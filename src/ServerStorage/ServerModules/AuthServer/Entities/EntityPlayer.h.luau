@@ -191,6 +191,9 @@ function module:GrantXp(player: Player, amount: number, reason: string?, fromKil
 	if not char or amount <= 0 or char.Level >= Config.Xp.MaxLevel then
 		return
 	end
+	if fromKill then
+		amount *= self.includes.Zones["GameEvents.h"]:XpMultiplier()
+	end
 	local rested = 0
 	if fromKill and (char.Rested or 0) > 0 then
 		rested = math.min(math.floor(amount), math.floor(char.Rested))
@@ -798,7 +801,7 @@ return Base(module, {
 	{ Path = "World/Combat", Imports = "Death.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h|Auras.h|Talents.h" },
-	{ Path = "World/Zones", Imports = "Zones.h" },
+	{ Path = "World/Zones", Imports = "Zones.h|GameEvents.h" },
 	{ Path = "World/Content", Imports = "Creatures.h|Items.h" },
 	{ Path = "Auth/Social", Imports = "Achievements.h" },
 	{ Path = "Global/System", Imports = "Effects.h" },

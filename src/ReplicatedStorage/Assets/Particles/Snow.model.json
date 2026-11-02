@@ -1,0 +1,18 @@
+{
+  "className": "ParticleEmitter",
+  "properties": {
+    "Texture": "rbxasset://textures/particles/sparkles_main.dds",
+    "Color": { "ColorSequence": { "keypoints": [ { "time": 0, "color": [1, 1, 1] }, { "time": 1, "color": [0.9, 0.95, 1] } ] } },
+    "Size": { "NumberSequence": { "keypoints": [ { "time": 0, "value": 0.35, "envelope": 0.1 }, { "time": 1, "value": 0.3, "envelope": 0 } ] } },
+    "Transparency": { "NumberSequence": { "keypoints": [ { "time": 0, "value": 0.2, "envelope": 0 }, { "time": 1, "value": 0.7, "envelope": 0 } ] } },
+    "Lifetime": { "NumberRange": [4, 6] },
+    "Rate": 120,
+    "Speed": { "NumberRange": [6, 9] },
+    "SpreadAngle": [25, 25],
+    "Acceleration": [0, -1, 0],
+    "EmissionDirection": "Bottom",
+    "RotSpeed": { "NumberRange": [-40, 40] },
+    "LightEmission": 0.3,
+    "Enabled": false
+  }
+}

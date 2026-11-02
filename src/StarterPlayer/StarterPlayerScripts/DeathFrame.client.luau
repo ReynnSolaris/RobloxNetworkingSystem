@@ -15,6 +15,7 @@ local Children = Fusion.Children
 
 local dead = Components.attribute(scope, player, "Dead", false)
 local ghost = Components.attribute(scope, player, "Ghost", false)
+local resurrectFrom = Components.attribute(scope, player, "ResurrectFrom", nil)
 
 local showDead = scope:Computed(function(use)
 	return use(dead) == true and use(ghost) ~= true
@@ -25,7 +26,7 @@ scope:New "ScreenGui" {
 	ResetOnSpawn = false,
 	DisplayOrder = 30,
 	Enabled = scope:Computed(function(use)
-		return use(showDead) or use(ghost) == true
+		return use(showDead) or use(ghost) == true or use(resurrectFrom) ~= nil
 	end),
 	Parent = player:WaitForChild("PlayerGui"),
 	[Children] = {
@@ -43,6 +44,32 @@ scope:New "ScreenGui" {
 				Components.Text(scope, { Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 10), Text = "You have died.", Font = Enum.Font.Garamond, TextSize = 30, Color = Color3.fromRGB(230, 90, 90), Align = Enum.TextXAlignment.Center }),
 				Components.Button(scope, { Size = UDim2.fromOffset(180, 34), Position = UDim2.new(0.5, -90, 1, -46), Text = "Release Spirit", OnClick = function()
 					netSend:Fire(Opcodes.CMSG_REPOP_REQUEST, {})
+				end }),
+			},
+		},
+		scope:New "Frame" {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0.36, 0),
+			Size = UDim2.fromOffset(340, 100),
+			BackgroundColor3 = Ui.PANEL,
+			BackgroundTransparency = 0.15,
+			BorderSizePixel = 0,
+			Visible = scope:Computed(function(use)
+				return use(resurrectFrom) ~= nil
+			end),
+			[Children] = {
+				scope:New "UICorner" { CornerRadius = UDim.new(0, 8) },
+				scope:New "UIStroke" { Color = Ui.GOLD },
+				Components.Text(scope, { Size = UDim2.new(1, -20, 0, 40), Position = UDim2.fromOffset(10, 8), Wrapped = true, Align = Enum.TextXAlignment.Center, Text = scope:Computed(function(use)
+					return ("%s wants to resurrect you."):format(tostring(use(resurrectFrom)))
+				end) }),
+				Components.Button(scope, { Size = UDim2.fromOffset(120, 32), Position = UDim2.new(0.5, -126, 1, -42), Text = "Accept", OnClick = function()
+					netSend:Fire(Opcodes.CMSG_RESURRECT_RESPONSE, { Accept = true })
+					player:SetAttribute("ResurrectFrom", nil)
+				end }),
+				Components.Button(scope, { Size = UDim2.fromOffset(120, 32), Position = UDim2.new(0.5, 6, 1, -42), Text = "Decline", OnClick = function()
+					netSend:Fire(Opcodes.CMSG_RESURRECT_RESPONSE, { Accept = false })
+					player:SetAttribute("ResurrectFrom", nil)
 				end }),
 			},
 		},

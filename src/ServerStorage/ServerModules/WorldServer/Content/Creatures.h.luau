@@ -22,8 +22,10 @@ local SEED = {
 	{ name = "Class Trainer", subname = "Trainer", modelid = "default", scale = 1, gossip = "What would you like to learn?", faction = "friendly" },
 	{ name = "General Goods", subname = "Vendor", modelid = "default", scale = 1, gossip = "Fine wares, fair prices.", faction = "friendly" },
 	{ name = "Kobold Vermin", modelid = "default", scale = 0.85, faction = "hostile", minlevel = 1, maxlevel = 2, health = 40, dmgmin = 2, dmgmax = 4, aggro = 15, speed = 12, mingold = 1, maxgold = 5, wander = 8, spells = { "Throw Torch" } },
-	{ name = "Young Wolf", modelid = "default", scale = 0.9, faction = "hostile", minlevel = 2, maxlevel = 3, health = 55, dmgmin = 3, dmgmax = 5, aggro = 18, speed = 14, mingold = 0, maxgold = 3, wander = 12, spells = { "Bite" } },
+	{ name = "Young Wolf", modelid = "default", scale = 0.9, faction = "hostile", minlevel = 2, maxlevel = 3, health = 55, dmgmin = 3, dmgmax = 5, aggro = 18, speed = 14, mingold = 0, maxgold = 3, wander = 12, spells = { "Bite" }, beast = true },
 	{ name = "Kobold Geomancer", modelid = "default", scale = 0.85, faction = "hostile", minlevel = 3, maxlevel = 4, health = 60, dmgmin = 2, dmgmax = 4, aggro = 20, speed = 12, mingold = 3, maxgold = 9, spells = { "Fire Blast" } },
+	{ name = "Imp", subname = "Minion", modelid = "default", scale = 0.6, faction = "pet", health = 45, dmgmin = 3, dmgmax = 6, speed = 16, spells = { "Firebolt" } },
+	{ name = "Festival Vendor", subname = "Harvest Festival", modelid = "default", scale = 1, gossip = "Fresh from the fields! Only while the festival lasts.", faction = "friendly" },
 }
 -- creature by name, item by entry; resolved to entries when seeded
 local LOOT_SEED = {
@@ -76,6 +78,15 @@ function module:Template(entry)
 	return self:DB():Get("creature_template", entry)
 end
 
+function module:ByName(name: string)
+	for _, row in self:DB():Select("creature_template") do
+		if row.name == name then
+			return row
+		end
+	end
+	return nil
+end
+
 -- Runtime state per spawned creature, keyed by guid string.
 function module:State(guid)
 	return self.information[tostring(guid)]
@@ -124,7 +135,7 @@ end
 function module:Spawn(row)
 	local template = self:Template(row.id)
 	self:Despawn(row.guid)
-	if not template then
+	if not template or (row.event and not self.includes.Zones["GameEvents.h"]:IsEventActive(row.event)) then
 		return nil
 	end
 	local hostile = template.faction == "hostile"
@@ -179,6 +190,53 @@ function module:Spawn(row)
 	return model
 end
 
+-- A pet: built from a template with no row, owned by a player, levelled to them.
+function module:SpawnPet(template, at: CFrame, owner: Player, level: number, name: string?)
+	local guid = "pet:" .. owner.UserId
+	self:Despawn(guid)
+	local model = build(template.modelid or "default")
+	model.Name = name or template.name
+	model:SetAttribute("Guid", guid)
+	model:SetAttribute("Entry", tostring(template.entry))
+	model:SetAttribute("Level", level)
+	model:SetAttribute("Subname", (owner:GetAttribute("CharacterName") or owner.Name) .. "'s Pet")
+	model:SetAttribute("Faction", "pet")
+	model:SetAttribute("Owner", owner.Name)
+	local humanoid = model:FindFirstChildOfClass("Humanoid") :: Humanoid
+	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
+	humanoid.DisplayName = model.Name
+	humanoid.WalkSpeed = math.max(template.speed or 12, 18)
+	if template.scale and template.scale ~= 1 then
+		model:ScaleTo(template.scale)
+	end
+	humanoid.MaxHealth = math.floor((template.health or 40) * (1 + 0.12 * (level - 1)))
+	humanoid.Health = humanoid.MaxHealth
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+	local box, size = model:GetBoundingBox()
+	local lift = model:GetPivot().Position.Y - (box.Position.Y - size.Y / 2)
+	model:PivotTo(at * CFrame.new(0, lift, 0))
+	model.Parent = folder()
+	root:SetNetworkOwner(nil)
+	local state = { Row = { guid = guid, id = template.entry }, Template = template, Model = model, Humanoid = humanoid, Root = root, Home = at, Level = level,
+		Hostile = false, Moves = true, Owner = owner, Mode = "defensive", Target = nil, NextSwing = 0, Dead = false, Cooldowns = {} }
+	self.information[guid] = state
+	humanoid.Died:Once(function()
+		if state.Dead then
+			return
+		end
+		state.Dead = true
+		self.includes.Spells["Auras.h"]:Clear(state)
+		self.includes.System["Effects.h"]:Play("Smoke", guid, 8)
+		self.includes.Content["Pets.h"]:OnPetDeath(state)
+		task.delay(3, function()
+			if self.information[guid] == state then
+				self:Despawn(guid)
+			end
+		end)
+	end)
+	return state
+end
+
 -- An emptied corpse clears a moment later.
 function module:ClearCorpse(guid)
 	local state = self:State(guid)
@@ -198,18 +256,19 @@ end
 
 -- Called when a player hurts the creature. Nearby creatures of the same kind
 -- join in.
-function module:Aggro(guid, player: Player, quiet: boolean?)
+function module:Aggro(guid, attacker, quiet: boolean?)
 	local state = self:State(guid)
 	if not state or not state.Hostile or state.Dead then
 		return
 	end
-	state.LastAttacker = player
-	state.Target = state.Target or player
+	local owner = if typeof(attacker) == "table" then attacker.Owner else attacker
+	state.LastAttacker = owner or state.LastAttacker
+	state.Target = state.Target or attacker
 	if not quiet then
 		for _, other in self.information do
 			if other ~= state and other.Hostile and not other.Dead and not other.Target and other.Row.id == state.Row.id
 				and (other.Root.Position - state.Root.Position).Magnitude <= Config.Combat.AssistRange then
-				other.Target = player
+				other.Target = attacker
 			end
 		end
 	end
@@ -317,13 +376,16 @@ function module:Think(state)
 		humanoid:MoveTo(here)
 		return
 	end
+	if state.Owner then
+		return self.includes.Content["Pets.h"]:Think(state)
+	end
 	if not state.Hostile then
 		return idle(self, state)
 	end
 
 	local target = state.Target
 	local targetRoot = target and Combat:Root(target)
-	if target and (not targetRoot or not Combat:Alive(target) or target.Parent ~= Players
+	if target and (not targetRoot or not Combat:Alive(target) or (Combat:IsPlayer(target) and target.Parent ~= Players)
 		or (flat(targetRoot.Position) - flat(state.Home.Position)).Magnitude > 60) then
 		state.Target = nil
 		target = nil
@@ -349,6 +411,9 @@ function module:Think(state)
 	end
 
 	Combat:Enter(target)
+	if Combat:IsPlayer(target) then
+		self.includes.Content["Pets.h"]:Assist(target, state)
+	end
 	if state.Model:GetAttribute("Casting") then
 		humanoid:MoveTo(here)
 		return
@@ -437,7 +502,7 @@ function module:Start()
 			byName[template.name] = DB:Insert("creature_template", table.clone(template))
 		else
 			local fields = {}
-			for _, key in { "innkeeper", "banker", "spells", "wander" } do
+			for _, key in { "innkeeper", "banker", "spells", "wander", "beast" } do
 				if template[key] ~= nil and existing[key] == nil then
 					fields[key] = template[key]
 				end
@@ -488,7 +553,8 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Social", Imports = "Party.h|Reputation.h|Achievements.h" },
-	{ Path = "World/Content", Imports = "Vendors.h|Items.h" },
+	{ Path = "World/Content", Imports = "Vendors.h|Items.h|Pets.h" },
+	{ Path = "World/Zones", Imports = "GameEvents.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h|Auras.h" },
 })

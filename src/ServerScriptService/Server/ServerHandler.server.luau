@@ -73,6 +73,8 @@ local Achievements = Auth.Social["Achievements.h"]
 local Auction = World.Content["Auction.h"]
 local Taxi = World.Content["Taxi.h"]
 local Trade = World.Content["Trade.h"]
+local Pets = World.Content["Pets.h"]
+local GameEvents = World.Zones["GameEvents.h"]
 local Bus = Global.System["Global.h"]
 local Database = Global.Database["Database.h"]
 
@@ -109,6 +111,8 @@ Achievements:Start()
 Auction:Start()
 Taxi:Start()
 Trade:Start()
+Pets:Start()
+GameEvents:Start()
 Session:OnAuthed(function(player)
 	Characters:Enum(player)
 	Commands:SyncState(player)

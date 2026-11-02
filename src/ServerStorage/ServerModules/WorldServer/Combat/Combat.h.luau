@@ -40,7 +40,18 @@ function module:Name(unit): string
 	if self:IsPlayer(unit) then
 		return unit:GetAttribute("CharacterName") or unit.Name
 	end
+	if unit and unit.Owner then
+		return unit.Model.Name
+	end
 	return unit and unit.Template and unit.Template.name or "?"
+end
+
+-- The player behind a unit: the player, or a pet's owner.
+function module:OwnerOf(unit): Player?
+	if self:IsPlayer(unit) then
+		return unit
+	end
+	return unit and unit.Owner or nil
 end
 
 function module:Alive(unit): boolean
@@ -83,7 +94,16 @@ function module:CanAttack(attacker, target): (boolean, string?)
 		return false, "Invalid target."
 	end
 	if not self:IsPlayer(attacker) then
-		return self:IsPlayer(target), "Invalid target."
+		if attacker.Owner then
+			if not self:IsPlayer(target) and target.Owner == attacker.Owner then
+				return false, "Invalid target."
+			end
+			return self:CanAttack(attacker.Owner, target)
+		end
+		return self:IsPlayer(target) or target.Owner ~= nil, "Invalid target."
+	end
+	if not self:IsPlayer(target) and target.Owner then
+		return self:CanAttack(attacker, target.Owner)
 	end
 	if self:IsPlayer(target) then
 		if self.includes.Combat["Duel.h"]:Opponent(attacker) == target then
@@ -122,11 +142,15 @@ function module:Damage(attacker, target, amount: number, school: string?, source
 		self:Enter(target)
 		local who = if attacker then self:Name(attacker) else "Something"
 		self:Log(target, ("%s's %s hits you for %d."):format(who, (source:gsub("^Your ", "")), amount), Config.Chat.Colors.HURT)
-		if attacker and self:IsPlayer(attacker) then
-			self:Enter(attacker)
-			self:Log(attacker, ("%s hits %s for %d."):format(source, self:Name(target), amount), Config.Chat.Colors.HIT)
+		if attacker and not self:IsPlayer(attacker) then
+			self.includes.Content["Pets.h"]:Assist(target, attacker)
+		end
+		local owner = self:OwnerOf(attacker)
+		if owner then
+			self:Enter(owner)
+			self:Log(owner, ("%s hits %s for %d."):format(source, self:Name(target), amount), Config.Chat.Colors.HIT)
 			if humanoid.Health <= 0 then
-				self.includes.Combat["Pvp.h"]:OnKill(attacker, target)
+				self.includes.Combat["Pvp.h"]:OnKill(owner, target)
 			end
 		end
 		return amount
@@ -134,10 +158,17 @@ function module:Damage(attacker, target, amount: number, school: string?, source
 	amount = math.min(amount, math.floor(humanoid.Health))
 	humanoid:TakeDamage(amount)
 	Effects:Play(EFFECT[school or "physical"] or "Hit", target.Row.guid, 8)
-	if attacker and self:IsPlayer(attacker) then
+	local owner = self:OwnerOf(attacker)
+	if attacker and not self:IsPlayer(attacker) and attacker.Owner then
+		source = ("%s's %s"):format(self:Name(attacker), (source:gsub("^Your ", "")))
+	end
+	if owner then
 		self.includes.Content["Creatures.h"]:Aggro(target.Row.guid, attacker)
-		self:Enter(attacker)
-		self:Log(attacker, ("%s hits %s for %d."):format(source, self:Name(target), amount), Config.Chat.Colors.HIT)
+		self:Enter(owner)
+		self:Log(owner, ("%s hits %s for %d."):format(source, self:Name(target), amount), Config.Chat.Colors.HIT)
+	end
+	if target.Owner and target.Owner.Parent == Players then
+		self:Log(target.Owner, ("%s hits %s for %d."):format(if attacker then self:Name(attacker) else "Something", self:Name(target), amount), Config.Chat.Colors.HURT)
 	end
 	return amount
 end
@@ -222,6 +253,7 @@ function module:Swing(player: Player, state)
 		damage *= 2
 	end
 	self:Damage(player, target, math.max(1, damage), "physical", if roll == "crit" then "Your attack crits" else "Your attack")
+	self.includes.Content["Pets.h"]:Assist(player, target)
 end
 
 -- Attack roll: miss, dodge, crit or hit. Agility raises crit and dodge.
@@ -272,7 +304,7 @@ end
 
 return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
-	{ Path = "World/Content", Imports = "Creatures.h" },
+	{ Path = "World/Content", Imports = "Creatures.h|Pets.h" },
 	{ Path = "World/Combat", Imports = "Duel.h|Pvp.h" },
 	{ Path = "World/Spells", Imports = "Auras.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },

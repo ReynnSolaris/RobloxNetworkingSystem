@@ -29,10 +29,11 @@ src/ServerStorage/ServerModules/
   AuthServer/Social/               Party
   WorldServer/Database/            WorldDatabase (the account's characters), WorldDB (TrinityCore-style tables)
   WorldServer/Characters/          Characters (enum, create, delete, login, logout)
-  WorldServer/Zones/               Zones (which zone each player stands in)
+  WorldServer/Zones/               Zones (which zone each player stands in), GameEvents (day and night, weather, timed events)
   WorldServer/Movement/            Anticheat (movement validation)
   WorldServer/Content/             Creatures (spawns, AI, spells, waypoints, loot), GameObjects (chests, doors, nodes, mailboxes),
-                                   Items (templates, Describe), Vendors, Teleports, Auction (auction house), Taxi (flight paths), Trade
+                                   Items (templates, Describe), Vendors, Teleports, Auction (auction house), Taxi (flight paths), Trade,
+                                   Pets (tame, summon, follow, attack)
   WorldServer/Combat/              Combat (units, damage, healing, rolls, melee), Loot (loot sources), Death (release, ghosts, corpses),
                                    Duel, Pvp (world PvP, honor)
   WorldServer/Quests/              Quests (templates, questgivers, gossip, objectives, rewards)
@@ -51,7 +52,8 @@ src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), 
                                                    MailFrame (mailbox prompt), FriendsFrame (O: friends, ignore, guild), BankFrame,
                                                    BuffFrame (auras and the target's cast), TalentFrame (N), SkillFrame (K, professions
                                                    and the profession trainer), ReputationFrame (U), AchievementFrame (Y, toast),
-                                                   AuctionFrame, TaxiFrame, TradeFrame, InspectFrame,
+                                                   AuctionFrame, TaxiFrame, TradeFrame, InspectFrame, PetFrame, RollFrame (Need, Greed, Pass),
+                                   GuildBankFrame, Weather (rain, snow, fog over the camera),
                                                    Preview (ViewportFrame character previews),
                                                    ZoneBanner, PartyFrame, Drag (drag and drop),
                                                    Ui (theme, tooltip), Components (Fusion panels, lists, buttons)
@@ -113,6 +115,11 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | SMSG_SHOWTAXINODES / CMSG_ACTIVATETAXI / SMSG_TAXI_DONE | both | `{ Guid, Here, Nodes }`; `{ Guid, Node }`; arrival |
 | CMSG_INITIATE_TRADE / CMSG_BEGIN_TRADE / CMSG_CANCEL_TRADE / CMSG_SET_TRADE_ITEM / CMSG_SET_TRADE_GOLD / CMSG_ACCEPT_TRADE / SMSG_TRADE_STATUS | both | `{ Target }`; `{ Slot, Bag? }`; `{ Amount }`; `{ Status, Partner, Mine, Theirs }` |
 | CMSG_INSPECT / SMSG_INSPECT_RESULT / CMSG_RANDOM_ROLL | both | `{ Name }` in, gear and stats out; `{ Max }` rolls to the party |
+| CMSG_PET_ACTION | client | `{ Action = attack|follow|passive|aggressive|defensive|dismiss }` |
+| SMSG_LOOT_ROLL_START / CMSG_LOOT_ROLL | both | `{ Id, Item, Seconds }`; `{ Id, Vote = need|greed|pass }` |
+| SMSG_WEATHER / SMSG_GAME_EVENT | server | `{ Kind, Intensity }`; `{ Active, Started? }` |
+| CMSG_GUILD_BANK / SMSG_GUILD_BANK_LIST | both | `{ Action = open|deposit|withdraw|depositmoney|withdrawmoney, Bag?, Slot?, Amount? }`; the vault |
+| SMSG_RESURRECT_REQUEST / CMSG_RESURRECT_RESPONSE | both | `{ From }`; `{ Accept }` |
 | SMSG_QUESTGIVER_STATUS_MULTIPLE | server | `{ Statuses = { [guid] = available|complete|incomplete|none } }` for the markers |
 | SMSG_VENDOR_LIST | server | `{ Guid, Items }` opens the vendor window |
 | CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
@@ -201,6 +208,7 @@ GAMEMASTER  .buff <all|player> <speed|jump> <multiplier> <seconds>
             .achievement add <id> [player] | .achievement list | .honor add <amount> [player]
             .taxi node add <name> [cost] | .taxi path <from> <to> [cost] | .taxi list | .taxi learn all [player]
             .npc wp add [guid] [wait] | .npc wp clear [guid]
+            .event list | .event info <id> | .pet <creature entry> [player] | .pet dismiss [player]
             .npc add <entry> | delete [guid] | move [guid] | kill [guid] | say [guid] <text> | info [guid] | near
             .loot template add <creatureEntry> <itemEntry> <chance> [min] [max] | template list [entry]
             .npc template add <name> [modelid] [subname] | template set <entry> <field> <value> | template list
@@ -280,7 +288,7 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | Table | Key | Columns |
 |---|---|---|
 | creature_template | entry | name, subname, modelid, scale, gossip, faction, minlevel, maxlevel, health, dmgmin, dmgmax, aggro, speed, mingold, maxgold, spells, wander, faction_id, rep_kill, rep_ally, innkeeper, banker, trainer_skill, flightmaster, auctioneer |
-| creature | guid | id (entry), x, y, z, o, spawntimesecs, waypoints, by |
+| creature | guid | id (entry), x, y, z, o, spawntimesecs, waypoints, event, by |
 | creature_loot_template / gameobject_loot_template | id | entry, item, chance, mincount, maxcount |
 | gameobject_template | entry | name, modelid, size, type (mailbox, chest, door, node, auctioneer), skill, reqskill, mingold, maxgold |
 | gameobject | guid | id (entry), x, y, z, o, scale, spawntimesecs, by |
@@ -298,6 +306,7 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | achievement | id | name, description, category, points, criteria = { type, value, name } |
 | auctionhouse | id | item, count, owner, ownerId, bid, buyout, bidder, bidderId, expires, deposit |
 | taxi_nodes / taxi_path | id | name, x, y, z, cost / from, to, cost, points |
+| game_event | id | name, description, start, length (min), occurrence (min), xp_mult |
 
 Outside the world tables, the World store also keeps `names` (character name to
 account, for mail and friends), `mail:<name>` (a character's letters),
@@ -568,6 +577,32 @@ talent spread; `/roll` rolls to the party or those nearby.
 In a zone with `Pvp = true`, players of the other faction are attackable, which
 flags you (red PvP on the player frame) for five minutes. A kill of someone within
 five levels is an honorable kill worth honor, both kept on the character sheet.
+
+## Pets, group loot, events, guild vault, resurrection
+
+Hunters cast Tame Beast on a beast (`creature_template.beast`) of their level or
+lower; it becomes the character's pet, called back with Call Pet and sent away
+with Dismiss Pet. Warlocks summon an Imp. A pet is a creature state with an
+owner and no database row: it follows, attacks what you attack or what attacks
+you, obeys /petattack, /petfollow, /petpassive and /petaggressive or the pet
+frame's buttons, leashes back when far, and needs ten seconds to recover after
+dying. Creatures fight pets back and pets' kills credit the owner.
+
+In a party, looting an item of uncommon quality or better starts a Need, Greed or
+Pass roll among the members nearby. Everyone sees the choices and the rolls,
+Need beats Greed, the winner gets the item (by mail when their bags are full),
+and an all-pass puts it back on the corpse.
+
+The real clock drives the world: a game day lasts `Config.World.DayMinutes`,
+weather rerolls every `WeatherMinutes` (clear, rain, storm, snow, fog, drawn over
+the camera with fog and dimmer light), and `game_event` rows start and end on a
+schedule, announcing themselves, spawning the creatures and objects whose spawn
+row names them in `event`, and multiplying kill experience by `xp_mult`.
+
+Guilds have a vault at any banker: shared slots and money, members deposit,
+officers withdraw. Priests, paladins, shaman and druids learn a resurrection
+spell; cast on a dead player's target within range of their corpse or ghost, it
+offers, and accepting brings them back at the corpse with half health.
 
 ## Tooltips
 

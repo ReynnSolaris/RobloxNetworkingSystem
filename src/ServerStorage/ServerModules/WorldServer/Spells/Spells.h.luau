@@ -58,9 +58,13 @@ local SEED = {
 	slow("Warrior", "Hamstring", "physical", 0.5, 15, 10, 0, 8, "HM", "Maims the enemy, reducing movement speed by 50% for 15 sec."),
 	dmg("Paladin", "Crusader Strike", "holy", 8, 2, 10, 0, 4, 8, "CS", "An instant strike that deals holy damage.", true),
 	heal("Paladin", "Holy Light", 20, 5, 30, 2.5, "HL", "Heals a friendly target."),
+	spell("Paladin", "Redemption", "holy", "resurrect", "friend", 0, 0, 60, 10, 0, 30, "RD", "Brings a dead player back to life with half their health."),
 	stat("Paladin", "Blessing of Might", "holy", "Damage", 3, 1, 20, 600, "BM", "Places a Blessing on the friendly target, increasing melee damage for 10 min."),
 	stun("Paladin", "Hammer of Justice", "holy", 6, 15, 60, 10, "HJ", "Stuns the target for 6 sec."),
 	dmg("Hunter", "Arcane Shot", "arcane", 9, 2, 12, 0, 6, 35, "AS", "An instant shot that deals arcane damage.", true),
+	spell("Hunter", "Tame Beast", "nature", "tame", "enemy", 0, 0, 0, 6, 0, 20, "TB", "Begins taming a beast to be your companion. The beast must be your level or lower."),
+	spell("Hunter", "Call Pet", "nature", "callpet", "self", 0, 0, 0, 0, 5, 0, "CP", "Summons your pet to you."),
+	spell("Hunter", "Dismiss Pet", "nature", "dismiss", "self", 0, 0, 0, 0, 0, 0, "DP", "Dismisses your pet."),
 	speed("Hunter", "Aspect of the Cheetah", 1.3, 30, 20, 30, "AC", "Increases movement speed for 30 sec."),
 	dot("Hunter", "Serpent Sting", "nature", 4, 1, 15, 0, 35, 3, 15, "SS", "Stings the target, causing nature damage over 15 sec."),
 	slow("Hunter", "Concussive Shot", "physical", 0.5, 4, 10, 12, 35, "CO", "Dazes the target, slowing movement speed by 50% for 4 sec."),
@@ -70,6 +74,7 @@ local SEED = {
 	stun("Rogue", "Gouge", "physical", 4, 15, 30, 8, "GO", "Stuns the target for 4 sec."),
 	dmg("Priest", "Smite", "holy", 14, 3, 18, 2, 0, 30, "SM", "Smites an enemy with holy damage.", true),
 	heal("Priest", "Lesser Heal", 20, 5, 25, 2, "LH", "Heals a friendly target."),
+	spell("Priest", "Resurrection", "holy", "resurrect", "friend", 0, 0, 60, 10, 0, 30, "RS", "Brings a dead player back to life with half their health."),
 	hot("Priest", "Renew", 5, 1, 20, 3, 15, "RN", "Heals the target over 15 sec."),
 	stat("Priest", "Power Word: Fortitude", "holy", "Stamina", 3, 1, 25, 1800, "PF", "Increases the target's Stamina for 30 min."),
 	dot("Priest", "Shadow Word: Pain", "shadow", 4, 1, 20, 0, 30, 3, 18, "SW", "A word of darkness that causes shadow damage over 18 sec."),
@@ -79,6 +84,7 @@ local SEED = {
 	slow("Death Knight", "Chains of Ice", "frost", 0.3, 8, 15, 20, 20, "CI", "Shackles the target, reducing movement speed by 70% for 8 sec."),
 	dmg("Shaman", "Lightning Bolt", "nature", 14, 3, 18, 2.5, 0, 30, "LB", "Casts a bolt of lightning at the target.", true),
 	heal("Shaman", "Healing Wave", 24, 6, 30, 3, "HW", "Heals a friendly target."),
+	spell("Shaman", "Ancestral Spirit", "nature", "resurrect", "friend", 0, 0, 60, 10, 0, 30, "AN", "Returns the spirit to a dead player with half their health."),
 	dot("Shaman", "Flame Shock", "fire", 4, 1, 18, 6, 20, 3, 12, "FS", "Sears the target with fire, then burns it over 12 sec."),
 	dmg("Shaman", "Earth Shock", "nature", 12, 3, 20, 0, 6, 20, "ES", "Instantly shocks the target with concussive force."),
 	dmg("Mage", "Fireball", "fire", 16, 3, 20, 3, 0, 35, "FB", "Hurls a fiery ball that causes fire damage.", true),
@@ -87,9 +93,12 @@ local SEED = {
 	stat("Mage", "Arcane Intellect", "arcane", "Intellect", 3, 1, 25, 1800, "AI", "Increases the target's Intellect for 30 min."),
 	dmg("Warlock", "Shadow Bolt", "shadow", 16, 3, 20, 3, 0, 30, "SB", "Sends a shadowy bolt at the enemy.", true),
 	dmg("Warlock", "Immolate", "fire", 10, 2, 15, 0, 8, 30, "IM", "Burns the enemy for fire damage."),
+	spell("Warlock", "Summon Imp", "fire", "summon", "self", 0, 0, 30, 5, 0, 0, "SI", "Summons an Imp under the command of the Warlock.", { summon = "Imp" }),
+	spell("Warlock", "Dismiss Pet", "shadow", "dismiss", "self", 0, 0, 0, 0, 0, 0, "DP", "Dismisses your minion."),
 	dot("Warlock", "Corruption", "shadow", 4, 1, 15, 0, 30, 3, 18, "CR", "Corrupts the target, causing shadow damage over 18 sec."),
 	dmg("Druid", "Wrath", "nature", 14, 3, 18, 2, 0, 30, "WR", "Causes nature damage to the target.", true),
 	heal("Druid", "Healing Touch", 24, 6, 30, 3, "HT", "Heals a friendly target."),
+	spell("Druid", "Rebirth", "nature", "resurrect", "friend", 0, 0, 60, 10, 600, 30, "RB", "Returns the spirit to a dead player with half their health."),
 	hot("Druid", "Rejuvenation", 5, 1, 20, 3, 12, "RJ", "Heals the target over 12 sec."),
 	stat("Druid", "Mark of the Wild", "nature", "Armor", 2, 1, 25, 1800, "MW", "Increases the friendly target's armor for 30 min."),
 	dot("Druid", "Moonfire", "arcane", 3, 1, 15, 0, 30, 3, 12, "MF", "Burns the enemy with arcane energy over 12 sec."),
@@ -103,6 +112,7 @@ local SEED = {
 	{ name = "Bite", npc = true, school = "physical", effect = "aura", target = "enemy", base = 2, per_level = 1, cost = 0, cast_time = 0, cooldown = 12, range = 6, icon = "BI", description = "A savage bite that leaves the victim bleeding.", aura = { kind = "periodic", interval = 3, duration = 9, harmful = true } },
 	{ name = "Throw Torch", npc = true, school = "fire", effect = "damage", target = "enemy", base = 4, per_level = 1, cost = 0, cast_time = 0, cooldown = 8, range = 20, icon = "TT", description = "Hurls a burning torch." },
 	{ name = "Fire Blast", npc = true, school = "fire", effect = "damage", target = "enemy", base = 6, per_level = 2, cost = 0, cast_time = 1.5, cooldown = 6, range = 25, icon = "FB", description = "Blasts the target with fire." },
+	{ name = "Firebolt", npc = true, school = "fire", effect = "damage", target = "enemy", base = 5, per_level = 1, cost = 0, cast_time = 1.5, cooldown = 4, range = 25, icon = "FI", description = "Hurls a bolt of fire." },
 }
 
 function module:DB()
@@ -314,7 +324,31 @@ function module:ResolveTarget(player: Player, spell, guid)
 		local other = Combat:Root(unit)
 		return other ~= nil and root ~= nil and (other.Position - root.Position).Magnitude <= math.max(spell.range or 0, Config.Combat.Range)
 	end
-	if spell.target == "enemy" then
+	if spell.effect == "resurrect" then
+		local target = Combat:Target(player)
+		if not target or not Combat:IsPlayer(target) or not self.includes.Combat["Death.h"]:IsDead(target) then
+			return nil, "Target is not dead."
+		end
+		local at = self.includes.Combat["Death.h"]:CorpseAt(target)
+		local other = Combat:Root(target)
+		local near = (at and (at.Position - root.Position).Magnitude <= (spell.range or 30)) or (other and (other.Position - root.Position).Magnitude <= (spell.range or 30))
+		if not near then
+			return nil, "Out of range."
+		end
+		return target
+	elseif spell.effect == "tame" then
+		local target = if guid ~= nil then self.includes.Content["Creatures.h"]:State(guid) else Combat:Target(player)
+		if not target or Combat:IsPlayer(target) or not target.Template.beast then
+			return nil, "That creature cannot be tamed."
+		elseif (target.Level or 1) > (player:GetAttribute("CharacterLevel") or 1) then
+			return nil, "That beast is too high level to tame."
+		elseif self.includes.Content["Pets.h"]:Of(player) then
+			return nil, "You already have a pet out."
+		elseif not inRange(target) then
+			return nil, "Out of range."
+		end
+		return target
+	elseif spell.target == "enemy" then
 		local target = if guid ~= nil then self.includes.Content["Creatures.h"]:State(guid) else Combat:Target(player)
 		if not target or not Combat:CanAttack(player, target) then
 			return nil, "Invalid target."
@@ -407,7 +441,7 @@ function module:Apply(caster, spell, target, item)
 			Packet:Send(caster, Opcodes.SMSG_SPELL_COOLDOWN, { Id = spell.id, Seconds = spell.cooldown })
 		end
 	end
-	if not Combat:Alive(target) or (spell.target == "enemy" and not Combat:CanAttack(caster, target)) then
+	if spell.effect ~= "resurrect" and (not Combat:Alive(target) or (spell.target == "enemy" and spell.effect ~= "tame" and not Combat:CanAttack(caster, target))) then
 		if isPlayer then
 			self:Sync(caster)
 			self:Fail(caster, "Invalid target.")
@@ -415,6 +449,9 @@ function module:Apply(caster, spell, target, item)
 		return
 	end
 	local source = if isPlayer then "Your " .. spell.name else spell.name
+	if isPlayer and spell.target == "enemy" and spell.effect ~= "tame" then
+		self.includes.Content["Pets.h"]:Assist(caster, target)
+	end
 	if spell.effect == "damage" then
 		if isPlayer and Combat:Roll(caster, target) == "crit" then
 			amount *= 1.5
@@ -426,6 +463,27 @@ function module:Apply(caster, spell, target, item)
 	elseif spell.effect == "aura" then
 		Effects:Play(Combat.EFFECT[spell.school] or "Holy", if Combat:IsPlayer(target) then target else target.Row.guid, 10)
 		Auras:Apply(caster, target, spell, amount)
+		amount = 0
+	elseif spell.effect == "tame" and isPlayer then
+		if not target.Dead and target.Template.beast then
+			self.includes.Content["Pets.h"]:Tame(caster, target)
+		end
+		amount = 0
+	elseif spell.effect == "callpet" and isPlayer then
+		self.includes.Content["Pets.h"]:Call(caster)
+		amount = 0
+	elseif spell.effect == "dismiss" and isPlayer then
+		self.includes.Content["Pets.h"]:Dismiss(caster)
+		amount = 0
+	elseif spell.effect == "summon" and isPlayer then
+		local template = self.includes.Content["Creatures.h"]:ByName(spell.summon or "")
+		if template then
+			Effects:Play("Shadow", caster, 16)
+			self.includes.Content["Pets.h"]:Summon(caster, template.entry)
+		end
+		amount = 0
+	elseif spell.effect == "resurrect" and isPlayer then
+		self.includes.Combat["Death.h"]:Offer(target, caster)
 		amount = 0
 	elseif spell.effect == "hearth" and isPlayer then
 		local home = char(self, caster).Home
@@ -656,8 +714,8 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
-	{ Path = "World/Content", Imports = "Creatures.h" },
-	{ Path = "World/Combat", Imports = "Combat.h|Duel.h" },
+	{ Path = "World/Content", Imports = "Creatures.h|Pets.h" },
+	{ Path = "World/Combat", Imports = "Combat.h|Duel.h|Death.h" },
 	{ Path = "World/Spells", Imports = "Auras.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 	{ Path = "Global/System", Imports = "Effects.h" },

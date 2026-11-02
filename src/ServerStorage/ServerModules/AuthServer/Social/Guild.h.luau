@@ -386,6 +386,115 @@ function module:Disband(player: Player)
 	end
 end
 
+-- Guild bank: a slotted vault and money on the guild record. Members deposit,
+-- officers and the guild master withdraw.
+function module:SendBank(player: Player, open: boolean?)
+	local guild = self:Of(player)
+	if not guild then
+		return say(self, player, "You are not in a guild.")
+	end
+	local Items = self.includes.Content["Items.h"]
+	local items = {}
+	for slot, stack in (guild.Bank or {}) do
+		table.insert(items, Items:Describe(stack.entry, { Bank = tonumber(slot), Count = stack.count }))
+	end
+	local rank = self:Rank(player, guild) or 2
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_GUILD_BANK_LIST, { Guild = guild.Name, Items = items, Money = guild.Money or 0, Slots = Config.GuildBank.Slots, CanWithdraw = rank <= 1, Open = open == true })
+end
+
+function module:Bank(player: Player, data)
+	local guild = self:Of(player)
+	local Entities = self.includes.Entities["EntityPlayer.h"]
+	if not guild then
+		return say(self, player, "You are not in a guild.")
+	end
+	local rank = self:Rank(player, guild) or 2
+	local action = data.Action
+	local id = guild.Id
+	if action == "open" then
+		return self:SendBank(player, true)
+	elseif action == "deposit" then
+		local stack = Entities:StackAt(player, tonumber(data.Bag) or 0)
+		if not stack then
+			return
+		end
+		local template = self.includes.Content["Items.h"]:Template(stack.entry)
+		if template and template.bind == "pickup" then
+			return say(self, player, "That item is soulbound.")
+		end
+		local placed = false
+		self:Edit(id, function(g)
+			g.Bank = g.Bank or {}
+			local slot = tonumber(data.Slot)
+			if not slot or g.Bank[tostring(slot)] then
+				slot = nil
+				for i = 1, Config.GuildBank.Slots do
+					if not g.Bank[tostring(i)] then
+						slot = i
+						break
+					end
+				end
+			end
+			if slot then
+				g.Bank[tostring(slot)] = { entry = stack.entry, count = stack.count }
+				placed = true
+			end
+			return g
+		end)
+		if not placed then
+			return say(self, player, "The guild vault is full.")
+		end
+		Entities:TakeSlot(player, stack.slot)
+		self:Event(self:Load(id), ("%s deposited %s into the guild vault."):format(nameOf(player), (template and template.name) or "an item"))
+	elseif action == "withdraw" then
+		if rank > 1 then
+			return say(self, player, "Only officers may withdraw from the guild vault.")
+		end
+		local taken
+		self:Edit(id, function(g)
+			g.Bank = g.Bank or {}
+			taken = g.Bank[tostring(tonumber(data.Slot) or 0)]
+			g.Bank[tostring(tonumber(data.Slot) or 0)] = nil
+			return g
+		end)
+		if taken and not Entities:AddItem(player, taken.entry, taken.count) then
+			self:Edit(id, function(g)
+				g.Bank[tostring(tonumber(data.Slot) or 0)] = taken
+				return g
+			end)
+		end
+	elseif action == "depositmoney" then
+		local amount = math.clamp(math.floor(tonumber(data.Amount) or 0), 0, player:GetAttribute("Money") or 0)
+		if amount <= 0 then
+			return
+		end
+		Entities:AddMoney(player, -amount)
+		self:Edit(id, function(g)
+			g.Money = (g.Money or 0) + amount
+			return g
+		end)
+	elseif action == "withdrawmoney" then
+		if rank > 1 then
+			return say(self, player, "Only officers may withdraw from the guild vault.")
+		end
+		local amount = math.floor(tonumber(data.Amount) or 0)
+		local ok = false
+		self:Edit(id, function(g)
+			if amount > 0 and (g.Money or 0) >= amount then
+				g.Money -= amount
+				ok = true
+			end
+			return g
+		end)
+		if ok then
+			Entities:AddMoney(player, amount)
+		end
+	end
+	for _, member in self:Online(player) do
+		self:SendBank(member)
+	end
+end
+
 function module:OnLogin(player: Player)
 	local guild = self:Of(player)
 	self:Roster(player)
@@ -428,6 +537,11 @@ function module:Start()
 		disband = function(player) self:Disband(player) end,
 		roster = function(player) self:Roster(player) end,
 	}
+	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_GUILD_BANK, function(player, data)
+		if typeof(data) == "table" then
+			self:Bank(player, data)
+		end
+	end)
 	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_GUILD, function(player, data)
 		local action = typeof(data) == "table" and actions[data.Action]
 		if action then
@@ -441,6 +555,7 @@ function module:Start()
 end
 
 return Base(module, {
+	{ Path = "World/Content", Imports = "Items.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h|ChatFunctions.h" },

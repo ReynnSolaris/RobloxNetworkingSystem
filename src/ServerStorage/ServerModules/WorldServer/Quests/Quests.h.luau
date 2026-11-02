@@ -195,6 +195,9 @@ function module:Gossip(player: Player, guid)
 	end
 	if template.banker then
 		table.insert(options, { Id = "bank", Text = "I would like to check my deposit box." })
+		if self.includes.Social["Guild.h"]:Of(player) then
+			table.insert(options, { Id = "guildbank", Text = "I would like to open the guild vault." })
+		end
 	end
 	if template.trainer_skill then
 		table.insert(options, { Id = "profession", Text = "I would like to learn a profession." })
@@ -230,6 +233,8 @@ function module:Select(player: Player, guid, option)
 		self.includes.Content["Vendors.h"]:Open(player, guid, entry)
 	elseif option == "bank" and template.banker then
 		self.includes.Entities["EntityPlayer.h"]:SendBank(player, true)
+	elseif option == "guildbank" and template.banker then
+		self.includes.Social["Guild.h"]:SendBank(player, true)
 	elseif option == "profession" and template.trainer_skill then
 		self.includes.Spells["Skills.h"]:TrainerList(player, guid)
 	elseif option == "untalent" then
@@ -468,7 +473,7 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
-	{ Path = "Auth/Social", Imports = "Party.h|Achievements.h|Reputation.h" },
+	{ Path = "Auth/Social", Imports = "Party.h|Achievements.h|Reputation.h|Guild.h" },
 	{ Path = "World/Content", Imports = "Creatures.h|Vendors.h|Items.h|Taxi.h|Auction.h" },
 	{ Path = "World/Spells", Imports = "Spells.h|Talents.h|Skills.h" },
 	{ Path = "World/Zones", Imports = "Zones.h" },

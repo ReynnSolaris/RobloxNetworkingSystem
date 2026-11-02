@@ -178,6 +178,12 @@ return table.freeze({
 	Auction = { Deposit = 0.05, Cut = 0.05, Hours = { 12, 24, 48 }, MaxListings = 50 },
 	Taxi = { Speed = 60, Height = 40 },
 	Trade = { Slots = 6, Range = 12 },
+	Pets = { FollowDistance = 4, LeashDistance = 40, ResummonSeconds = 10 },
+	-- Group loot: items of this quality or better roll Need, Greed or Pass in a party.
+	Loot = { RollQuality = 2, RollSeconds = 30 },
+	-- One game day lasts DayMinutes real minutes; weather rerolls every WeatherMinutes.
+	World = { DayMinutes = 60, WeatherMinutes = 10, Weathers = { "clear", "clear", "clear", "rain", "storm", "snow", "fog" } },
+	GuildBank = { Slots = 48 },
 	-- Reputation standings, WoW thresholds, with the vendor discount each earns.
 	Reputation = {
 		Min = -42000, Max = 42999,

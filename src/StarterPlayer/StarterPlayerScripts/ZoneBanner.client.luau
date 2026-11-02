@@ -67,6 +67,13 @@ player:GetAttributeChangedSignal("Zone"):Connect(function()
 		show(name, player:GetAttribute("ZoneKind") or "")
 	end
 end)
+player:GetAttributeChangedSignal("EventBanner"):Connect(function()
+	local raw = player:GetAttribute("EventBanner")
+	local name = raw and raw:match("^(.-) [%d%.]+$")
+	if name then
+		show(name, "has begun")
+	end
+end)
 player:GetAttributeChangedSignal("LevelUp"):Connect(function()
 	local level = player:GetAttribute("LevelUp")
 	if level then

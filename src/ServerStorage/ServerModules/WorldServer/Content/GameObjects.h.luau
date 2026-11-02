@@ -178,7 +178,7 @@ local LABEL = { mailbox = "Mailbox", chest = "Chest", door = "Door", node = "Gat
 function module:Spawn(row)
 	local template = self:Template(row.id)
 	self:Despawn(row.guid)
-	if not template then
+	if not template or (row.event and not self.includes.Zones["GameEvents.h"]:IsEventActive(row.event)) then
 		return nil
 	end
 	local model = build(template.modelid)
@@ -308,4 +308,5 @@ return Base(module, {
 	{ Path = "World/Content", Imports = "Auction.h|Items.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h" },
+	{ Path = "World/Zones", Imports = "GameEvents.h" },
 })

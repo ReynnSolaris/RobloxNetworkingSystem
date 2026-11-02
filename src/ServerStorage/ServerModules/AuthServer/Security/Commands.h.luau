@@ -945,6 +945,32 @@ add("dismount", 2, ".dismount [player]", function(self, caller, args)
 	self:Reply(caller, "Done.")
 end)
 
+add("event", 2, ".event list | .event info <id>", function(self, caller, args)
+	local GameEvents = self.includes.Zones["GameEvents.h"]
+	if args[1] == "list" then
+		for _, event in self.includes.Database["WorldDB.h"]:Select("game_event") do
+			self:Reply(caller, ("  %s: %s %s"):format(tostring(event.id), event.name, if GameEvents:IsActive(event) then "(active)" else ""))
+		end
+	elseif args[1] == "info" then
+		local event = assert(self.includes.Database["WorldDB.h"]:Get("game_event", tonumber(args[2]) or 0), "no such event")
+		self:Reply(caller, ("%s: %s. Every %d min for %d min, xp x%s. %s"):format(event.name, event.description or "", event.occurrence or 0, event.length or 0, tostring(event.xp_mult or 1), if GameEvents:IsActive(event) then "Active now." else "Not active."))
+	else
+		error("expected list or info", 0)
+	end
+end)
+
+add("pet", 2, ".pet <creature entry> [player] | .pet dismiss [player]", function(self, caller, args)
+	local Pets = self.includes.Content["Pets.h"]
+	if args[1] == "dismiss" then
+		Pets:Dismiss(targetOrSelf(args, 2, caller))
+	else
+		local entry = assert(tonumber(args[1]), "expected a creature entry or dismiss")
+		assert(self.includes.Content["Creatures.h"]:Template(entry), "no such creature")
+		assert(Pets:Summon(targetOrSelf(args, 2, caller), entry), "could not summon")
+	end
+	self:Reply(caller, "Done.")
+end)
+
 add("honor", 2, ".honor add <amount> [player]", function(self, caller, args)
 	assert(args[1] == "add", "expected add")
 	local target = targetOrSelf(args, 3, caller)
@@ -1011,13 +1037,13 @@ return Base(module, {
 	{ Path = "Auth/Database", Imports = "AuthDatabase.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
 	{ Path = "Auth/Support", Imports = "Tickets.h" },
-	{ Path = "World/Zones", Imports = "Zones.h" },
+	{ Path = "World/Zones", Imports = "Zones.h|GameEvents.h" },
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
 	{ Path = "World/Combat", Imports = "Death.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h|Auras.h|Skills.h|Talents.h" },
 	{ Path = "Auth/Social", Imports = "Reputation.h|Achievements.h" },
-	{ Path = "World/Content", Imports = "Teleports.h|GameObjects.h|Creatures.h|Taxi.h" },
+	{ Path = "World/Content", Imports = "Teleports.h|GameObjects.h|Creatures.h|Taxi.h|Pets.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 	{ Path = "Global/Database", Imports = "Database.h" },
 	{ Path = "Global/System", Imports = "Global.h" },

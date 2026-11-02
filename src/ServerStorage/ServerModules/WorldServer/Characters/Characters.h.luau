@@ -130,6 +130,7 @@ function module:Login(player: Player, data)
 	self.includes.Spells["Talents.h"]:OnLogin(player)
 	self.includes.Spells["Skills.h"]:OnLogin(player)
 	self.includes.Social["Achievements.h"]:OnLogin(player)
+	self.includes.Zones["GameEvents.h"]:OnLogin(player)
 end
 
 function module:Logout(player: Player)
@@ -140,6 +141,7 @@ function module:Logout(player: Player)
 	end
 	self.includes.Combat["Duel.h"]:Forfeit(player)
 	self.includes.Content["Trade.h"]:Cancel(player, "Trade cancelled.")
+	self.includes.Content["Pets.h"]:OnLogout(player)
 	self.includes.Combat["Death.h"]:Forget(player)
 	self.includes.Social["Social.h"]:OnLogout(player)
 	self.includes.Social["Guild.h"]:OnLogout(player)
@@ -192,6 +194,7 @@ return Base(module, {
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h|Talents.h|Skills.h" },
 	{ Path = "World/Mail", Imports = "Mail.h" },
-	{ Path = "World/Content", Imports = "Trade.h" },
+	{ Path = "World/Content", Imports = "Trade.h|Pets.h" },
+	{ Path = "World/Zones", Imports = "GameEvents.h" },
 	{ Path = "Auth/Social", Imports = "Social.h|Guild.h|Reputation.h|Achievements.h" },
 })

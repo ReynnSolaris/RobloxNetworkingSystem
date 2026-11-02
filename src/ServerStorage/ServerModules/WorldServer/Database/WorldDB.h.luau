@@ -30,6 +30,7 @@ local TABLES = {
 	taxi_nodes = "id",
 	taxi_path = "id",
 	achievement = "id",
+	game_event = "id",
 }
 module.TABLES = TABLES
 

@@ -1,6 +1,8 @@
 local Base = require(game:GetService("ServerStorage").ServerModules["Template.h"])
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Opcodes = require(ReplicatedStorage.Shared.Opcodes)
+local Config = require(ReplicatedStorage.Shared.Config)
+local Players = game:GetService("Players")
 local module = {}
 
 -- Loot windows, WoW style, over any source: a corpse, a chest, a gathering
@@ -10,6 +12,8 @@ local module = {}
 
 local LOOT_RANGE = 10
 local sources = {}
+local rolls = {}
+local nextRoll = 0
 
 function module:Register(source)
 	sources[tostring(source.Guid)] = source
@@ -78,9 +82,97 @@ local function current(self, player: Player)
 end
 
 local function settle(self, player: Player, source)
-	if self:IsEmpty(source.Loot) then
+	if self:IsEmpty(source.Loot) and (source.Rolling or 0) == 0 then
 		self:Unregister(source.Guid)
 		self:Release(player)
+		if source.OnEmpty then
+			source.OnEmpty()
+		end
+	end
+end
+
+-- Group loot: in a party, an item at or above Config.Loot.RollQuality starts a
+-- Need, Greed or Pass roll among the members nearby instead of being taken.
+function module:StartRoll(player: Player, source, index: number, entry)
+	local Party = self.includes.Social["Party.h"]
+	local Items = self.includes.Content["Items.h"]
+	local members = {}
+	for _, member in Party:MembersOf(player) do
+		local root = member.Character and member.Character:FindFirstChild("HumanoidRootPart")
+		if root and source.Root and (root.Position - source.Root.Position).Magnitude <= 100 then
+			table.insert(members, member)
+		end
+	end
+	if #members < 2 then
+		return false
+	end
+	nextRoll += 1
+	local item = Items:Describe(entry.Entry, { Count = entry.Count })
+	local roll = { Id = nextRoll, Source = source, Index = index, Entry = entry, Item = item, Players = members, Votes = {}, Ends = os.time() + Config.Loot.RollSeconds }
+	rolls[roll.Id] = roll
+	source.Loot.Items[index] = nil
+	source.Rolling = (source.Rolling or 0) + 1
+	for _, member in members do
+		self.includes.Security["Packet.h"]:Send(member, Opcodes.SMSG_LOOT_ROLL_START, { Id = roll.Id, Item = item, Seconds = Config.Loot.RollSeconds })
+	end
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_LOOT_REMOVED, { Index = index })
+	return true
+end
+
+function module:Vote(player: Player, id, vote: string)
+	local roll = rolls[id]
+	if not roll or not table.find(roll.Players, player) or roll.Votes[player] or not table.find({ "need", "greed", "pass" }, vote) then
+		return
+	end
+	roll.Votes[player] = vote
+	local name = player:GetAttribute("CharacterName") or player.Name
+	local text = ("%s has selected %s for: [%s]"):format(name, vote:sub(1, 1):upper() .. vote:sub(2), roll.Item.Name)
+	for _, member in roll.Players do
+		self.includes.Chat["Chat.h"]:System(member, text)
+	end
+	for _, member in roll.Players do
+		if member.Parent == Players and not roll.Votes[member] then
+			return
+		end
+	end
+	self:Resolve(roll)
+end
+
+function module:Resolve(roll)
+	rolls[roll.Id] = nil
+	local Chat = self.includes.Chat["Chat.h"]
+	local best, bestRoll, bestVote = nil, 0, nil
+	for _, member in roll.Players do
+		local vote = roll.Votes[member] or "pass"
+		if member.Parent == Players and vote ~= "pass" then
+			local r = math.random(1, 100)
+			local beats = best == nil or (vote == "need" and bestVote ~= "need") or (vote == bestVote and r > bestRoll)
+			for _, other in roll.Players do
+				Chat:System(other, ("%s rolls %d (1-100) for [%s] (%s)."):format(member:GetAttribute("CharacterName") or member.Name, r, roll.Item.Name, vote))
+			end
+			if beats then
+				best, bestRoll, bestVote = member, r, vote
+			end
+		end
+	end
+	local source = roll.Source
+	source.Rolling = math.max(0, (source.Rolling or 1) - 1)
+	if not best then
+		for _, other in roll.Players do
+			Chat:System(other, ("Everyone passed on [%s]."):format(roll.Item.Name))
+		end
+		source.Loot.Items[roll.Index] = roll.Entry
+		return
+	end
+	for _, other in roll.Players do
+		Chat:System(other, ("%s won: [%s]"):format(best:GetAttribute("CharacterName") or best.Name, roll.Item.Name))
+	end
+	local Entities = self.includes.Entities["EntityPlayer.h"]
+	if not Entities:AddItem(best, roll.Entry.Entry, roll.Entry.Count) then
+		self.includes.Mail["Mail.h"]:Deliver(best:GetAttribute("CharacterName") or best.Name, { Sender = "Group Loot", Subject = roll.Item.Name, Body = "Your bags were full when you won this roll.", Items = { { Entry = roll.Entry.Entry, Count = roll.Entry.Count } }, Money = 0 })
+	end
+	if source.Rolling == 0 and self:IsEmpty(source.Loot) and self:Source(source.Guid) == source then
+		self:Unregister(source.Guid)
 		if source.OnEmpty then
 			source.OnEmpty()
 		end
@@ -91,6 +183,10 @@ function module:TakeItem(player: Player, index: number)
 	local source = current(self, player)
 	local entry = source and source.Loot.Items[index]
 	if not entry then
+		return
+	end
+	local template = self.includes.Content["Items.h"]:Template(entry.Entry)
+	if template and (template.quality or 1) >= Config.Loot.RollQuality and self:StartRoll(player, source, index, entry) then
 		return
 	end
 	if self.includes.Entities["EntityPlayer.h"]:AddItem(player, entry.Entry, entry.Count) then
@@ -136,7 +232,22 @@ function module:Start()
 	Packet:On(Opcodes.CMSG_LOOT_RELEASE, function(player)
 		self:Release(player)
 	end)
-	game:GetService("Players").PlayerRemoving:Connect(function(player)
+	Packet:On(Opcodes.CMSG_LOOT_ROLL, function(player, data)
+		if typeof(data) == "table" then
+			self:Vote(player, tonumber(data.Id), tostring(data.Vote))
+		end
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			for _, roll in rolls do
+				if os.time() >= roll.Ends then
+					self:Resolve(roll)
+				end
+			end
+		end
+	end)
+	Players.PlayerRemoving:Connect(function(player)
 		self.information[player] = nil
 	end)
 end
@@ -145,6 +256,8 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
+	{ Path = "Auth/Social", Imports = "Party.h" },
 	{ Path = "World/Content", Imports = "Items.h" },
+	{ Path = "World/Mail", Imports = "Mail.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h" },
 })

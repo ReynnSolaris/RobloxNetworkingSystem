@@ -141,6 +141,39 @@ function module:IsDead(player: Player): boolean
 	return self.information[player] ~= nil
 end
 
+function module:CorpseAt(player: Player): CFrame?
+	local state = self.information[player]
+	return state and state.At
+end
+
+-- A resurrection spell offers; the dead player accepts within a minute and
+-- returns where their corpse lies with half health.
+function module:Offer(target: Player, caster: Player)
+	local state = self.information[target]
+	if not state then
+		return
+	end
+	state.Offer = { From = caster, At = os.time() }
+	self.includes.Security["Packet.h"]:Send(target, Opcodes.SMSG_RESURRECT_REQUEST, { From = caster:GetAttribute("CharacterName") or caster.Name })
+	self.includes.Chat["Chat.h"]:System(caster, ("You offer to resurrect %s."):format(target:GetAttribute("CharacterName") or target.Name))
+end
+
+function module:Respond(player: Player, accept: boolean)
+	local state = self.information[player]
+	local offer = state and state.Offer
+	if not offer then
+		return
+	end
+	state.Offer = nil
+	if not accept or os.time() - offer.At > 60 then
+		if offer.From.Parent == Players then
+			self.includes.Chat["Chat.h"]:System(offer.From, ("%s declines your resurrection."):format(player:GetAttribute("CharacterName") or player.Name))
+		end
+		return
+	end
+	self:Resurrect(player, state.At)
+end
+
 -- Drop the live state (the record keeps Dead); used on leave and logout.
 function module:Forget(player: Player)
 	local state = self.information[player]
@@ -164,6 +197,9 @@ function module:Start()
 	end)
 	Packet:On(Opcodes.CMSG_RECLAIM_CORPSE, function(player)
 		self:Reclaim(player)
+	end)
+	Packet:On(Opcodes.CMSG_RESURRECT_RESPONSE, function(player, data)
+		self:Respond(player, typeof(data) == "table" and data.Accept == true)
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		self:Forget(player)

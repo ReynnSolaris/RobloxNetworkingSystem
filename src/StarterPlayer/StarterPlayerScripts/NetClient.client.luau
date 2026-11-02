@@ -504,6 +504,34 @@ end
 local skillTrainerOpen, achievementEarned = event("SkillTrainerOpen"), event("AchievementEarned")
 local auctionOpen, auctionList = event("AuctionOpen"), event("AuctionList")
 local taxiOpen, tradeStatus, inspectResult = event("TaxiOpen"), event("TradeStatus"), event("InspectResult")
+local rollStart, guildBankOpen = event("RollStart"), event("GuildBankOpen")
+
+handlers[Opcodes.SMSG_LOOT_ROLL_START] = function(d)
+	rollStart:Fire(d)
+end
+
+handlers[Opcodes.SMSG_WEATHER] = function(d)
+	player:SetAttribute("Weather", ("%s %.2f"):format(tostring(d.Kind or "clear"), d.Intensity or 0.5))
+end
+
+handlers[Opcodes.SMSG_GAME_EVENT] = function(d)
+	player:SetAttribute("GameEvents", HttpService:JSONEncode(d.Active or {}))
+	if d.Started then
+		player:SetAttribute("EventBanner", tostring(d.Started) .. " " .. os.clock())
+	end
+end
+
+handlers[Opcodes.SMSG_GUILD_BANK_LIST] = function(d)
+	player:SetAttribute("GuildBank", HttpService:JSONEncode(d))
+	if d.Open then
+		guildBankOpen:Fire()
+	end
+end
+
+handlers[Opcodes.SMSG_RESURRECT_REQUEST] = function(d)
+	player:SetAttribute("ResurrectFrom", d.From or "Someone")
+	system(("%s wants to resurrect you."):format(tostring(d.From)))
+end
 
 player:GetAttributeChangedSignal("AuctionOpen"):Connect(function()
 	if player:GetAttribute("AuctionOpen") then
@@ -680,6 +708,10 @@ local function parse(text: string)
 		return { Kind = "INSPECT", Target = rest:match("^(%S+)") or player:GetAttribute("TargetName") }
 	elseif prefix == "dismount" then
 		return { Kind = "DISMOUNT" }
+	elseif prefix == "petattack" or prefix == "petfollow" or prefix == "petpassive" or prefix == "petaggressive" or prefix == "petdefensive" or prefix == "petdismiss" then
+		return { Kind = "PET", Action = prefix:sub(4) }
+	elseif prefix == "need" or prefix == "greed" or prefix == "pass" then
+		return { Kind = "ROLLVOTE", Vote = prefix, Id = tonumber(rest:match("^(%d+)")) }
 	elseif prefix == "who" then
 		return { Kind = "WHO", Filter = rest }
 	elseif prefix == "played" then
@@ -736,6 +768,12 @@ local function dispatch(p)
 		send(Opcodes.CMSG_RANDOM_ROLL, { Max = p.Max })
 	elseif p.Kind == "INSPECT" then
 		send(Opcodes.CMSG_INSPECT, { Name = p.Target })
+	elseif p.Kind == "PET" then
+		send(Opcodes.CMSG_PET_ACTION, { Action = p.Action })
+	elseif p.Kind == "ROLLVOTE" then
+		if p.Id then
+			send(Opcodes.CMSG_LOOT_ROLL, { Id = p.Id, Vote = p.Vote })
+		end
 	elseif p.Kind == "DISMOUNT" then
 		local ok, auras = pcall(HttpService.JSONDecode, HttpService, player:GetAttribute("Auras") or "[]")
 		for _, aura in (if ok and typeof(auras) == "table" then auras else {}) do
