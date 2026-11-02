@@ -55,7 +55,8 @@ function module:Check(player: Player, dt: number)
 		return
 	end
 	local moved = (flat(root.Position) - flat(state.last.Position)).Magnitude
-	local allowed = humanoid.WalkSpeed * dt * cfg.Tolerance + cfg.Slack
+	local speed = if player:GetAttribute("MountFlying") then math.max(humanoid.WalkSpeed, cfg.FlySpeed or 80) else humanoid.WalkSpeed
+	local allowed = speed * dt * cfg.Tolerance + cfg.Slack
 	if moved <= allowed then
 		state.last = root.CFrame
 		return

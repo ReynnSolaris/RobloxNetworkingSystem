@@ -53,7 +53,7 @@ src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), 
                                                    BuffFrame (auras and the target's cast), TalentFrame (N), SkillFrame (K, professions
                                                    and the profession trainer), ReputationFrame (U), AchievementFrame (Y, toast),
                                                    AuctionFrame, TaxiFrame, TradeFrame, InspectFrame, PetFrame, RollFrame (Need, Greed, Pass),
-                                   GuildBankFrame, Weather (rain, snow, fog over the camera),
+                                   GuildBankFrame, Weather (rain, snow, fog over the camera), Flight (flying mount controller),
                                                    Preview (ViewportFrame character previews),
                                                    ZoneBanner, PartyFrame, Drag (drag and drop),
                                                    Ui (theme, tooltip), Components (Fusion panels, lists, buttons)
@@ -534,7 +534,8 @@ cast too: `creature_template.spells` names the spells their brains use, and they
 patrol `creature.waypoints` (`.npc wp add`), wander `wander` studs around home,
 and call nearby creatures of their kind for help when attacked.
 
-Talents open on N from level 10: three trees a class, five tiers of talents
+Talents open on N from level 10: three trees a class laid out as a scrolling
+grid of three columns, five tiers of talents
 that raise a stat by percent, a school's damage, or crit and dodge. Points come
 one a level; a tier opens with five points in the tree below. The class trainer
 unlearns them for a gold, doubling each time.
@@ -567,8 +568,11 @@ wins and expiries all settle through the mail, with the house's cut.
 Flight masters (`flightmaster`) sit at `taxi_nodes`; talking to one learns its
 node, and `taxi_path` rows connect nodes (`.taxi node add`, `.taxi path`). Flying
 anchors the character and tweens it along the path, high up, for the fare.
-Mounts are items whose spell applies a `mount` aura: a horse is drawn under the
-character, movement is faster, and any damage dismounts.
+Mounts are items whose spell applies a `mount` aura that lasts until cancelled
+or until any damage lands: a horse is drawn under the character and movement is
+faster. A mount with `fly = true` (Gryphon Reins) sets `MountFlying`, and the
+client's flight controller takes over: WASD along the camera, Space to rise,
+Shift to descend, hovering when idle; the anticheat allows flight speed.
 
 `/trade <name>` opens a six slot trade window on both sides once accepted; both
 must accept after any change. `/inspect` shows another player's gear, stats and
@@ -613,6 +617,14 @@ order: name in quality colour, binding, slot and type, armor, green stats, level
 requirement in red when too low, Use line, max stack, sell price in coin colours.
 Spells show cost and range, cast time and cooldown, rank, class, description and
 what the aura does. Items list primary stats and spell power.
+
+## Corpses
+
+Nothing breaks apart on death. Creatures and players keep their joints, and the
+body is laid on its back, anchored and passable, with an invisible Hitbox part
+the size of the corpse carrying the Loot or Resurrect prompt and the sparkle. A
+player's corpse is a clone of their body made as the ghost spawns, so the stone
+marker only appears when there was no body to clone.
 
 ## Saving
 

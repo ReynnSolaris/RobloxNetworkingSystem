@@ -31,6 +31,7 @@ local SEED = {
 	{ name = "Spiced Wolf Meat", quality = 1, stack = 20, class = "consumable", buyprice = 30, use = "Food", consumable = true },
 	{ name = "Stringy Wolf Meat", quality = 1, stack = 20, class = "reagent", buyprice = 5 },
 	{ name = "Brown Horse Bridle", quality = 2, stack = 1, class = "misc", buyprice = 100000, level = 20, use = "Summon Brown Horse", flavor = "A trusted companion of the road." },
+	{ name = "Gryphon Reins", quality = 3, stack = 1, class = "misc", buyprice = 5000000, level = 30, use = "Summon Gryphon", flavor = "The skies of Azeroth await." },
 }
 
 function module:DB()

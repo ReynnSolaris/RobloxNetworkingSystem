@@ -75,7 +75,7 @@ function module:Sync(unit)
 	local out = {}
 	for _, aura in self:List(unit) do
 		table.insert(out, { Id = aura.Id, Name = aura.Name, Icon = aura.Icon, School = aura.School, Kind = aura.Kind, Harmful = aura.Harmful,
-			Left = math.max(0, aura.Ends - now), Duration = aura.Duration, Description = aura.Description, Stacks = aura.Stacks })
+			Left = if aura.Ends == math.huge then -1 else math.max(0, aura.Ends - now), Duration = aura.Duration, Description = aura.Description, Stacks = aura.Stacks })
 	end
 	if target and target.Parent then
 		target:SetAttribute("Auras", if #out > 0 then HttpService:JSONEncode(out) else nil)
@@ -117,12 +117,12 @@ function module:Apply(caster, unit, spell, amount: number?)
 	aura.Kind, aura.Stat, aura.Mult = spec.kind, spec.stat, spec.mult
 	aura.Amount = amount or spec.amount or 0
 	aura.Interval = spec.interval or 3
-	aura.Duration = spec.duration or 10
-	aura.Ends = now + aura.Duration
+	aura.Duration = spec.duration or 0
+	aura.Ends = if aura.Duration > 0 then now + aura.Duration else math.huge
 	aura.NextTick = now + aura.Interval
 	aura.Harmful = spec.harmful == true or spec.kind == "stun" or ((spec.kind == "speed" or spec.kind == "jump") and (spec.mult or 1) < 1)
 	if spec.kind == "mount" then
-		self.includes.Entities["EntityPlayer.h"]:Mount(unit, true)
+		self.includes.Entities["EntityPlayer.h"]:Mount(unit, true, spec.fly == true)
 	end
 	aura.Caster = caster
 	aura.Stacks = math.min((aura.Stacks or 0) + 1, spec.stacks or 1)

@@ -140,12 +140,36 @@ local function elementUnderMouse(): GuiObject?
 	return nil
 end
 
+local tipAnchor: GuiObject | boolean | nil = nil
+
+-- Is the mouse still over the element the tooltip belongs to?
+local function overAnchor(): boolean
+	local anchor = tipAnchor
+	if typeof(anchor) ~= "Instance" then
+		return true
+	end
+	if not anchor:IsDescendantOf(player.PlayerGui) or not anchor.Visible then
+		return false
+	end
+	local screen = anchor:FindFirstAncestorOfClass("ScreenGui")
+	if screen and not screen.Enabled then
+		return false
+	end
+	local m = UserInputService:GetMouseLocation()
+	if not (screen and screen.IgnoreGuiInset) then
+		m -= GuiService:GetGuiInset()
+	end
+	local p, s = anchor.AbsolutePosition, anchor.AbsoluteSize
+	return m.X >= p.X - 2 and m.X <= p.X + s.X + 2 and m.Y >= p.Y - 2 and m.Y <= p.Y + s.Y + 2
+end
+
 local function place(anchor: GuiObject | boolean | nil)
 	local view = workspace.CurrentCamera.ViewportSize
 	local w, h = tip.AbsoluteSize.X, tip.AbsoluteSize.Y
 	if anchor == nil then
 		anchor = elementUnderMouse() or false
 	end
+	tipAnchor = anchor
 	if typeof(anchor) == "Instance" then
 		local screen = anchor:FindFirstAncestorOfClass("ScreenGui")
 		local inset = if screen and not screen.IgnoreGuiInset then GuiService:GetGuiInset().Y else 0
@@ -209,6 +233,9 @@ task.spawn(function()
 					other:GetAttribute("CharacterLevel") or 1, other:GetAttribute("CharacterRace") or "", class or "",
 					if other:GetAttribute("PvpFlag") then '\n<font color="#FF4040">PvP</font>' else "")
 			end
+		end
+		if tip.Visible and not overAnchor() then
+			Ui.hideTip()
 		end
 		if show then
 			hovering = model

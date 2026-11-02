@@ -237,11 +237,17 @@ end
 
 function module:Start()
 	local DB = self:DB()
+	for _, row in DB:Select("talent") do
+		local col = (row.tier - 1) % 3 + 1
+		if row.col ~= col then
+			DB:Update("talent", row.id, { col = col })
+		end
+	end
 	if #DB:Select("talent") == 0 then
 		for class, tabs in TREES do
 			for tab, tiers in tabs do
 				for tier, talent in tiers do
-					DB:Insert("talent", { class = class, tab = tab, tier = tier, col = 2, name = talent[1], description = describe(talent[2]),
+					DB:Insert("talent", { class = class, tab = tab, tier = tier, col = (tier - 1) % 3 + 1, name = talent[1], description = describe(talent[2]),
 						max_rank = if tier == 5 then 1 else 3, mod = talent[2] })
 				end
 			end

@@ -23,7 +23,9 @@ function SpellUi.color(spell): Color3
 end
 
 function SpellUi.duration(seconds: number): string
-	if seconds >= 3600 then
+	if seconds <= 0 or seconds == math.huge then
+		return "until cancelled"
+	elseif seconds >= 3600 then
 		return ("%d hour%s"):format(seconds // 3600, if seconds >= 7200 then "s" else "")
 	elseif seconds >= 60 then
 		return ("%d min"):format(seconds // 60)
@@ -37,7 +39,9 @@ function SpellUi.auraTooltip(aura, left: number): string
 	if aura.Description then
 		table.insert(lines, ('<font color="#FFD100">%s</font>'):format(aura.Description))
 	end
-	table.insert(lines, ('<font color="#FFFFFF">%s remaining</font>'):format(SpellUi.duration(math.ceil(left))))
+	if left ~= math.huge then
+		table.insert(lines, ('<font color="#FFFFFF">%s remaining</font>'):format(SpellUi.duration(math.ceil(left))))
+	end
 	if not aura.Harmful then
 		table.insert(lines, '<font color="#AAAAAA">Right-click to cancel</font>')
 	end
@@ -68,7 +72,9 @@ function SpellUi.tooltip(spell, extra: string?): string
 		text ..= (" +%d %s for %s."):format(spell.Amount or 0, aura.Stat or "", SpellUi.duration(aura.Duration or 0))
 	elseif aura and aura.Kind == "stun" then
 		text ..= (" Lasts %d sec."):format(aura.Duration or 0)
-	elseif aura and (aura.Kind == "speed" or aura.Kind == "mount") then
+	elseif aura and aura.Kind == "mount" then
+		text ..= (" +%d%% movement speed, until cancelled or damaged."):format(math.round(((aura.Mult or 1) - 1) * 100))
+	elseif aura and aura.Kind == "speed" then
 		text ..= (" %d%% movement speed for %s."):format(math.round(((aura.Mult or 1) - 1) * 100), SpellUi.duration(aura.Duration or 0))
 	end
 	table.insert(lines, ('<font color="#FFD100">%s</font>'):format(text))

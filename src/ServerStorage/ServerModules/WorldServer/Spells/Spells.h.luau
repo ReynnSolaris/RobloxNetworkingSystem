@@ -107,7 +107,8 @@ local SEED = {
 	{ name = "Food", school = "physical", effect = "heal", base = 15, per_level = 3, cost = 0, cast_time = 0, cooldown = 5, range = 0, target = "self", icon = "FD", description = "Restores health." },
 	{ name = "Minor Healing Potion", school = "nature", effect = "heal", base = 40, per_level = 5, cost = 0, cast_time = 0, cooldown = 60, range = 0, target = "self", icon = "HP", description = "Restores health instantly." },
 	{ name = "Linen Bandage", school = "physical", effect = "aura", base = 8, per_level = 2, cost = 0, cast_time = 0, cooldown = 30, range = 0, target = "self", icon = "LB", description = "Heals over 6 sec.", aura = { kind = "periodic", interval = 2, duration = 6 } },
-	{ name = "Summon Brown Horse", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "BH", description = "Summons and dismisses a rideable Brown Horse. Increases movement speed by 60%. Taking damage dismounts you.", aura = { kind = "mount", mult = 1.6, duration = 3600 } },
+	{ name = "Summon Brown Horse", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "BH", description = "Summons and dismisses a rideable Brown Horse. Increases movement speed by 60%. Taking damage dismounts you.", aura = { kind = "mount", mult = 1.6, duration = 0 } },
+	{ name = "Summon Gryphon", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "GR", description = "Summons and dismisses a rideable Gryphon. This mount can fly: hold Space to rise and Shift to descend. Taking damage dismounts you.", aura = { kind = "mount", mult = 2.2, duration = 0, fly = true } },
 	-- creature spells: cast by brains, never learned
 	{ name = "Bite", npc = true, school = "physical", effect = "aura", target = "enemy", base = 2, per_level = 1, cost = 0, cast_time = 0, cooldown = 12, range = 6, icon = "BI", description = "A savage bite that leaves the victim bleeding.", aura = { kind = "periodic", interval = 3, duration = 9, harmful = true } },
 	{ name = "Throw Torch", npc = true, school = "fire", effect = "damage", target = "enemy", base = 4, per_level = 1, cost = 0, cast_time = 0, cooldown = 8, range = 20, icon = "TT", description = "Hurls a burning torch." },
@@ -627,7 +628,12 @@ function module:Start()
 			trainer = row
 		end
 	end
+	local HttpService = game:GetService("HttpService")
 	for _, seed in SEED do
+		local existing = byName[seed.name]
+		if existing and seed.aura and HttpService:JSONEncode(existing.aura or {}) ~= HttpService:JSONEncode(seed.aura) then
+			DB:Update("spell_template", existing.id, { aura = seed.aura, description = seed.description })
+		end
 		if not byName[seed.name] then
 			local row = table.clone(seed)
 			row.starter = nil

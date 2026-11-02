@@ -605,6 +605,7 @@ function module:Spawn(player: Player, at: CFrame?, ghost: boolean?)
 
 	local humanoid = character:WaitForChild("Humanoid") :: Humanoid
 	humanoid.DisplayName = saved.Name
+	humanoid.BreakJointsOnDeath = false
 	module.Dress(character, saved)
 	self.includes.Spells["Auras.h"]:Clear(player)
 	self:ApplyStats(player)
@@ -685,9 +686,10 @@ function module:Buff(player: Player, effect: string, mult: number, seconds: numb
 	return true
 end
 
--- A mount is drawn as a horse-shaped body welded under the character; the
--- speed comes from the aura.
-function module:Mount(player: Player, on: boolean)
+-- A mount is drawn as a horse or gryphon body welded under the character; the
+-- speed comes from the aura, flight from the client's controller once
+-- MountFlying is set.
+function module:Mount(player: Player, on: boolean, fly: boolean?)
 	local entity = self.information[player]
 	local character = entity and entity.Character
 	if not character then
@@ -698,6 +700,7 @@ function module:Mount(player: Player, on: boolean)
 		existing:Destroy()
 	end
 	player:SetAttribute("Mounted", if on then true else nil)
+	player:SetAttribute("MountFlying", if on and fly then true else nil)
 	if not on then
 		return
 	end
@@ -725,15 +728,31 @@ function module:Mount(player: Player, on: boolean)
 		p.Parent = mount
 		return p
 	end
-	local brown, dark = Color3.fromRGB(96, 62, 36), Color3.fromRGB(40, 28, 18)
-	part("Body", Vector3.new(2.2, 2, 5), CFrame.new(0, -2.6, 0), brown)
-	part("Neck", Vector3.new(1.2, 2.4, 1.2), CFrame.new(0, -1.4, -2.8) * CFrame.Angles(math.rad(-30), 0, 0), brown)
-	part("Head", Vector3.new(1.1, 1.1, 2), CFrame.new(0, -0.4, -3.9), brown)
-	part("Mane", Vector3.new(0.4, 1.6, 1.6), CFrame.new(0, -0.8, -2.6), dark)
-	part("Tail", Vector3.new(0.5, 2, 0.5), CFrame.new(0, -3, 2.8) * CFrame.Angles(math.rad(25), 0, 0), dark)
-	for _, x in { -0.75, 0.75 } do
-		for _, z in { -1.8, 1.8 } do
-			part("Leg", Vector3.new(0.6, 2.6, 0.6), CFrame.new(x, -4.8, z), dark)
+	if fly then
+		local feather, gold = Color3.fromRGB(230, 232, 240), Color3.fromRGB(214, 170, 70)
+		part("Body", Vector3.new(2.4, 2, 5.5), CFrame.new(0, -2.6, 0.3), feather)
+		part("Neck", Vector3.new(1.4, 2.2, 1.4), CFrame.new(0, -1.3, -2.8) * CFrame.Angles(math.rad(-25), 0, 0), feather)
+		part("Head", Vector3.new(1.3, 1.2, 1.8), CFrame.new(0, -0.3, -3.9), feather)
+		part("Beak", Vector3.new(0.5, 0.5, 0.9), CFrame.new(0, -0.5, -5.1), gold)
+		part("Tail", Vector3.new(1.6, 0.3, 2.2), CFrame.new(0, -2.4, 3.9), feather)
+		for _, side in { -1, 1 } do
+			part("Wing", Vector3.new(5, 0.3, 3), CFrame.new(side * 3.6, -1.6, 0) * CFrame.Angles(0, 0, side * math.rad(18)), feather)
+			part("WingTip", Vector3.new(2.4, 0.25, 2), CFrame.new(side * 7, -0.6, 0.3) * CFrame.Angles(0, 0, side * math.rad(32)), feather)
+			for _, z in { -1.8, 1.8 } do
+				part("Leg", Vector3.new(0.6, 2.4, 0.6), CFrame.new(side * 0.8, -4.7, z), gold)
+			end
+		end
+	else
+		local brown, dark = Color3.fromRGB(96, 62, 36), Color3.fromRGB(40, 28, 18)
+		part("Body", Vector3.new(2.2, 2, 5), CFrame.new(0, -2.6, 0), brown)
+		part("Neck", Vector3.new(1.2, 2.4, 1.2), CFrame.new(0, -1.4, -2.8) * CFrame.Angles(math.rad(-30), 0, 0), brown)
+		part("Head", Vector3.new(1.1, 1.1, 2), CFrame.new(0, -0.4, -3.9), brown)
+		part("Mane", Vector3.new(0.4, 1.6, 1.6), CFrame.new(0, -0.8, -2.6), dark)
+		part("Tail", Vector3.new(0.5, 2, 0.5), CFrame.new(0, -3, 2.8) * CFrame.Angles(math.rad(25), 0, 0), dark)
+		for _, x in { -0.75, 0.75 } do
+			for _, z in { -1.8, 1.8 } do
+				part("Leg", Vector3.new(0.6, 2.6, 0.6), CFrame.new(x, -4.8, z), dark)
+			end
 		end
 	end
 	mount.Parent = character

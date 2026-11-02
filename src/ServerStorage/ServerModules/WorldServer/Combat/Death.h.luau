@@ -14,24 +14,40 @@ local SEED = {
 	{ name = "GM Island Graveyard", x = -380, y = 5, z = -380, o = 0 },
 }
 
-local function marker(player: Player, at: CFrame): BasePart
-	local part = Instance.new("Part")
-	part.Name = "Corpse of " .. (player:GetAttribute("CharacterName") or player.Name)
-	part.Size = Vector3.new(2, 0.6, 3)
-	part.Anchored = true
-	part.CanCollide = false
-	part.Material = Enum.Material.Slate
-	part.Color = Color3.fromRGB(70, 70, 78)
-	part.CFrame = at * CFrame.new(0, -2, 0)
-	part:SetAttribute("Owner", player.UserId)
+-- The corpse is the body itself, cloned before the ghost spawns and laid on
+-- the ground; a stone marker stands in when there is no body to clone.
+local function marker(self, player: Player, at: CFrame, character: Model?): Instance
+	local name = "Corpse of " .. (player:GetAttribute("CharacterName") or player.Name)
+	local corpse, hitbox
+	if character and character:FindFirstChild("HumanoidRootPart") then
+		character.Archivable = true
+		corpse = character:Clone()
+		for _, child in corpse:GetDescendants() do
+			if child:IsA("Humanoid") or child:IsA("LuaSourceContainer") or child:IsA("ProximityPrompt") or child:IsA("ParticleEmitter") or child.Name == "Mount" then
+				child:Destroy()
+			end
+		end
+		corpse:PivotTo(at)
+		hitbox = self.includes.Content["Creatures.h"].LayDown(corpse)
+	else
+		corpse = Instance.new("Part")
+		corpse.Size = Vector3.new(2, 0.6, 3)
+		corpse.Anchored, corpse.CanCollide = true, false
+		corpse.Material = Enum.Material.Slate
+		corpse.Color = Color3.fromRGB(70, 70, 78)
+		corpse.CFrame = at * CFrame.new(0, -2, 0)
+		hitbox = corpse
+	end
+	corpse.Name = name
+	corpse:SetAttribute("Owner", player.UserId)
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = "Resurrect"
-	prompt.ObjectText = part.Name
+	prompt.ObjectText = name
 	prompt.MaxActivationDistance = Config.Combat.ReclaimRange
 	prompt.RequiresLineOfSight = false
-	prompt.Parent = part
-	part.Parent = workspace
-	return part
+	prompt.Parent = hitbox
+	corpse.Parent = workspace
+	return corpse
 end
 
 function module:Nearest(position: Vector3): CFrame
@@ -60,6 +76,10 @@ end
 -- Called by EntityPlayer when a character's humanoid dies.
 function module:OnDeath(player: Player, at: CFrame)
 	self.includes.Combat["Duel.h"]:Forfeit(player)
+	if player.Character then
+		local hitbox = self.includes.Content["Creatures.h"].LayDown(player.Character)
+		hitbox.Name = "DeathHitbox"
+	end
 	local state = { At = at, Marker = nil, Ghost = false }
 	self.information[player] = state
 	remember(self, player, state)
@@ -96,8 +116,8 @@ function module:Repop(player: Player)
 	end
 	state.Ghost = true
 	remember(self, player, state)
-	state.Marker = marker(player, state.At)
-	state.Marker.ProximityPrompt.Triggered:Connect(function(who)
+	state.Marker = marker(self, player, state.At, player.Character)
+	state.Marker:FindFirstChildWhichIsA("ProximityPrompt", true).Triggered:Connect(function(who)
 		if who == player then
 			self:Reclaim(player)
 		end
@@ -207,6 +227,7 @@ function module:Start()
 end
 
 return Base(module, {
+	{ Path = "World/Content", Imports = "Creatures.h" },
 	{ Path = "World/Combat", Imports = "Duel.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },

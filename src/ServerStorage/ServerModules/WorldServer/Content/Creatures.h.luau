@@ -70,6 +70,29 @@ local function flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
 end
 
+-- A dead model stays whole: every part anchored and passable, the body laid on
+-- its back on the ground, and an invisible Hitbox part the size of the corpse
+-- for prompts and clicks. Returns the hitbox.
+function module.LayDown(model: Model): BasePart
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.Anchored = true
+			part.CanCollide = false
+		end
+	end
+	local box, size = model:GetBoundingBox()
+	local ground = box.Position.Y - size.Y / 2
+	local target = CFrame.new(box.Position.X, ground + size.Z / 2, box.Position.Z) * box.Rotation * CFrame.Angles(-math.pi / 2, 0, 0)
+	model:PivotTo(target * box:Inverse() * model:GetPivot())
+	local hitbox = Instance.new("Part")
+	hitbox.Name = "Hitbox"
+	hitbox.Size = Vector3.new(size.X, size.Z, size.Y)
+	hitbox.CFrame = CFrame.new(target.Position) * box.Rotation
+	hitbox.Anchored, hitbox.CanCollide, hitbox.Transparency = true, false, 1
+	hitbox.Parent = model
+	return hitbox
+end
+
 function module:DB()
 	return self.includes.Database["WorldDB.h"]
 end
@@ -152,6 +175,7 @@ function module:Spawn(row)
 	local root = assert(model:FindFirstChild("HumanoidRootPart"), "creature model needs a HumanoidRootPart") :: BasePart
 	humanoid.DisplayName = template.name
 	humanoid.WalkSpeed = template.speed or 12
+	humanoid.BreakJointsOnDeath = false
 	if template.scale and template.scale ~= 1 then
 		model:ScaleTo(template.scale)
 	end
@@ -205,6 +229,7 @@ function module:SpawnPet(template, at: CFrame, owner: Player, level: number, nam
 	local humanoid = model:FindFirstChildOfClass("Humanoid") :: Humanoid
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
 	humanoid.DisplayName = model.Name
+	humanoid.BreakJointsOnDeath = false
 	humanoid.WalkSpeed = math.max(template.speed or 12, 18)
 	if template.scale and template.scale ~= 1 then
 		model:ScaleTo(template.scale)
@@ -241,8 +266,9 @@ end
 function module:ClearCorpse(guid)
 	local state = self:State(guid)
 	if state then
-		self.includes.System["Effects.h"]:Detach("Sparkle", state.Root)
-		local prompt = state.Root:FindFirstChildOfClass("ProximityPrompt")
+		local part = state.Hitbox or state.Root
+		self.includes.System["Effects.h"]:Detach("Sparkle", part)
+		local prompt = part:FindFirstChildOfClass("ProximityPrompt")
 		if prompt then
 			prompt:Destroy()
 		end
@@ -280,7 +306,9 @@ function module:OnDeath(state)
 	end
 	state.Dead = true
 	state.Model:SetAttribute("Casting", nil)
+	state.Model:SetAttribute("Dead", true)
 	self.includes.Spells["Auras.h"]:Clear(state)
+	state.Hitbox = module.LayDown(state.Model)
 	local Entities = self.includes.Entities["EntityPlayer.h"]
 	local Combat = self.includes.Combat["Combat.h"]
 	local Loot = self.includes.Combat["Loot.h"]
@@ -299,20 +327,20 @@ function module:OnDeath(state)
 	local loot = Loot:Roll("creature_loot_template", state.Row.id, state.Template.mingold, state.Template.maxgold)
 	if not Loot:IsEmpty(loot) then
 		local Party = self.includes.Social["Party.h"]
-		Loot:Register({ Guid = state.Row.guid, Name = state.Template.name, Root = state.Root, Loot = loot,
+		Loot:Register({ Guid = state.Row.guid, Name = state.Template.name, Root = state.Hitbox, Loot = loot,
 			MayLoot = function(player)
 				return not killer or killer == player or table.find(Party:MembersOf(killer), player) ~= nil
 			end,
 			OnEmpty = function()
 				self:ClearCorpse(state.Row.guid)
 			end })
-		self.includes.System["Effects.h"]:Attach("Sparkle", state.Root)
+		self.includes.System["Effects.h"]:Attach("Sparkle", state.Hitbox)
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Loot"
 		prompt.ObjectText = state.Template.name
 		prompt.MaxActivationDistance = 8
 		prompt.RequiresLineOfSight = false
-		prompt.Parent = state.Root
+		prompt.Parent = state.Hitbox
 		prompt.Triggered:Connect(function(player)
 			Loot:Open(player, state.Row.guid)
 		end)

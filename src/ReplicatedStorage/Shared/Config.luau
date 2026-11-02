@@ -204,7 +204,9 @@ return table.freeze({
 
 	-- Server-side movement check. Allowed distance per sample is
 	-- WalkSpeed * dt * Tolerance + Slack; over it snaps back and counts a strike.
-	Anticheat = { Enabled = true, SampleSeconds = 0.5, Tolerance = 1.6, Slack = 6, Strikes = 3, WindowSeconds = 60 },
+	Anticheat = { Enabled = true, SampleSeconds = 0.5, Tolerance = 1.6, Slack = 6, Strikes = 3, WindowSeconds = 60, FlySpeed = 80 },
+	-- Flying mounts: studs per second forward and up, from the client's flight controller.
+	Flight = { Speed = 70, Vertical = 40 },
 
 	Spawn = CFrame.new(0, 5, 0),
 	RespawnDelay = 3,

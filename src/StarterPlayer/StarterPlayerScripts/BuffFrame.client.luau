@@ -38,7 +38,7 @@ local function reader()
 		local auras = SpellUi.decode(raw, {})
 		local stamp = os.clock()
 		for _, aura in auras do
-			aura.Ends = stamp + (aura.Left or 0)
+			aura.Ends = if (aura.Left or 0) < 0 then math.huge else stamp + (aura.Left or 0)
 		end
 		list:set(auras)
 	end
@@ -77,7 +77,7 @@ local function tile(scope, aura, cancellable: boolean)
 				TextColor3 = Color3.fromRGB(220, 220, 230),
 				Text = scope:Computed(function(use)
 					local left = aura.Ends - use(now)
-					return if left >= 3600 then ("%dh"):format(left // 3600) elseif left >= 60 then ("%dm"):format(left // 60) elseif left > 0 then ("%d"):format(math.ceil(left)) else ""
+					return if left == math.huge then "" elseif left >= 3600 then ("%dh"):format(left // 3600) elseif left >= 60 then ("%dm"):format(left // 60) elseif left > 0 then ("%d"):format(math.ceil(left)) else ""
 				end),
 			},
 			if aura.Stacks and aura.Stacks > 1 then scope:New "TextLabel" {
