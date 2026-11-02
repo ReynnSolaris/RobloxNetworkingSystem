@@ -133,7 +133,7 @@ local function kindOf(item)
 	end
 	for armor, names in ARMOR_KIND do
 		if table.find(names, item.name) then
-			out.armor = armor
+			out.armortype = armor
 		end
 	end
 	return out
@@ -168,7 +168,7 @@ function module:Describe(item, extra)
 	local out = { Entry = template.entry, Name = template.name or "?", Quality = template.quality or 1, Stack = template.stack, Slot = template.slot,
 		Class = template.class, Level = template.level, Health = template.health, Damage = template.damage, Armor = template.armor,
 		Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Use = spell and spell.description, Flavor = template.flavor,
-		Bind = template.bind, Recipe = template.recipe, Mount = template.mount, Container = template.container, Subclass = template.subclass, Hands = template.hands, ArmorType = template.armor }
+		Bind = template.bind, Recipe = template.recipe, Mount = template.mount, Container = template.container, Subclass = template.subclass, Hands = template.hands, ArmorType = template.armortype }
 	for _, stat in STATS do
 		out[stat:sub(1, 1):upper() .. stat:sub(2)] = template[stat]
 	end
@@ -189,6 +189,11 @@ function module:Start()
 			item[key] = value
 		end
 		local existing = byName[item.name]
+		-- rows written while the armor type sat in `armor`: restore the number, move the type
+		if existing and typeof(existing.armor) == "string" then
+			DB:Update("item_template", existing.entry, { armor = item.armor or 0, armortype = existing.armor })
+			existing.armor, existing.armortype = item.armor, existing.armor
+		end
 		if not existing then
 			byName[item.name] = DB:Insert("item_template", table.clone(item))
 		else

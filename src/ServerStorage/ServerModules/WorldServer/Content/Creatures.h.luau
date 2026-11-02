@@ -23,6 +23,7 @@ local SEED = {
 	{ name = "Innkeeper", subname = "Innkeeper", modelid = "default", scale = 1, gossip = "Welcome, traveler. Rest your feet a while.", faction = "friendly", innkeeper = true },
 	{ name = "Town Guard", subname = "Guard", modelid = "default", scale = 1.05, gossip = "Move along, citizen.", faction = "Alliance", guard = true, rank = "elite", minlevel = 10, maxlevel = 10, health = 300, dmgmin = 12, dmgmax = 18, aggro = 20, speed = 16 },
 	{ name = "Orgrimmar Grunt", subname = "Guard", modelid = "default", scale = 1.1, gossip = "Lok'tar, friend.", faction = "Horde", guard = true, rank = "elite", minlevel = 10, maxlevel = 10, health = 300, dmgmin = 12, dmgmax = 18, aggro = 20, speed = 16 },
+	{ name = "Riding Trainer", subname = "Riding Trainer", modelid = "default", scale = 1, gossip = "Every great journey starts in the saddle.", faction = "friendly" },
 	{ name = "Spirit Healer", subname = "", modelid = "default", scale = 1.2, gossip = "Rest now, and rise.", faction = "friendly", spirithealer = true, ghostonly = true },
 	{ name = "Banker", subname = "Banker", modelid = "default", scale = 1, gossip = "Your deposits are safe with us.", faction = "friendly", banker = true },
 	{ name = "Class Trainer", subname = "Trainer", modelid = "default", scale = 1, gossip = "What would you like to learn?", faction = "friendly" },
@@ -140,7 +141,7 @@ end
 -- GM mode makes everything neutral.
 function module:IsHostileTo(state, player: Player): boolean
 	local session = self.includes.Security["Session.h"]:Get(player)
-	if session and session.Gm then
+	if session and (session.Gm or session.Invisible) then
 		return false
 	end
 	local faction = state.Template.faction
@@ -375,7 +376,8 @@ function module:TopThreat(state)
 	local Combat = self.includes.Combat["Combat.h"]
 	local best, bestThreat = nil, -1
 	for unit, threat in state.Threat do
-		if Combat:Alive(unit) and (Combat:IsPlayer(unit) and unit.Parent == Players or not Combat:IsPlayer(unit)) then
+		local owner = Combat:OwnerOf(unit)
+		if Combat:Alive(unit) and (Combat:IsPlayer(unit) and unit.Parent == Players or not Combat:IsPlayer(unit)) and (not owner or self:IsHostileTo(state, owner)) then
 			if threat > bestThreat then
 				best, bestThreat = unit, threat
 			end

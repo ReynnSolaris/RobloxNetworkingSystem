@@ -1122,7 +1122,7 @@ return Base(module, {
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h|Auras.h|Skills.h|Talents.h" },
 	{ Path = "Auth/Social", Imports = "Reputation.h|Achievements.h" },
-	{ Path = "World/Content", Imports = "Teleports.h|GameObjects.h|Creatures.h|Taxi.h|Pets.h" },
+	{ Path = "World/Content", Imports = "Teleports.h|GameObjects.h|Creatures.h|Taxi.h|Pets.h|Items.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 	{ Path = "Global/Database", Imports = "Database.h" },
 	{ Path = "Global/System", Imports = "Global.h" },

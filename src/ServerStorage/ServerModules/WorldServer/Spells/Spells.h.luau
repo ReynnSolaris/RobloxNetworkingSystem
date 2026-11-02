@@ -22,8 +22,8 @@ local function spell(class, name, school, effect, target, base, per, cost, cast,
 	end
 	return row
 end
-local function dmg(class, name, school, base, per, cost, cast, cd, range, icon, text, starter)
-	return spell(class, name, school, "damage", "enemy", base, per, cost, cast, cd, range, icon, text, { starter = starter })
+local function dmg(class, name, school, base, per, cost, cast, cd, range, icon, text, starter, forms)
+	return spell(class, name, school, "damage", "enemy", base, per, cost, cast, cd, range, icon, text, { starter = starter, forms = forms })
 end
 local function heal(class, name, base, per, cost, cast, icon, text)
 	return spell(class, name, "holy", "heal", "friend", base, per, cost, cast, 0, 30, icon, text)
@@ -70,7 +70,7 @@ local SEED = {
 	speed("Warrior", "Battle Shout", 1.25, 20, 15, 30, "BS", "Quickens your step for 20 sec."),
 	spell("Warrior", "Taunt", "physical", "taunt", "enemy", 0, 0, 5, 0, 8, 20, "TA", "Taunts the target to attack you, putting you at the top of its threat list."),
 	spell("Paladin", "Hand of Reckoning", "holy", "taunt", "enemy", 0, 0, 10, 0, 8, 30, "HR", "Taunts the target to attack you, putting you at the top of its threat list."),
-	spell("Druid", "Growl", "physical", "taunt", "enemy", 0, 0, 5, 0, 8, 20, "GL", "Taunts the target to attack you, putting you at the top of its threat list."),
+	spell("Druid", "Growl", "physical", "taunt", "enemy", 0, 0, 5, 0, 8, 20, "GL", "Taunts the target to attack you in bear form, putting you at the top of its threat list.", { forms = { "bear" } }),
 	spell("Death Knight", "Dark Command", "shadow", "taunt", "enemy", 0, 0, 5, 0, 8, 30, "DK", "Commands the target to attack you, putting you at the top of its threat list."),
 	dot("Warrior", "Rend", "physical", 3, 1, 10, 0, 8, 3, 15, "RE", "Wounds the target, causing them to bleed."),
 	slow("Warrior", "Hamstring", "physical", 0.5, 15, 10, 0, 8, "HM", "Maims the enemy, reducing movement speed by 50% for 15 sec."),
@@ -99,7 +99,8 @@ local SEED = {
 	spell("Priest", "Resurrection", "holy", "resurrect", "friend", 0, 0, 60, 10, 0, 30, "RS", "Brings a dead player back to life with half their health."),
 	hot("Priest", "Renew", 5, 1, 20, 3, 15, "RN", "Heals the target over 15 sec."),
 	stat("Priest", "Power Word: Fortitude", "holy", "Stamina", 3, 1, 25, 1800, "PF", "Increases the target's Stamina for 30 min."),
-	dot("Priest", "Shadow Word: Pain", "shadow", 4, 1, 20, 0, 30, 3, 18, "SW", "A word of darkness that causes shadow damage over 18 sec."),
+	spell("Priest", "Shadow Word: Pain", "shadow", "aura", "enemy", 4, 1, 20, 0, 0, 30, "SW", "A word of darkness that causes shadow damage over 18 sec.", { aura = { kind = "periodic", interval = 3, duration = 18, harmful = true }, forms = { "none", "shadow" } }),
+	dmg("Priest", "Mind Blast", "shadow", 18, 4, 25, 1.5, 8, 30, "MB", "Blasts the target with shadow damage.", false, { "none", "shadow" }),
 	dmg("Death Knight", "Icy Touch", "frost", 9, 2, 12, 0, 4, 20, "IT", "Chills the target for frost damage.", true),
 	stance("Death Knight", "Blood Presence", "shadow", "presence", { Stamina = 1 }, nil, 2, 1, 0, "BP", "Increases Stamina. Only one presence at a time.", true),
 	stance("Death Knight", "Frost Presence", "frost", "presence", { Armor = 3 }, nil, 2, 1, 0, "FP", "Increases armor. Only one presence at a time."),
@@ -122,15 +123,21 @@ local SEED = {
 	spell("Warlock", "Summon Imp", "fire", "summon", "self", 0, 0, 30, 5, 0, 0, "SI", "Summons an Imp under the command of the Warlock.", { summon = "Imp" }),
 	spell("Warlock", "Dismiss Pet", "shadow", "dismiss", "self", 0, 0, 0, 0, 0, 0, "DP", "Dismisses your minion."),
 	dot("Warlock", "Corruption", "shadow", 4, 1, 15, 0, 30, 3, 18, "CR", "Corrupts the target, causing shadow damage over 18 sec."),
-	dmg("Druid", "Wrath", "nature", 14, 3, 18, 2, 0, 30, "WR", "Causes nature damage to the target.", true),
-	heal("Druid", "Healing Touch", 24, 6, 30, 3, "HT", "Heals a friendly target."),
+	dmg("Druid", "Wrath", "nature", 14, 3, 18, 2, 0, 30, "WR", "Causes nature damage to the target.", true, { "none", "moonkin" }),
+	dmg("Druid", "Starfire", "arcane", 22, 5, 30, 3, 0, 30, "SF", "Causes arcane damage to the target.", false, { "none", "moonkin" }),
+	dmg("Druid", "Maul", "physical", 10, 3, 10, 0, 3, 8, "ML", "A strong attack in bear form.", false, { "bear" }),
+	dmg("Druid", "Swipe", "physical", 7, 2, 10, 0, 6, 8, "SW", "Swipe the enemy in bear form.", false, { "bear" }),
+	dmg("Druid", "Claw", "physical", 9, 3, 10, 0, 2, 8, "CL", "Claw the enemy in cat form.", false, { "cat" }),
+	dmg("Druid", "Ferocious Bite", "physical", 16, 4, 20, 0, 8, 8, "FB", "A finishing bite in cat form.", false, { "cat" }),
+	spell("Druid", "Healing Touch", "holy", "heal", "friend", 24, 6, 30, 3, 0, 30, "HT", "Heals a friendly target.", { forms = { "none", "tree" } }),
 	form("Druid", "Bear Form", "nature", "bear", { Armor = 3, Stamina = 1 }, nil, 3, 1, 20, "BR", "Shapeshift into a bear, increasing armor and Stamina.", true),
 	form("Druid", "Cat Form", "nature", "cat", { Agility = 1.5 }, 1.3, 3, 1, 20, "CT", "Shapeshift into a cat, increasing Agility and movement speed by 30%."),
 	form("Druid", "Travel Form", "nature", "travel", {}, 1.4, 0, 0, 15, "TF", "Shapeshift into a swift form, increasing movement speed by 40%."),
 	spell("Druid", "Rebirth", "nature", "resurrect", "friend", 0, 0, 60, 10, 600, 30, "RB", "Returns the spirit to a dead player with half their health."),
-	hot("Druid", "Rejuvenation", 5, 1, 20, 3, 12, "RJ", "Heals the target over 12 sec."),
+	spell("Druid", "Rejuvenation", "holy", "aura", "friend", 5, 1, 20, 0, 0, 30, "RJ", "Heals the target over 12 sec.", { aura = { kind = "periodic", interval = 3, duration = 12 }, forms = { "none", "tree" } }),
 	stat("Druid", "Mark of the Wild", "nature", "Armor", 2, 1, 25, 1800, "MW", "Increases the friendly target's armor for 30 min."),
-	dot("Druid", "Moonfire", "arcane", 3, 1, 15, 0, 30, 3, 12, "MF", "Burns the enemy with arcane energy over 12 sec."),
+	spell("Druid", "Moonfire", "arcane", "aura", "enemy", 3, 1, 15, 0, 0, 30, "MF", "Burns the enemy with arcane energy over 12 sec.", { aura = { kind = "periodic", interval = 3, duration = 12, harmful = true }, forms = { "none", "moonkin" } }),
+	spell("Druid", "Rake", "physical", "aura", "enemy", 4, 1, 15, 0, 0, 8, "RK", "Rake the enemy in cat form, causing bleeding over 9 sec.", { aura = { kind = "periodic", interval = 3, duration = 9, harmful = true }, forms = { "cat" } }),
 	-- signature spells taught by the last talent of each tree (talent = true keeps trainers from selling them)
 	dmg("Warrior", "Mortal Strike", "physical", 18, 4, 20, 0, 6, 8, "MS", "A vicious strike that deals heavy damage."),
 	dmg("Warrior", "Bloodthirst", "physical", 16, 4, 20, 0, 4, 8, "BT", "Instantly attack the target, fuelled by rage."),
@@ -169,6 +176,8 @@ local SEED = {
 	{ class = "Hunter", name = "Dual Wield", school = "physical", effect = "passive", target = "self", icon = "DW", description = "Allows a one-handed weapon in your off hand.", trainlevel = 20 },
 	{ class = "Shaman", name = "Dual Wield", school = "physical", effect = "passive", target = "self", icon = "DW", description = "Allows a one-handed weapon in your off hand.", trainlevel = 40 },
 	{ class = "Warrior", name = "Titan's Grip", school = "physical", effect = "passive", target = "self", icon = "TG", description = "Allows you to wield two-handed axes, maces and swords in one hand.", trainlevel = 60 },
+	{ name = "Apprentice Riding", school = "physical", effect = "passive", target = "self", icon = "AR", description = "Allows you to ride ground mounts.", trainer = "Riding Trainer", trainlevel = 20, cost = 40000 },
+	{ name = "Expert Riding", school = "physical", effect = "passive", target = "self", icon = "ER", description = "Allows you to ride flying mounts.", trainer = "Riding Trainer", trainlevel = 60, cost = 2500000 },
 	{ name = "Resurrection Sickness", school = "shadow", effect = "aura", target = "self", cost = 0, cast_time = 0, cooldown = 0, range = 0, icon = "RS", description = "Your stats are reduced by a quarter after a spirit healer brought you back.",
 		aura = { kind = "stats", pct = -0.25, duration = 600, harmful = true } },
 	-- item spells: no class, never trained
@@ -176,9 +185,9 @@ local SEED = {
 	{ name = "Food", school = "physical", effect = "heal", base = 15, per_level = 3, cost = 0, cast_time = 0, cooldown = 5, range = 0, target = "self", icon = "FD", description = "Restores health." },
 	{ name = "Minor Healing Potion", school = "nature", effect = "heal", base = 40, per_level = 5, cost = 0, cast_time = 0, cooldown = 60, range = 0, target = "self", icon = "HP", description = "Restores health instantly." },
 	{ name = "Linen Bandage", school = "physical", effect = "aura", base = 8, per_level = 2, cost = 0, cast_time = 0, cooldown = 30, range = 0, target = "self", icon = "LB", description = "Heals over 6 sec.", aura = { kind = "periodic", interval = 2, duration = 6 } },
-	{ name = "Summon Brown Horse", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "BH", description = "Summons and dismisses a rideable Brown Horse. Increases movement speed by 60%. Taking damage dismounts you.", aura = { kind = "mount", mult = 1.6, duration = 0 } },
-	{ name = "Summon Pony", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "PN", description = "Summons and dismisses a rideable Pony from the Pony mount template.", aura = { kind = "mount", mult = 1.6, duration = 0, model = "Pony" } },
-	{ name = "Summon Gryphon", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "GR", description = "Summons and dismisses a rideable Gryphon. This mount can fly: hold Space to rise and Shift to descend. Taking damage dismounts you.", aura = { kind = "mount", mult = 2.2, duration = 0, fly = true } },
+	{ name = "Summon Brown Horse", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "BH", description = "Summons and dismisses a rideable Brown Horse. Increases movement speed by 60%. Taking damage dismounts you. Requires Apprentice Riding.", aura = { kind = "mount", mult = 1.6, duration = 0, riding = "Apprentice Riding" } },
+	{ name = "Summon Pony", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "PN", description = "Summons and dismisses a rideable Pony from the Pony mount template. Requires Apprentice Riding.", aura = { kind = "mount", mult = 1.6, duration = 0, model = "Pony", riding = "Apprentice Riding" } },
+	{ name = "Summon Gryphon", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "GR", description = "Summons and dismisses a rideable Gryphon. Space takes off, Shift lands. Taking damage dismounts you. Requires Expert Riding.", aura = { kind = "mount", mult = 2.2, duration = 0, fly = true, riding = "Expert Riding" } },
 	-- creature spells: cast by brains, never learned
 	{ name = "Bite", npc = true, school = "physical", effect = "aura", target = "enemy", base = 2, per_level = 1, cost = 0, cast_time = 0, cooldown = 12, range = 6, icon = "BI", description = "A savage bite that leaves the victim bleeding.", aura = { kind = "periodic", interval = 3, duration = 9, harmful = true } },
 	{ name = "Throw Torch", npc = true, school = "fire", effect = "damage", target = "enemy", base = 4, per_level = 1, cost = 0, cast_time = 0, cooldown = 8, range = 20, icon = "TT", description = "Hurls a burning torch." },
@@ -281,8 +290,10 @@ function module:Describe(spell, level: number, caster)
 		Cost = spell.cost or 0, CastTime = spell.cast_time or 0, Cooldown = spell.cooldown or 0, Range = spell.range or 0, Target = spell.target,
 		Icon = spell.icon, Amount = math.floor(self:Amount(spell, level, caster)) }
 	if spell.aura then
-		out.Aura = { Kind = spell.aura.kind, Stat = spell.aura.stat, Mult = spell.aura.mult, Interval = spell.aura.interval, Duration = spell.aura.duration, Harmful = spell.aura.harmful }
+		out.Aura = { Kind = spell.aura.kind, Stat = spell.aura.stat, Mult = spell.aura.mult, Interval = spell.aura.interval, Duration = spell.aura.duration, Harmful = spell.aura.harmful,
+			Group = spell.aura.group, Form = spell.aura.form, Riding = spell.aura.riding }
 	end
+	out.Forms = spell.forms
 	return out
 end
 
@@ -491,6 +502,20 @@ function module:Cast(player: Player, id, guid, item)
 	end
 	if self.includes.Spells["Auras.h"]:Has(player, "stun") then
 		return self:Fail(player, "You are stunned.")
+	end
+	-- shapeshifted: only what the form allows, and the form spells themselves
+	local current = self.includes.Spells["Auras.h"]:CurrentForm(player)
+	local isForm = spell.aura and spell.aura.kind == "form"
+	if not isForm and not item then
+		local forms = spell.forms or { "none" }
+		if not table.find(forms, current or "none") then
+			return self:Fail(player, if current then "You can't do that while shapeshifted." else "You must be shapeshifted to do that.")
+		end
+	elseif item and current and current ~= "shadow" then
+		return self:Fail(player, "You can't use items while shapeshifted.")
+	end
+	if spell.aura and spell.aura.riding and not self.includes.Entities["EntityPlayer.h"]:Knows(player, spell.aura.riding) then
+		return self:Fail(player, ("You need the %s skill to ride that."):format(spell.aura.riding))
 	end
 	local s = self:State(player)
 	local now = os.clock()
@@ -732,11 +757,16 @@ function module:Start()
 		byName[keyOf(row)] = row
 	end
 	local fresh = next(byName) == nil
-	local trainer
+	local trainer, trainers = nil, {}
 	for _, row in DB:Select("creature_template") do
+		trainers[row.name] = row
 		if row.name == "Class Trainer" then
 			trainer = row
 		end
+	end
+	local taught = {}
+	for _, row in DB:Select("npc_trainer") do
+		taught[tostring(row.spell)] = true
 	end
 	local HttpService = game:GetService("HttpService")
 	for _, seed in SEED do
@@ -747,14 +777,22 @@ function module:Start()
 		end
 		if not existing then
 			local row = table.clone(seed)
-			row.starter, row.trainlevel = nil, nil
+			row.starter, row.trainlevel, row.trainer, row.cost = nil, nil, nil, nil
 			byName[key] = DB:Insert("spell_template", row)
 			-- new class spells reach old databases through the trainer; new starters are learned at login
 			if not fresh and seed.starter and seed.class then
 				DB:Insert("playercreateinfo_spell", { class = seed.class, spell = byName[key].id })
-			elseif not fresh and trainer and seed.class and not seed.starter and not seed.talent then
+			elseif not fresh and trainer and seed.class and not seed.starter and not seed.talent and not seed.trainer then
 				DB:Insert("npc_trainer", { entry = trainer.entry, spell = byName[key].id, cost = 100, reqlevel = seed.trainlevel or 2 })
 			end
+		end
+	end
+	-- other trainers (riding) sell their spells whenever a row is missing
+	for _, seed in SEED do
+		local shop = seed.trainer and trainers[seed.trainer]
+		local spell = byName[keyOf(seed)]
+		if shop and spell and not taught[tostring(spell.id)] then
+			DB:Insert("npc_trainer", { entry = shop.entry, spell = spell.id, cost = seed.cost or 100, reqlevel = seed.trainlevel or 1 })
 		end
 	end
 	if fresh then
@@ -762,7 +800,7 @@ function module:Start()
 			local spell = byName[keyOf(seed)]
 			if seed.starter then
 				DB:Insert("playercreateinfo_spell", { class = seed.class, spell = spell.id })
-			elseif trainer and seed.class and not seed.talent then
+			elseif trainer and seed.class and not seed.talent and not seed.trainer then
 				DB:Insert("npc_trainer", { entry = trainer.entry, spell = spell.id, cost = 100, reqlevel = seed.trainlevel or 2 })
 			end
 		end

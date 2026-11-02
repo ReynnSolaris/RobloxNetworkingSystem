@@ -60,6 +60,16 @@ function SpellUi.tooltip(spell, extra: string?): string
 	if spell.Class then
 		table.insert(lines, ('<font color="#AAAAAA">%s</font>'):format(spell.Class))
 	end
+	if spell.Forms then
+		local names = {}
+		for _, f in spell.Forms do
+			table.insert(names, if f == "none" then "Caster" else (f:sub(1, 1):upper() .. f:sub(2) .. " Form"))
+		end
+		table.insert(lines, ('<font color="#FFFFFF">Requires %s</font>'):format(table.concat(names, ", ")))
+	end
+	if spell.Aura and spell.Aura.Riding then
+		table.insert(lines, ('<font color="#FFFFFF">Requires %s</font>'):format(spell.Aura.Riding))
+	end
 	local text = spell.Description or ""
 	local aura = spell.Aura
 	if spell.Effect == "damage" then

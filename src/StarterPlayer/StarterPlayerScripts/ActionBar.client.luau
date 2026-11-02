@@ -197,7 +197,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 	local slot = table.find(KEYCODES, input.KeyCode)
-	if slot then
+	if slot and not (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
 		cast(slot)
 	elseif input.KeyCode == Enum.KeyCode.Escape and peek(casting) then
 		netSend:Fire(Opcodes.CMSG_CANCEL_CAST, {})

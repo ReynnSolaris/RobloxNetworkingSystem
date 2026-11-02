@@ -41,6 +41,16 @@ function module:Has(unit, kind: string): boolean
 	return false
 end
 
+-- The shapeshift form a unit is in, if any.
+function module:CurrentForm(unit): string?
+	for _, aura in self:List(unit) do
+		if aura.Kind == "form" then
+			return aura.Form
+		end
+	end
+	return nil
+end
+
 function module:Find(unit, id)
 	for _, aura in self:List(unit) do
 		if aura.Id == id then

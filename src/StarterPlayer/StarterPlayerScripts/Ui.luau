@@ -56,7 +56,8 @@ function Ui.itemTooltip(item, price: string?): string
 		white("Binds when equipped")
 	end
 	if item.Slot then
-		local kind = if item.Subclass then (item.Subclass:sub(1, 1):upper() .. item.Subclass:sub(2)) elseif item.ArmorType then (item.ArmorType:sub(1, 1):upper() .. item.ArmorType:sub(2)) elseif item.Class then (CLASS_NAMES[item.Class] or item.Class) else nil
+		local sub, armor = if typeof(item.Subclass) == "string" then item.Subclass else nil, if typeof(item.ArmorType) == "string" then item.ArmorType else nil
+		local kind = if sub then (sub:sub(1, 1):upper() .. sub:sub(2)) elseif armor then (armor:sub(1, 1):upper() .. armor:sub(2)) elseif item.Class then (CLASS_NAMES[item.Class] or item.Class) else nil
 		local hands = if (item.Hands or 1) == 2 then "Two-Hand" elseif item.Slot == "mainhand" and item.Class == "weapon" then "One-Hand" else nil
 		white(("%s%s"):format(hands or SLOT_NAMES[item.Slot] or item.Slot, if kind then ('<font color="#AAAAAA">   %s</font>'):format(kind) else ""))
 	elseif item.Class and item.Class ~= "misc" then

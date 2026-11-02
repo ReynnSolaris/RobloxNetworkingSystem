@@ -685,6 +685,16 @@ around the origin as the rider's HumanoidRootPart. Part attributes: `Parent`
 template in the mount spell's `aura.model`; the Pony template and Pony Reins
 show the whole chain. Legs swing with speed, wings glide and flap.
 
+Casting respects the form, TC's stance masks: a spell lists the `forms` it
+may be cast in ("none" is the caster form), everything else is "You can't do
+that while shapeshifted". Bears have Maul, Swipe and Growl, cats Claw, Rake and
+Ferocious Bite, moonkin Wrath, Starfire and Moonfire, trees the heals, and
+Shadowform allows the shadow spells. A stance bar above the action bar holds
+the stances, auras, aspects, presences, forms and Stealth on Ctrl+1 to Ctrl+9,
+lit while active. Riding is a skill: the Riding Trainer teaches Apprentice
+Riding (ground mounts, level 20) and Expert Riding (flying, level 60), and a
+mount spell names the skill it needs in `aura.riding`.
+
 ## Factions, guards, equip rules, spirit healers, GM tools
 
 Hostility is TC's: `creature_template.faction` is `hostile` (everyone), an
