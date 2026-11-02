@@ -1,33 +1,18 @@
+local Base = require(game:GetService("ServerStorage").ServerModules["Template.h"])
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local module = {}
---[[
-	Module Base
---]]
---[[
-	Module Custom Functions
---]]
 
---[[
-	Example () -> Does an example function
---]]
-function module:Example(std:Example_Variable)
-	
+local CHANNELS = {
+	SAY = { Range = Config.Chat.SayRange },
+	YELL = { Range = Config.Chat.YellRange },
+	WORLD = {},
+	WHISPER = { Target = true },
+	SYSTEM = { ServerOnly = true },
+}
+module.CHANNELS = CHANNELS
+
+function module:Get(name: string)
+	return CHANNELS[name]
 end
 
-return function()
-	return setmetatable({
-		["includes"] = {},
-		["information"] = {}
-	}, {
-		__index = function(self, index)
-			if module[index] ~= nil then
-				if typeof(module[index]) == "function" then
-					return function(self, ...)
-						return module[index](self, ...)
-					end
-				else
-					return module[index]
-				end
-			end
-		end,
-	})
-end
+return Base(module)

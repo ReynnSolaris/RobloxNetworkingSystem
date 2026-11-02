@@ -1,52 +1,39 @@
+local Base = require(game:GetService("ServerStorage").ServerModules["Template.h"])
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local module = {}
---[[
-	Module Base
---]]
---[[
-	Module Custom Functions
---]]
 
---[[
-	Example () -> Does an example function
---]]
-local ENUM = {
-	["RBAC_PERMISSION_CONSOLE"] = 5,
-	["RBAC_PERMISSION_OWNER"] = 4,
-	["RBAC_PERMISSION_PLAYER"] = 0,
-}
-function module:GetRole(PlayerInfo:Player)
-	if PlayerInfo.UserId == game.CreatorId or PlayerInfo.UserId == 44037530 then
-		return ENUM.RBAC_PERMISSION_OWNER
+local ROLES = { PLAYER = 0, MODERATOR = 1, GAMEMASTER = 2, OWNER = 4, CONSOLE = 5 }
+module.ROLES = ROLES
+
+local function isCreator(player: Player): boolean
+	return game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
+end
+
+function module:GetRole(player: Player): number
+	if isCreator(player) or table.find(Config.Owners, player.UserId) then
+		return ROLES.OWNER
 	end
-	return ENUM.RBAC_PERMISSION_PLAYER
+	local account = self.includes.Database["AuthDatabase.h"]:Get(player)
+	return if account and account.Role then account.Role else ROLES.PLAYER
 end
 
-function module:GetRoleName(RBAC_PERMISSION_VALUE:number)
-	local TITLE = ""
-	table.foreach(ENUM, function(a, b)
-		if b == RBAC_PERMISSION_VALUE then
-			TITLE = a
-			return a
+function module:GetRoleName(level: number): string
+	for name, value in ROLES do
+		if value == level then
+			return name
 		end
-	end)
-	return TITLE
+	end
+	return "PLAYER"
 end
 
-return function()
-	return setmetatable({
-		["includes"] = {},
-		["information"] = {}
-	}, {
-		__index = function(self, index)
-			if module[index] ~= nil then
-				if typeof(module[index]) == "function" then
-					return function(self, ...)
-						return module[index](self, ...)
-					end
-				else
-					return module[index]
-				end
-			end
-		end,
-	})
+function module:Parse(name: string): number?
+	return ROLES[name:upper()]
 end
+
+function module:HasLevel(player: Player, level: number): boolean
+	return self:GetRole(player) >= level
+end
+
+return Base(module, {
+	{ Path = "Auth/Database", Imports = "AuthDatabase.h" },
+})
