@@ -122,6 +122,24 @@ add("ticket", 1, ".ticket list | .ticket view <id> | .ticket reply <id> <text> |
 	end
 end)
 
+add("ac", 1, ".ac status | .ac reset <player> | .ac on|off", function(self, caller, args)
+	local AC = self.includes.Movement["Anticheat.h"]
+	if args[1] == "reset" then
+		AC:Reset(findPlayer(args[2]))
+		self:Reply(caller, "Strikes cleared.")
+	elseif args[1] == "on" or args[1] == "off" then
+		AC:SetEnabled(args[1] == "on")
+		self:Reply(caller, "Anticheat " .. args[1] .. ".")
+	else
+		self:Reply(caller, "Anticheat " .. (if AC:Enabled() then "on" else "off"))
+		for _, player in Players:GetPlayers() do
+			if AC:Strikes(player) > 0 then
+				self:Reply(caller, ("  %s: %d strike(s)"):format(player.Name, AC:Strikes(player)))
+			end
+		end
+	end
+end)
+
 -- gm mode and visibility
 
 add("gm", 1, ".gm on|off | .gm invis on|off | .gm list", function(self, caller, args)
@@ -392,6 +410,7 @@ return Base(module, {
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
 	{ Path = "Auth/Support", Imports = "Tickets.h" },
 	{ Path = "World/Zones", Imports = "Zones.h" },
+	{ Path = "World/Movement", Imports = "Anticheat.h" },
 	{ Path = "Global/Database", Imports = "Database.h" },
 	{ Path = "Global/System", Imports = "Global.h" },
 })

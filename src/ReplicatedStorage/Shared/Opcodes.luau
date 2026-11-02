@@ -21,6 +21,10 @@ local Opcodes = {
 	SMSG_EMOTE = 51,
 
 	CMSG_TICKET = 60,
+
+	CMSG_PARTY = 70,
+	SMSG_PARTY_UPDATE = 71,
+	SMSG_PARTY_INVITE = 72,
 }
 
 local names = {}

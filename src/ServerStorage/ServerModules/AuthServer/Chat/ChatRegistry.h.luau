@@ -7,6 +7,7 @@ local CHANNELS = {
 	YELL = { Range = Config.Chat.YellRange },
 	WORLD = {},
 	WHISPER = { Target = true },
+	PARTY = { Party = true },
 	SYSTEM = { ServerOnly = true },
 }
 module.CHANNELS = CHANNELS

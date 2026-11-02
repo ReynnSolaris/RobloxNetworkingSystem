@@ -72,6 +72,9 @@ function module:Start()
 		if channel.Target and #recipients == 0 then
 			return self:System(player, "No player named " .. tostring(data.Target))
 		end
+		if channel.Party and #recipients == 0 then
+			return self:System(player, "You are not in a party.")
+		end
 		-- The sender already sees their own line as the chat box echo.
 		for _, recipient in recipients do
 			if recipient ~= player then

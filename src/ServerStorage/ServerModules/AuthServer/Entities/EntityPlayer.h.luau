@@ -33,6 +33,7 @@ function module:Spawn(player: Player, at: CFrame?)
 
 	player:LoadCharacter()
 	local character = player.Character or player.CharacterAdded:Wait()
+	self.includes.Movement["Anticheat.h"]:Allow(player)
 	character:PivotTo(at)
 	entity.Character = character
 
@@ -82,6 +83,7 @@ end
 function module:Teleport(player: Player, at: CFrame)
 	local entity = self.information[player]
 	if entity and entity.Character then
+		self.includes.Movement["Anticheat.h"]:Allow(player)
 		entity.Character:PivotTo(at)
 	end
 end
@@ -147,4 +149,5 @@ end
 return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h|Session.h" },
 	{ Path = "World/Database", Imports = "WorldDatabase.h" },
+	{ Path = "World/Movement", Imports = "Anticheat.h" },
 })

@@ -26,11 +26,13 @@ src/ServerStorage/ServerModules/
   AuthServer/Entities/             EntityPlayer
   AuthServer/Chat/                 Chat, ChatRegistry, ChatFunctions
   AuthServer/Support/              Tickets
+  AuthServer/Social/               Party
   WorldServer/Database/            WorldDatabase (position, health)
   WorldServer/Zones/               Zones (which zone each player stands in)
+  WorldServer/Movement/            Anticheat (movement validation)
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus)
-src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), ZoneBanner
+src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), ZoneBanner, PartyFrame
 src/Workspace/Zones/                               demo zone parts
 ```
 
@@ -56,6 +58,9 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | SMSG_ZONE_UPDATE | server | `{ Name, Pvp, Safe }` or `{}` when leaving all zones |
 | CMSG_EMOTE / SMSG_EMOTE | both | `{ Emote }` in, `{ Emote, Sender }` out to SAY range |
 | CMSG_TICKET | client | `{ Text }` opens a GM ticket |
+| CMSG_PARTY | client | `{ Action, Target }` invite, accept, decline, leave, uninvite, promote |
+| SMSG_PARTY_UPDATE | server | `{ Leader, Members }` to every member on change |
+| SMSG_PARTY_INVITE | server | `{ From }` |
 
 Add an opcode in `Shared/Opcodes.luau`, then `Packet:On(opcode, handler)` on the
 server and `handlers[opcode]` on the client.
@@ -92,6 +97,7 @@ Commands are typed in chat with a leading dot, WoW style. A PLAYER gets
 
 ```
 MODERATOR   .help  .who  .server info  .zone  .gm on|off  .gm invis on|off  .gm list
+            .ac status | .ac reset <player> | .ac on|off
             .ticket list | view <id> | reply <id> <text> | close <id>
             .freeze <player>  .unfreeze <player>  .mute <player> <minutes> [reason]
             .unmute <player>  .kick <player> [reason]
@@ -110,8 +116,8 @@ visual (`LocalTransparencyModifier` on each client), collisions are unchanged.
 
 ## Chat
 
-Channels: SAY (30 studs), YELL (100), WORLD, WHISPER, SYSTEM. On the client, `/y`,
-`/w Name`, and `/world` pick the channel; anything else is SAY. Messages go through
+Channels: SAY (30 studs), YELL (100), WORLD, WHISPER, PARTY, SYSTEM. On the client,
+`/y`, `/w Name`, `/world` and `/p` pick the channel; anything else is SAY. Messages go through
 `TextService` filtering and are delivered by packet, then drawn as rich text in
 Blizzard's colours and phrasing: white `Reynn says:`, red `Reynn yells:`, pink
 `Reynn whispers:` / `To Reynn:`, channel-pink `[World] [Reynn]:`, yellow system
@@ -136,6 +142,23 @@ in SAY range in orange. The table is `Config.Emotes`.
 a yellow notice; `.ticket` lists, views, replies to and closes them. Tickets live in
 one `Tickets` DataStore record edited with `UpdateAsync`, so servers never overwrite
 each other, and replies reach the player on whichever server they are on.
+
+## Parties
+
+WoW groups, up to `Config.Party.MaxSize`: `/invite Name`, `/accept`, `/decline`,
+`/leave`, `/uninvite Name`, `/promote Name`. The leader passes on when the leader
+leaves; a party of one disbands. `/p text` is the PARTY channel in light blue.
+`PartyFrame` lists members on the left with health bars read from their replicated
+characters, so the frame costs no packets.
+
+## Anticheat
+
+Every `Config.Anticheat.SampleSeconds` the server compares how far each character
+moved horizontally with `WalkSpeed * dt * Tolerance + Slack`. Over the limit snaps
+the player back to the last good position and counts a strike; strikes decay after
+`WindowSeconds`; at `Strikes` every online GM gets a yellow alert. Server-side moves
+(`.tele`, `.summon`, spawns) call `Anticheat:Allow` first so they never trip it, and
+GM mode is exempt. `.ac` shows strikes, resets a player, or toggles the check.
 
 ## Cross-server
 

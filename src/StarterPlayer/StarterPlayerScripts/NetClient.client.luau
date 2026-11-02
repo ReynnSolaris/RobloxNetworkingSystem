@@ -50,6 +50,8 @@ local function chatLine(d): string
 		return tint(color, ("%s whispers: %s"):format(name, text))
 	elseif d.Channel == "WORLD" then
 		return tint(color, ("[World] [%s]: %s"):format(name, text))
+	elseif d.Channel == "PARTY" then
+		return tint(color, ("[Party] [%s]: %s"):format(name, text))
 	end
 	return tint(color, ("%s says: %s"):format(name, text))
 end
@@ -106,6 +108,17 @@ handlers[Opcodes.SMSG_EMOTE] = function(d)
 	if emote then
 		display(tint(Colors.EMOTE, emote.Text:format(esc(d.Sender or "?"))))
 	end
+end
+
+-- Party membership lands on attributes; PartyFrame draws it.
+handlers[Opcodes.SMSG_PARTY_UPDATE] = function(d)
+	local members = d.Members or {}
+	player:SetAttribute("PartyMembers", if #members > 0 then table.concat(members, ",") else nil)
+	player:SetAttribute("PartyLeader", if #members > 0 then d.Leader else nil)
+end
+
+handlers[Opcodes.SMSG_PARTY_INVITE] = function(d)
+	system(("%s invites you to a group. /accept or /decline"):format(tostring(d.From)))
 end
 
 local function playEmote(name: string)
@@ -171,6 +184,12 @@ local function parse(text: string)
 		return { Kind = "EMOTE", Emote = prefix:lower() }
 	elseif prefix == "ticket" then
 		return { Kind = "TICKET", Body = rest }
+	elseif prefix == "invite" or prefix == "uninvite" or prefix == "promote" then
+		return { Kind = "PARTY", Action = prefix, Target = rest:match("^(%S+)") }
+	elseif prefix == "accept" or prefix == "decline" or prefix == "leave" then
+		return { Kind = "PARTY", Action = prefix }
+	elseif prefix == "p" or prefix == "party" then
+		return { Kind = "CHAT", Channel = "PARTY", Body = rest }
 	elseif prefix == "y" or prefix == "yell" then
 		return { Kind = "CHAT", Channel = "YELL", Body = rest }
 	elseif prefix == "world" or prefix == "g" then
@@ -188,6 +207,8 @@ local function dispatch(p)
 		send(Opcodes.CMSG_EMOTE, { Emote = p.Emote })
 	elseif p.Kind == "TICKET" then
 		send(Opcodes.CMSG_TICKET, { Text = p.Body })
+	elseif p.Kind == "PARTY" then
+		send(Opcodes.CMSG_PARTY, { Action = p.Action, Target = p.Target })
 	else
 		send(Opcodes.CMSG_MESSAGECHAT, { Channel = p.Channel, Text = p.Body, Target = p.Target })
 	end
@@ -218,6 +239,10 @@ if modern then
 			color, prefix, body = Colors.EMOTE, "", Config.Emotes[p.Emote].Text:format(esc(player.DisplayName))
 		elseif p.Kind == "TICKET" then
 			color, prefix = Colors.COMMAND, "Ticket:"
+		elseif p.Kind == "PARTY" then
+			color, prefix, body = Colors.COMMAND, ">", message.Text
+		elseif p.Channel == "PARTY" then
+			color, prefix = Colors.PARTY, ("[Party] [%s]:"):format(who)
 		elseif p.Command then
 			color, prefix = Colors.COMMAND, ">"
 		elseif p.Channel == "WHISPER" then

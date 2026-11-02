@@ -47,6 +47,8 @@ local Chat = Auth.Chat["Chat.h"]
 local Commands = Auth.Security["Commands.h"]
 local Zones = World.Zones["Zones.h"]
 local Tickets = Auth.Support["Tickets.h"]
+local Party = Auth.Social["Party.h"]
+local Anticheat = World.Movement["Anticheat.h"]
 local Bus = Global.System["Global.h"]
 local Database = Global.Database["Database.h"]
 
@@ -57,6 +59,8 @@ Chat:Start()
 Zones:Start()
 Tickets:Start()
 Commands:Start()
+Party:Start()
+Anticheat:Start()
 Session:OnAuthed(function(player)
 	Entities:Spawn(player)
 	Commands:SyncState(player)

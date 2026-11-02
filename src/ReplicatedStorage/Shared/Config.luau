@@ -15,6 +15,7 @@ return table.freeze({
 			YELL = "#FF3F40",
 			WHISPER = "#FF80FF",
 			WORLD = "#FFC0C0",
+			PARTY = "#AAAAFF",
 			SYSTEM = "#FFFF00",
 			GM = "#00C0FF",
 			COMMAND = "#9D9D9D",
@@ -32,6 +33,12 @@ return table.freeze({
 	},
 
 	ZonePollSeconds = 0.5,
+
+	Party = { MaxSize = 5, InviteSeconds = 60 },
+
+	-- Server-side movement check. Allowed distance per sample is
+	-- WalkSpeed * dt * Tolerance + Slack; over it snaps back and counts a strike.
+	Anticheat = { Enabled = true, SampleSeconds = 0.5, Tolerance = 1.6, Slack = 6, Strikes = 3, WindowSeconds = 60 },
 
 	Spawn = CFrame.new(0, 5, 0),
 	RespawnDelay = 3,

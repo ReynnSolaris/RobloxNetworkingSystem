@@ -15,6 +15,9 @@ function module:Recipients(channel, sender: Player, targetName: string?): { Play
 		local target = targetName and Players:FindFirstChild(targetName)
 		return if target then { target } else {}
 	end
+	if channel.Party then
+		return self.includes.Social["Party.h"]:MembersOf(sender)
+	end
 	if not channel.Range then
 		return Players:GetPlayers()
 	end
@@ -32,4 +35,6 @@ function module:Recipients(channel, sender: Player, targetName: string?): { Play
 	return out
 end
 
-return Base(module)
+return Base(module, {
+	{ Path = "Auth/Social", Imports = "Party.h" },
+})
