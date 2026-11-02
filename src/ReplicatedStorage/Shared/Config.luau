@@ -29,6 +29,9 @@ return table.freeze({
 		},
 	},
 
+	BagSlots = 16, -- the backpack
+	BuybackSlots = 12,
+
 	-- Equipment slots, in character sheet order.
 	Slots = { "head", "chest", "legs", "feet", "mainhand", "ring", "trinket" },
 	VendorRange = 12,

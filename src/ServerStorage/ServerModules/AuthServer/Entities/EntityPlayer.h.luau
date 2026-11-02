@@ -123,26 +123,73 @@ function module:Discover(player: Player, zoneName: string)
 	self:GrantXp(player, Config.Xp.Explore * char.Level, "Discovered " .. zoneName)
 end
 
--- Inventory is a list of { entry, count }; stacks merge up to the template's stack size.
+-- The bag: a list of stacks { slot, entry, count }, one per occupied slot out of
+-- Config.BagSlots. Stacks merge up to the template's stack size, then the first
+-- free slot is used; a full bag refuses, WoW style.
+
+local function bag(char)
+	char.Inventory = char.Inventory or {}
+	for i, stack in char.Inventory do
+		if stack.slot == nil then
+			stack.slot = i -- records from before slots
+		end
+	end
+	return char.Inventory
+end
+
+local function stackAt(items, slot: number)
+	for _, stack in items do
+		if stack.slot == slot then
+			return stack
+		end
+	end
+	return nil
+end
+
+local function freeSlot(items): number?
+	for slot = 1, Config.BagSlots do
+		if not stackAt(items, slot) then
+			return slot
+		end
+	end
+	return nil
+end
+
+function module:System(player: Player, text: string)
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_MESSAGECHAT, { Channel = "SYSTEM", Text = text })
+end
+
 function module:AddItem(player: Player, entry: number, count: number, quiet: boolean?): boolean
 	local char = self.information[player] and self.information[player].Active
 	local template = self.includes.Database["WorldDB.h"]:Get("item_template", entry)
 	if not char or not template or count <= 0 then
 		return false
 	end
-	char.Inventory = char.Inventory or {}
+	local items = bag(char)
+	local size = template.stack or 1
 	local left = count
-	for _, stack in char.Inventory do
-		if stack.entry == entry and stack.count < (template.stack or 1) then
-			local room = (template.stack or 1) - stack.count
-			local add = math.min(room, left)
+	for _, stack in items do
+		if stack.entry == entry and stack.count < size and left > 0 then
+			local add = math.min(size - stack.count, left)
 			stack.count += add
 			left -= add
 		end
 	end
+	local needed = math.ceil(left / size)
+	local free = 0
+	for slot = 1, Config.BagSlots do
+		if not stackAt(items, slot) then
+			free += 1
+		end
+	end
+	if needed > free then
+		self:System(player, "Inventory is full.")
+		self:SendInventory(player, false)
+		return false
+	end
 	while left > 0 do
-		local add = math.min(template.stack or 1, left)
-		table.insert(char.Inventory, { entry = entry, count = add })
+		local add = math.min(size, left)
+		table.insert(items, { slot = freeSlot(items), entry = entry, count = add })
 		left -= add
 	end
 	if not quiet then
@@ -156,7 +203,7 @@ end
 function module:CountItem(player: Player, entry: number): number
 	local char = self.information[player] and self.information[player].Active
 	local total = 0
-	for _, stack in (char and char.Inventory or {}) do
+	for _, stack in (char and bag(char) or {}) do
 		if stack.entry == entry then
 			total += stack.count
 		end
@@ -169,15 +216,16 @@ function module:RemoveItem(player: Player, entry: number, count: number): boolea
 	if not char or self:CountItem(player, entry) < count then
 		return false
 	end
+	local items = bag(char)
 	local left = count
-	for i = #char.Inventory, 1, -1 do
-		local stack = char.Inventory[i]
+	for i = #items, 1, -1 do
+		local stack = items[i]
 		if stack.entry == entry and left > 0 then
 			local take = math.min(stack.count, left)
 			stack.count -= take
 			left -= take
 			if stack.count == 0 then
-				table.remove(char.Inventory, i)
+				table.remove(items, i)
 			end
 		end
 	end
@@ -185,12 +233,58 @@ function module:RemoveItem(player: Player, entry: number, count: number): boolea
 	return true
 end
 
--- Equip from the bag; whatever was in the slot goes back to the bag.
-function module:Equip(player: Player, entry: number): (boolean, string?)
+-- Takes a whole stack out of a bag slot and returns it.
+function module:TakeSlot(player: Player, slot: number)
 	local char = self.information[player] and self.information[player].Active
-	local item = self.includes.Database["WorldDB.h"]:Get("item_template", entry)
-	if not char or not item then
-		return false, "No such item."
+	local items = char and bag(char)
+	local stack = items and stackAt(items, slot)
+	if not stack then
+		return nil
+	end
+	table.remove(items, table.find(items, stack))
+	self:SendInventory(player, false)
+	return stack
+end
+
+-- Move or swap bag slots; partial stacks of the same item merge, WoW style.
+function module:SwapSlots(player: Player, from: number, to: number)
+	local char = self.information[player] and self.information[player].Active
+	if not char or from == to or from < 1 or to < 1 or from > Config.BagSlots or to > Config.BagSlots then
+		return
+	end
+	local items = bag(char)
+	local a, b = stackAt(items, from), stackAt(items, to)
+	if not a then
+		return
+	end
+	if b and b.entry == a.entry then
+		local size = (self.includes.Database["WorldDB.h"]:Get("item_template", a.entry) or {}).stack or 1
+		local move = math.min(size - b.count, a.count)
+		if move > 0 then
+			b.count += move
+			a.count -= move
+			if a.count == 0 then
+				table.remove(items, table.find(items, a))
+			end
+			self:SendInventory(player, false)
+			return
+		end
+	end
+	a.slot = to
+	if b then
+		b.slot = from
+	end
+	self:SendInventory(player, false)
+end
+
+-- Equip the item in a bag slot; whatever was worn goes back to that slot.
+function module:Equip(player: Player, slot: number): (boolean, string?)
+	local char = self.information[player] and self.information[player].Active
+	local items = char and bag(char)
+	local stack = items and stackAt(items, slot)
+	local item = stack and self.includes.Database["WorldDB.h"]:Get("item_template", stack.entry)
+	if not item then
+		return false, "Nothing there."
 	end
 	if not item.slot then
 		return false, "That cannot be equipped."
@@ -198,32 +292,39 @@ function module:Equip(player: Player, entry: number): (boolean, string?)
 	if (item.level or 1) > (char.Level or 1) then
 		return false, ("You need to be level %d."):format(item.level)
 	end
-	if self:CountItem(player, entry) == 0 then
-		return false, "You do not have that item."
-	end
 	char.Equipment = char.Equipment or {}
 	local previous = char.Equipment[item.slot]
-	self:RemoveItem(player, entry, 1)
-	char.Equipment[item.slot] = entry
-	if previous then
-		self:AddItem(player, previous, 1, true)
+	stack.count -= 1
+	if stack.count == 0 then
+		table.remove(items, table.find(items, stack))
 	end
+	char.Equipment[item.slot] = stack.entry
+	if previous then
+		table.insert(items, { slot = freeSlot(items) or slot, entry = previous, count = 1 })
+	end
+	self:SendInventory(player, false)
 	self:ApplyStats(player)
 	return true
 end
 
-function module:Unequip(player: Player, slot: string): boolean
+function module:Unequip(player: Player, slotName: string): boolean
 	local char = self.information[player] and self.information[player].Active
-	local entry = char and char.Equipment and char.Equipment[slot]
+	local entry = char and char.Equipment and char.Equipment[slotName]
 	if not entry then
 		return false
 	end
-	char.Equipment[slot] = nil
-	self:AddItem(player, entry, 1, true)
+	local items = bag(char)
+	local free = freeSlot(items)
+	if not free then
+		self:System(player, "Inventory is full.")
+		return false
+	end
+	char.Equipment[slotName] = nil
+	table.insert(items, { slot = free, entry = entry, count = 1 })
+	self:SendInventory(player, false)
 	self:ApplyStats(player)
 	return true
 end
-
 function module:SendEquipment(player: Player)
 	local entity = self.information[player]
 	local char = entity and entity.Active
@@ -234,7 +335,8 @@ function module:SendEquipment(player: Player)
 	local slots = {}
 	for slot, entry in (char.Equipment or {}) do
 		local item = DB:Get("item_template", entry) or {}
-		slots[slot] = { Entry = entry, Name = item.name or "?", Quality = item.quality or 1 }
+		slots[slot] = { Entry = entry, Name = item.name or "?", Quality = item.quality or 1, Slot = slot, Class = item.class,
+			Level = item.level, Health = item.health, Damage = item.damage, Armor = item.armor }
 	end
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_EQUIPMENT, { Slots = slots, Stats = entity.Stats })
 end
@@ -255,12 +357,13 @@ function module:SendInventory(player: Player, announce: boolean?)
 	local char = self.information[player] and self.information[player].Active
 	local DB = self.includes.Database["WorldDB.h"]
 	local items = {}
-	for _, stack in (char and char.Inventory or {}) do
+	for _, stack in (char and bag(char) or {}) do
 		local template = DB:Get("item_template", stack.entry) or {}
-		table.insert(items, { Entry = stack.entry, Name = template.name or "?", Quality = template.quality or 1, Count = stack.count,
-			Slot = template.slot, Class = template.class, Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Level = template.level })
+		table.insert(items, { Bag = stack.slot, Entry = stack.entry, Name = template.name or "?", Quality = template.quality or 1, Count = stack.count,
+			Slot = template.slot, Class = template.class, Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Level = template.level,
+			Health = template.health, Damage = template.damage, Armor = template.armor })
 	end
-	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INVENTORY, { Items = items, Money = char and char.Money or 0, Announce = announce == true })
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INVENTORY, { Items = items, Money = char and char.Money or 0, Bags = Config.BagSlots, Announce = announce == true })
 end
 
 function module:Get(player: Player)

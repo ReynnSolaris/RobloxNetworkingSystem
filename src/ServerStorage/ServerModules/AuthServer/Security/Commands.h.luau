@@ -158,8 +158,14 @@ add("server", 1, ".server info", function(self, caller)
 		Config.Build, up // 3600, (up % 3600) // 60, #Players:GetPlayers(), math.round(1 / game:GetService("RunService").Heartbeat:Wait())))
 end)
 
-add("zone", 1, ".zone", function(self, caller)
+add("zone", 1, ".zone | .zone show | .zone hide", function(self, caller, args)
 	local Zones = self.includes.Zones["Zones.h"]
+	if args[1] == "show" or args[1] == "hide" then
+		for _, part in Zones:All() do
+			part.Transparency = if args[1] == "show" then 0.85 else 1
+		end
+		return self:Reply(caller, "Zone bounds " .. (if args[1] == "show" then "shown." else "hidden."))
+	end
 	local here = Zones:Current(caller)
 	self:Reply(caller, "You are in: " .. (if here then here.Name else "no zone"))
 	for _, part in Zones:All() do

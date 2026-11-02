@@ -114,7 +114,7 @@ local function setCoreUi(on: boolean)
 		window.Enabled = false -- ChatFrame draws chat
 	end
 	if inputBar then
-		inputBar.Enabled = on
+		inputBar.Enabled = false -- ChatFrame has its own box
 	end
 end
 

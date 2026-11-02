@@ -37,7 +37,7 @@ src/ServerStorage/ObjectTemplates/                 models .gobject can place
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus)
 src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, PlayerFrame, TargetFrame,
-                                                   ChatFrame, VendorFrame, CharacterSheet, ZoneBanner, PartyFrame,
+                                                   ChatFrame, VendorFrame, BagFrame, CharacterSheet, ZoneBanner, PartyFrame,
                                                    Ui (theme, tooltip), Components (Fusion panels, lists, buttons)
 src/Workspace/Zones/                               demo zone parts
 ```
@@ -72,6 +72,8 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
 | CMSG_EQUIP / CMSG_UNEQUIP | client | `{ Entry }` / `{ Slot }` |
 | SMSG_EQUIPMENT | server | `{ Slots, Stats = { Health, Damage, Armor } }` |
+| CMSG_BUYBACK_ITEM / SMSG_BUYBACK_LIST | both | `{ Guid, Index }` in, `{ Items }` out |
+| CMSG_ITEM_QUERY_SINGLE / SMSG_ITEM_QUERY_SINGLE_RESPONSE | both | `{ Entry }` in, the template's display fields out |
 | SMSG_SPAWN | server | `{ Position, Health, MaxHealth }` |
 | SMSG_DESPAWN | server | on death, respawn follows after `Config.RespawnDelay` |
 | SMSG_HEALTH_UPDATE | server | `{ Health, MaxHealth }` |
@@ -183,8 +185,9 @@ chat box types into has `ShouldDeliverCallback` returning false.
 
 ## Zones, emotes, tickets
 
-A zone is any Part tagged `Zone` (CollectionService). Its name is the zone name;
-attributes `Pvp` and `Safe` describe it. The world server polls players every
+A zone is any Part tagged `Zone` (CollectionService), fully invisible and
+non-colliding in play; `.zone show` outlines them for a moment. Its name is the
+zone name; attributes `Pvp` and `Safe` describe it. The world server polls players every
 `Config.ZonePollSeconds` and sends `SMSG_ZONE_UPDATE` on change; the client sets the
 `Zone` and `ZoneKind` attributes on the Player and `ZoneBanner` fades the name in
 like the WoW zone text. Two demo zones ship under `src/Workspace/Zones`.
@@ -256,8 +259,10 @@ access) it logs once and runs single-server.
 
 ## Chat window, experience, items
 
-`ChatFrame` replaces Roblox's chat window (the input bar stays, for typing and
-filtering) with three tabs: General, Whispers, Log. Entering the world clears General
+`ChatFrame` replaces Roblox's chat window and input bar with its own: three tabs
+(General, Whispers, Log) and a box that `/` or Enter focuses. Lines still go out
+through the TextChannel, so Roblox filtering applies, and every line is drawn from
+the server's packet, the sender's own included. Entering the world clears General
 and Log; Whispers keep. A hidden tab lights up when it gets a line, pink for whispers.
 
 Characters have a level (cap `Config.Xp.MaxLevel`, 80) and experience on a TC-shaped
@@ -289,19 +294,31 @@ templates seed: Kobold Vermin and Young Wolf, with loot rows.
 
 ## Vendors and gear
 
-A creature with `npc_vendor` rows opens a vendor window when talked to: its stock
-on the left with prices in copper, your bag on the right with sell prices (a
-quarter of the buy price unless `sellprice` is set). Buying checks range, stock and
-money. General Goods seeds with the starter set.
+The backpack has `Config.BagSlots` slots (16, like WoW's); a stack merges into its
+kind first and then takes the first free slot, and a full bag says so. **B** opens
+it as a grid of quality-bordered tiles with stack counts and tooltips. Left-click
+picks a stack up and left-click elsewhere moves or swaps it (`CMSG_SWAP_INV_ITEM`,
+partial stacks merge); Shift-click puts `[Item Name]` into the chat box; right-click
+equips gear, or sells the whole stack while a vendor window is open.
+
+A creature with `npc_vendor` rows opens a vendor window when talked to, and the
+backpack with it: goods on the left with prices in copper, buyback on the right
+holding the last `Config.BuybackSlots` stacks you sold this session at the price
+you got. Sell prices are a quarter of the buy price unless `sellprice` is set.
+Buying checks range, stock and money. General Goods seeds with the starter set.
+
+Type `[Linen Cloth]` in chat and the server resolves it against `item_template`;
+everyone sees it in the item's quality colour, and clicking the line shows the
+tooltip, fetched through `CMSG_ITEM_QUERY_SINGLE` and cached, like the real client.
 
 The vendor window and character sheet are built with
 [Fusion](https://elttob.uk/Fusion/) through `Components.luau`: draggable titled
 panels, hover rows with tooltips, lists bound to the Inventory, Equipment, Stats and
 Money attributes so they redraw themselves.
 
-Items with a `slot` are gear. Press **C** for the character sheet: click a bag item
-to equip it (one per slot, the old one goes back to the bag, `level` is enforced),
-click a slot to unequip. Stats recompute on every change: max health is the level's
+Items with a `slot` are gear. Right-click them in the backpack to equip (one per
+slot, the old one goes back to the bag, `level` is enforced); **C** opens the
+character sheet with the worn slots and stats, click a slot to unequip. Stats recompute on every change: max health is the level's
 health plus gear `health`, melee adds gear `damage`, and gear `armor` comes off every
 creature hit. Equipment and the bag live on the character record.
 

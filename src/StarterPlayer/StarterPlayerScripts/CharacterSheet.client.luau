@@ -10,8 +10,8 @@ local Components = require(script.Parent:WaitForChild("Components"))
 local player = Players.LocalPlayer
 local netSend = script.Parent:WaitForChild("NetSend") :: BindableEvent
 
--- Character sheet on C, built with Fusion: slots and stats on the left (click a
--- slot to unequip), the bag on the right (click gear to equip it).
+-- Character sheet on C, built with Fusion: equipped slots and stats. Click a slot
+-- to unequip; equipping is done from the backpack (B).
 
 local scope = Fusion.scoped(Fusion)
 local Children = Fusion.Children
@@ -22,7 +22,6 @@ local function decode(json: string, default)
 end
 
 local open = scope:Value(false)
-local inventory = Components.attribute(scope, player, "Inventory", "[]")
 local equipment = Components.attribute(scope, player, "Equipment", "{}")
 local stats = Components.attribute(scope, player, "Stats", "{}")
 local money = Components.attribute(scope, player, "Money", 0)
@@ -46,38 +45,22 @@ local slotRows = scope:Computed(function(use)
 	return rows
 end)
 
-local bagRows = scope:Computed(function(use)
-	local rows = {}
-	for _, item in decode(use(inventory), {}) do
-		table.insert(rows, {
-			Text = Ui.itemName(item),
-			Right = item.Slot or item.Class or "",
-			Tooltip = Ui.itemTooltip(item) .. (if item.Slot then "\nClick to equip" else ""),
-			OnClick = if item.Slot then function()
-				netSend:Fire(Opcodes.CMSG_EQUIP, { Entry = item.Entry })
-			end else nil,
-		})
-	end
-	return rows
-end)
-
 Components.Panel(scope, {
 	Name = "CharacterSheet",
-	Size = UDim2.fromOffset(640, 420),
+	Size = UDim2.fromOffset(340, 400),
+	Position = UDim2.new(0.5, -360, 0.5, 0),
 	Enabled = open,
 	Parent = player:WaitForChild("PlayerGui"),
 	Title = scope:Computed(function(use)
 		return ("%s, Level %d %s"):format(use(charName), use(level), use(charClass))
 	end),
 	[Children] = {
-		Components.Text(scope, { Size = UDim2.new(0.5, -20, 0, 40), Position = UDim2.fromOffset(12, 8), TextSize = 13, Color = Ui.DIM, Text = scope:Computed(function(use)
+		Components.Text(scope, { Size = UDim2.new(1, -24, 0, 40), Position = UDim2.fromOffset(12, 8), TextSize = 13, Color = Ui.DIM, Text = scope:Computed(function(use)
 			local s = decode(use(stats), {})
 			return ("Health %d    Melee +%d    Armor %d"):format(s.Health or 0, s.Damage or 0, s.Armor or 0)
 		end) }),
-		Components.Text(scope, { Size = UDim2.new(0.5, -20, 0, 20), Position = UDim2.new(0.5, 8, 0, 8), Text = "Bag", Color = Ui.DIM }),
-		Components.List(scope, { Size = UDim2.new(0.5, -18, 1, -62), Position = UDim2.fromOffset(12, 52), Rows = slotRows }),
-		Components.List(scope, { Size = UDim2.new(0.5, -18, 1, -62), Position = UDim2.new(0.5, 8, 0, 30), Rows = bagRows }),
-		Components.Text(scope, { Size = UDim2.new(0.5, -20, 0, 20), Position = UDim2.new(0.5, 8, 1, -26), Color = Ui.GOLD, Align = Enum.TextXAlignment.Right, Text = scope:Computed(function(use)
+		Components.List(scope, { Size = UDim2.new(1, -24, 1, -84), Position = UDim2.fromOffset(12, 52), Rows = slotRows }),
+		Components.Text(scope, { Size = UDim2.new(1, -24, 0, 20), Position = UDim2.new(0, 12, 1, -26), Color = Ui.GOLD, Align = Enum.TextXAlignment.Right, Text = scope:Computed(function(use)
 			return Ui.money(use(money))
 		end) }),
 	},

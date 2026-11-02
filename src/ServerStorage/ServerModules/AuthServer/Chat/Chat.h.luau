@@ -61,8 +61,19 @@ function module:Start()
 		if not channel or channel.ServerOnly then
 			return
 		end
+		-- [Item Name] in the text becomes a link when it matches an item_template name.
+		local links = {}
+		for bracketed in text:gmatch("%[([^%]]+)%]") do
+			for _, item in self.includes.Database["WorldDB.h"]:Select("item_template") do
+				if item.name:lower() == bracketed:lower() then
+					links[bracketed] = { Entry = item.entry, Name = item.name, Quality = item.quality or 1 }
+				end
+			end
+		end
+
 		local packet = {
 			Channel = name,
+			Links = if next(links) then links else nil,
 			Sender = player:GetAttribute("CharacterName") or player.DisplayName,
 			Class = player:GetAttribute("CharacterClass"),
 			Gm = session ~= nil and session.Gm,
@@ -76,11 +87,12 @@ function module:Start()
 		if channel.Party and #recipients == 0 then
 			return self:System(player, "You are not in a party.")
 		end
-		-- The sender already sees their own line as the chat box echo.
+		-- The sender gets the same line back, filtered and with links resolved.
+		if not table.find(recipients, player) then
+			table.insert(recipients, player)
+		end
 		for _, recipient in recipients do
-			if recipient ~= player then
-				Packet:Send(recipient, Opcodes.SMSG_MESSAGECHAT, packet)
-			end
+			Packet:Send(recipient, Opcodes.SMSG_MESSAGECHAT, packet)
 		end
 	end)
 
@@ -93,9 +105,7 @@ function module:Start()
 		end
 		local packet = { Emote = data.Emote, Sender = player:GetAttribute("CharacterName") or player.DisplayName }
 		for _, recipient in Functions:Recipients(Registry:Get("SAY"), player) do
-			if recipient ~= player then
-				Packet:Send(recipient, Opcodes.SMSG_EMOTE, packet)
-			end
+			Packet:Send(recipient, Opcodes.SMSG_EMOTE, packet)
 		end
 	end)
 
@@ -115,4 +125,5 @@ return Base(module, {
 	{ Path = "Auth/Chat", Imports = "ChatRegistry.h|ChatFunctions.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h|Commands.h|Session.h" },
 	{ Path = "Auth/Support", Imports = "Tickets.h" },
+	{ Path = "World/Database", Imports = "WorldDB.h" },
 })

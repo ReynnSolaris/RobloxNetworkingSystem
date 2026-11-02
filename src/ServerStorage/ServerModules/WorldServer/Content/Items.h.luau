@@ -37,6 +37,21 @@ function module:Start()
 	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_INVENTORY, function(player)
 		self.includes.Entities["EntityPlayer.h"]:SendInventory(player, true)
 	end)
+	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_SWAP_INV_ITEM, function(player, data)
+		if typeof(data) == "table" then
+			self.includes.Entities["EntityPlayer.h"]:SwapSlots(player, tonumber(data.From) or 0, tonumber(data.To) or 0)
+		end
+	end)
+	-- What the client needs to draw a tooltip for an item it only knows by entry (chat links).
+	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_ITEM_QUERY_SINGLE, function(player, data)
+		local item = DB:Get("item_template", tonumber(typeof(data) == "table" and data.Entry) or 0)
+		if item then
+			self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_ITEM_QUERY_SINGLE_RESPONSE, {
+				Entry = item.entry, Name = item.name, Quality = item.quality or 1, Slot = item.slot, Class = item.class, Level = item.level,
+				Health = item.health, Damage = item.damage, Armor = item.armor, Price = item.buyprice,
+			})
+		end
+	end)
 end
 
 return Base(module, {

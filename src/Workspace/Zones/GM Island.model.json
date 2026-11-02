@@ -4,11 +4,30 @@
     "Anchored": true,
     "CanCollide": false,
     "CanQuery": false,
-    "Transparency": 0.9,
-    "Color": [0.3, 0.5, 0.8],
-    "Size": [80, 80, 80],
-    "Position": [-400, 40, -400],
-    "Tags": ["Zone"]
+    "Transparency": 1,
+    "Color": [
+      0.3,
+      0.5,
+      0.8
+    ],
+    "Size": [
+      80,
+      80,
+      80
+    ],
+    "Position": [
+      -400,
+      40,
+      -400
+    ],
+    "Tags": [
+      "Zone"
+    ],
+    "CanTouch": false,
+    "CastShadow": false
   },
-  "attributes": { "Pvp": false, "Safe": true }
+  "attributes": {
+    "Pvp": false,
+    "Safe": true
+  }
 }

@@ -51,11 +51,37 @@ local chatLine = Instance.new("BindableEvent")
 chatLine.Name = "ChatLine"
 chatLine.Parent = script.Parent
 
-local function display(text: string, tab: string?)
-	chatLine:Fire(tab or "General", text)
+local function display(text: string, tab: string?, links: any?)
+	chatLine:Fire(tab or "General", text, if links then HttpService:JSONEncode(links) else nil)
 	if not channel then
 		print((text:gsub("<[^>]->", "")))
 	end
+end
+
+-- Item knowledge by entry, filled from SMSG_ITEM_QUERY_SINGLE_RESPONSE; other
+-- scripts ask through the ItemInfo function (nil means "asked, wait for ItemQueryTick").
+local itemCache: { [number]: any } = {}
+local itemInfo = Instance.new("BindableFunction")
+itemInfo.Name = "ItemInfo"
+itemInfo.OnInvoke = function(entry: number)
+	if itemCache[entry] then
+		return itemCache[entry]
+	end
+	send(Opcodes.CMSG_ITEM_QUERY_SINGLE, { Entry = entry })
+	return nil
+end
+itemInfo.Parent = script.Parent
+
+-- [Name] in a message becomes a quality-coloured link when the server resolved it.
+local function withLinks(escaped: string, links: any?): string
+	if not links then
+		return escaped
+	end
+	for shown, link in links do
+		local coloured = tint(Config.Quality[link.Quality or 1] or "#FFFFFF", "[" .. esc(link.Name) .. "]")
+		escaped = escaped:gsub("%[" .. esc(shown):gsub("%W", "%%%0") .. "%]", coloured)
+	end
+	return escaped
 end
 
 local function system(text: string)
@@ -79,11 +105,14 @@ local function formatChat(d): string
 		sender = tint(classColor[d.Class], sender)
 	end
 	local name = (if d.Gm then tint(Colors.GM, "&lt;GM&gt;") .. " " else "") .. sender
-	local text = esc(d.Text or "")
+	local text = withLinks(esc(d.Text or ""), d.Links)
 	local color = Colors[d.Channel] or Colors.SAY
 	if d.Channel == "YELL" then
 		return tint(color, ("%s yells: %s"):format(name, text))
 	elseif d.Channel == "WHISPER" then
+		if (d.Sender or "") == (player:GetAttribute("CharacterName") or player.DisplayName) then
+			return tint(color, ("To %s: %s"):format(esc(d.Target or "?"), text))
+		end
 		return tint(color, ("%s whispers: %s"):format(name, text))
 	elseif d.Channel == "WORLD" then
 		return tint(color, ("[World] [%s]: %s"):format(name, text))
@@ -149,7 +178,7 @@ handlers[Opcodes.SMSG_MESSAGECHAT] = function(d)
 	if d.Channel == "SYSTEM" then
 		system(d.Text or "")
 	else
-		display(formatChat(d), if d.Channel == "WHISPER" then "Whispers" else "General")
+		display(formatChat(d), if d.Channel == "WHISPER" then "Whispers" else "General", d.Links)
 	end
 end
 
@@ -199,6 +228,7 @@ end
 handlers[Opcodes.SMSG_INVENTORY] = function(d)
 	local items = d.Items or {}
 	player:SetAttribute("Inventory", HttpService:JSONEncode(items))
+	player:SetAttribute("BagSlots", d.Bags or Config.BagSlots)
 	if d.Announce then
 		system(("Inventory, %d stack(s), %s:"):format(#items, money(d.Money or 0)))
 		for _, item in items do
@@ -219,7 +249,19 @@ vendorOpen.Parent = script.Parent
 
 handlers[Opcodes.SMSG_VENDOR_LIST] = function(d)
 	player:SetAttribute("Vendor", HttpService:JSONEncode(d.Items or {}))
+	player:SetAttribute("VendorGuid", tostring(d.Guid))
 	vendorOpen:Fire(tostring(d.Guid))
+end
+
+handlers[Opcodes.SMSG_BUYBACK_LIST] = function(d)
+	player:SetAttribute("Buyback", HttpService:JSONEncode(d.Items or {}))
+end
+
+handlers[Opcodes.SMSG_ITEM_QUERY_SINGLE_RESPONSE] = function(d)
+	if d.Entry then
+		itemCache[d.Entry] = d
+		player:SetAttribute("ItemQueryTick", (player:GetAttribute("ItemQueryTick") or 0) + 1)
+	end
 end
 
 -- Zone changes land on attributes; ZoneBanner draws them.
@@ -347,39 +389,34 @@ local function dispatch(p)
 	end
 end
 
+-- Chat lines come back from the server; only commands and slash actions echo locally.
+local function echo(p)
+	if p.Kind ~= "CHAT" or p.Command then
+		display(tint(Colors.COMMAND, "&gt; " .. esc(p.Raw or "")), "General")
+	end
+end
+
+-- ChatFrame owns the input box: ChatSend(text) sends through the TextChannel so
+-- filtering still applies (or straight to the server on legacy chat).
+local chatSend = Instance.new("BindableEvent")
+chatSend.Name = "ChatSend"
+chatSend.Event:Connect(function(text: string)
+	if channel then
+		channel:SendAsync(text)
+	else
+		local p = parse(text)
+		p.Raw = text
+		echo(p)
+		dispatch(p)
+	end
+end)
+chatSend.Parent = script.Parent
+
 if modern then
 	local inputBar = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
 	if inputBar and channel then
 		inputBar.TargetTextChannel = channel
 	end
-
-	-- Roblox's chat window is off; our own line is drawn here when the box sends.
-	local function echo(p)
-		local me = gmState[player.Name]
-		local myName = esc(player:GetAttribute("CharacterName") or player.DisplayName)
-		local myClass = player:GetAttribute("CharacterClass")
-		if myClass and classColor[myClass] then
-			myName = tint(classColor[myClass], myName)
-		end
-		local who = (if me and me.Gm then tint(Colors.GM, "&lt;GM&gt;") .. " " else "") .. myName
-		local body = esc(p.Body or "")
-		if p.Kind == "EMOTE" then
-			display(tint(Colors.EMOTE, Config.Emotes[p.Emote].Text:format(myName)))
-		elseif p.Kind ~= "CHAT" or p.Command then
-			display(tint(Colors.COMMAND, "&gt; " .. esc(p.Raw or "")), "General")
-		elseif p.Channel == "WHISPER" then
-			display(tint(Colors.WHISPER, ("To %s: %s"):format(esc(p.Target or "?"), body)), "Whispers")
-		elseif p.Channel == "YELL" then
-			display(tint(Colors.YELL, ("%s yells: %s"):format(who, body)))
-		elseif p.Channel == "WORLD" then
-			display(tint(Colors.WORLD, ("[World] [%s]: %s"):format(who, body)))
-		elseif p.Channel == "PARTY" then
-			display(tint(Colors.PARTY, ("[Party] [%s]: %s"):format(who, body)))
-		else
-			display(tint(Colors.SAY, ("%s says: %s"):format(who, body)))
-		end
-	end
-
 	TextChatService.SendingMessage:Connect(function(message)
 		local p = parse(message.Text)
 		p.Raw = message.Text

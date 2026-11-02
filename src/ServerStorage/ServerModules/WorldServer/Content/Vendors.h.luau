@@ -2,6 +2,7 @@ local Base = require(game:GetService("ServerStorage").ServerModules["Template.h"
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Opcodes = require(ReplicatedStorage.Shared.Opcodes)
 local Config = require(ReplicatedStorage.Shared.Config)
+local Players = game:GetService("Players")
 local module = {}
 
 -- npc_vendor: { id, entry (creature), item }. Talking to a creature with rows
@@ -39,6 +40,9 @@ function module:Open(player: Player, guid, entry)
 	local stock = self:Stock(entry)
 	if #stock > 0 then
 		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_VENDOR_LIST, { Guid = tostring(guid), Items = stock })
+		if self.SendBuyback then
+			self.SendBuyback(player)
+		end
 	end
 end
 
@@ -85,28 +89,66 @@ function module:Start()
 		Entities:AddItem(player, entry, count)
 	end)
 
+	-- Selling takes the whole stack out of a bag slot and parks it for buyback.
+	local function sendBuyback(player: Player)
+		local list = {}
+		for _, item in (self.information[player] or {}) do
+			local template = DB:Get("item_template", item.entry) or {}
+			table.insert(list, { Entry = item.entry, Count = item.count, Price = item.price, Name = template.name, Quality = template.quality or 1,
+				Slot = template.slot, Class = template.class, Level = template.level, Health = template.health, Damage = template.damage, Armor = template.armor })
+		end
+		Packet:Send(player, Opcodes.SMSG_BUYBACK_LIST, { Items = list })
+	end
+	self.SendBuyback = sendBuyback
+
 	Packet:On(Opcodes.CMSG_VENDOR_SELL, function(player, data)
 		if typeof(data) ~= "table" or not inRange(self, player, data.Guid) then
 			return Chat:System(player, "You are too far away from the vendor.")
 		end
-		local entry, count = tonumber(data.Entry), math.clamp(tonumber(data.Count) or 1, 1, 20)
-		local item = entry and DB:Get("item_template", entry)
-		if not item then
+		local stack = Entities:TakeSlot(player, tonumber(data.Bag) or 0)
+		if not stack then
 			return
 		end
-		local price = (item.sellprice or math.floor((item.buyprice or 0) / 4)) * count
-		if Entities:RemoveItem(player, entry, count) then
-			Entities:AddMoney(player, price)
-			Chat:System(player, ("You sell %s%s."):format(item.name, if count > 1 then " x" .. count else ""))
+		local item = DB:Get("item_template", stack.entry) or {}
+		local price = (item.sellprice or math.floor((item.buyprice or 0) / 4)) * stack.count
+		Entities:AddMoney(player, price)
+		Chat:System(player, ("You sell %s%s."):format(item.name or "?", if stack.count > 1 then " x" .. stack.count else ""))
+		local list = self.information[player] or {}
+		self.information[player] = list
+		table.insert(list, 1, { entry = stack.entry, count = stack.count, price = price })
+		if #list > Config.BuybackSlots then
+			table.remove(list)
+		end
+		sendBuyback(player)
+	end)
+
+	Packet:On(Opcodes.CMSG_BUYBACK_ITEM, function(player, data)
+		local list = self.information[player] or {}
+		local index = tonumber(typeof(data) == "table" and data.Index) or 0
+		local item = list[index]
+		if not item or not inRange(self, player, data.Guid) then
+			return
+		end
+		if (player:GetAttribute("Money") or 0) < item.price then
+			return Chat:System(player, "You don't have enough money.")
+		end
+		if Entities:AddItem(player, item.entry, item.count, true) then
+			Entities:AddMoney(player, -item.price)
+			table.remove(list, index)
+			sendBuyback(player)
 		end
 	end)
 
 	Packet:On(Opcodes.CMSG_EQUIP, function(player, data)
-		local ok, reason = Entities:Equip(player, tonumber(typeof(data) == "table" and data.Entry) or 0)
+		local ok, reason = Entities:Equip(player, tonumber(typeof(data) == "table" and data.Bag) or 0)
 		if not ok then
 			Chat:System(player, reason or "You cannot equip that.")
 		end
 	end)
+	Players.PlayerRemoving:Connect(function(player)
+		self.information[player] = nil
+	end)
+
 	Packet:On(Opcodes.CMSG_UNEQUIP, function(player, data)
 		if typeof(data) == "table" and typeof(data.Slot) == "string" then
 			Entities:Unequip(player, data.Slot)
