@@ -1,7 +1,7 @@
 local Base = require(game:GetService("ServerStorage").ServerModules["Template.h"])
 local module = {}
 
--- Character state keyed by UserId: Position {x, y, z}, Health
+-- World record keyed by UserId: { Characters = { { Name, Class, Level, Position, Health, Created } } }
 
 local function key(userId: number): string
 	return "character:" .. userId
@@ -12,24 +12,32 @@ function module:Store()
 end
 
 function module:Load(player: Player)
-	local data = self:Store():Get(key(player.UserId), {})
-	self.information[player.UserId] = data
-	return data
+	local record = self:Store():Get(key(player.UserId), {})
+	if not record.Characters then
+		-- Records from before character select held one unnamed character.
+		record.Characters = if record.Position
+			then { { Name = player.Name, Class = "Warrior", Level = 1, Position = record.Position, Health = record.Health, Created = os.time() } }
+			else {}
+		record.Position, record.Health = nil, nil
+	end
+	self.information[player.UserId] = record
+	return record
 end
 
-function module:Save(player: Player, character: Model?)
-	local data = self.information[player.UserId]
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if not data or not humanoid or humanoid.Health <= 0 then
-		return
+function module:Get(player: Player)
+	return self.information[player.UserId]
+end
+
+-- Write the player's record (characters, positions) back to the store.
+function module:Commit(player: Player)
+	local record = self.information[player.UserId]
+	if record then
+		self:Store():Set(key(player.UserId), record)
 	end
-	local position = character:GetPivot().Position
-	data.Position = { position.X, position.Y, position.Z }
-	data.Health = humanoid.Health
-	self:Store():Set(key(player.UserId), data)
 end
 
 function module:Forget(player: Player)
+	self:Commit(player)
 	self:Store():Forget(key(player.UserId))
 	self.information[player.UserId] = nil
 end

@@ -63,7 +63,8 @@ function module:Start()
 		end
 		local packet = {
 			Channel = name,
-			Sender = player.DisplayName,
+			Sender = player:GetAttribute("CharacterName") or player.DisplayName,
+			Class = player:GetAttribute("CharacterClass"),
 			Gm = session ~= nil and session.Gm,
 			Target = if channel.Target then data.Target else nil,
 			Text = Functions:Filter(player, text),
@@ -90,7 +91,7 @@ function module:Start()
 		if not emote then
 			return
 		end
-		local packet = { Emote = data.Emote, Sender = player.DisplayName }
+		local packet = { Emote = data.Emote, Sender = player:GetAttribute("CharacterName") or player.DisplayName }
 		for _, recipient in Functions:Recipients(Registry:Get("SAY"), player) do
 			if recipient ~= player then
 				Packet:Send(recipient, Opcodes.SMSG_EMOTE, packet)

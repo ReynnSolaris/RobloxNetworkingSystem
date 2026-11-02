@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
 local TextChatService = game:GetService("TextChatService")
 local Opcodes = require(ReplicatedStorage.Shared.Opcodes)
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -16,6 +17,17 @@ local seq = 0
 local function send(opcode: number, data: any)
 	seq += 1
 	remote:FireServer(opcode, seq, data)
+end
+
+-- Other local scripts (CharacterSelect) send through here so the sequence stays single.
+local netSend = Instance.new("BindableEvent")
+netSend.Name = "NetSend"
+netSend.Event:Connect(send)
+netSend.Parent = script.Parent
+
+local classColor: { [string]: string } = {}
+for _, class in Config.Classes do
+	classColor[class.Name] = class.Color
 end
 
 -- Rich text helpers. User text is escaped before it goes inside a tag.
@@ -41,7 +53,11 @@ end
 
 -- Blizzard phrasing: "Reynn says: hi", "Reynn yells: hi", "Reynn whispers: hi", "[World] [Reynn]: hi"
 local function chatLine(d): string
-	local name = (if d.Gm then tint(Colors.GM, "&lt;GM&gt;") .. " " else "") .. esc(d.Sender or "?")
+	local sender = esc(d.Sender or "?")
+	if d.Class and classColor[d.Class] then
+		sender = tint(classColor[d.Class], sender)
+	end
+	local name = (if d.Gm then tint(Colors.GM, "&lt;GM&gt;") .. " " else "") .. sender
 	local text = esc(d.Text or "")
 	local color = Colors[d.Channel] or Colors.SAY
 	if d.Channel == "YELL" then
@@ -63,6 +79,23 @@ handlers[Opcodes.SMSG_AUTH_RESPONSE] = function(d)
 	authed = true
 	myLevel = d.Level or 0
 	system(if d.Ok then "Connected as " .. d.Role else "Rejected: " .. tostring(d.Reason))
+	if d.Ok then
+		send(Opcodes.CMSG_CHAR_ENUM, {})
+	end
+end
+
+-- Character select talks through attributes: Characters (JSON list), InWorld.
+handlers[Opcodes.SMSG_CHAR_ENUM] = function(d)
+	player:SetAttribute("Characters", HttpService:JSONEncode(d.Characters or {}))
+	player:SetAttribute("MaxCharacters", d.Max or Config.MaxCharacters)
+	player:SetAttribute("InWorld", false)
+end
+
+handlers[Opcodes.SMSG_CHAR_RESULT] = function(d)
+	if not d.Ok then
+		player:SetAttribute("CharError", tostring(d.Reason))
+		system(tostring(d.Reason))
+	end
 end
 
 handlers[Opcodes.SMSG_PONG] = function(d)
@@ -74,6 +107,7 @@ end
 handlers[Opcodes.SMSG_SPAWN] = function(d)
 	player:SetAttribute("Health", d.Health)
 	player:SetAttribute("MaxHealth", d.MaxHealth)
+	player:SetAttribute("InWorld", true)
 end
 
 handlers[Opcodes.SMSG_DESPAWN] = function()
@@ -184,6 +218,8 @@ local function parse(text: string)
 		return { Kind = "EMOTE", Emote = prefix:lower() }
 	elseif prefix == "ticket" then
 		return { Kind = "TICKET", Body = rest }
+	elseif prefix == "logout" or prefix == "camp" then
+		return { Kind = "LOGOUT" }
 	elseif prefix == "invite" or prefix == "uninvite" or prefix == "promote" then
 		return { Kind = "PARTY", Action = prefix, Target = rest:match("^(%S+)") }
 	elseif prefix == "accept" or prefix == "decline" or prefix == "leave" then
@@ -209,6 +245,8 @@ local function dispatch(p)
 		send(Opcodes.CMSG_TICKET, { Text = p.Body })
 	elseif p.Kind == "PARTY" then
 		send(Opcodes.CMSG_PARTY, { Action = p.Action, Target = p.Target })
+	elseif p.Kind == "LOGOUT" then
+		send(Opcodes.CMSG_LOGOUT_REQUEST, {})
 	else
 		send(Opcodes.CMSG_MESSAGECHAT, { Channel = p.Channel, Text = p.Body, Target = p.Target })
 	end
@@ -233,13 +271,18 @@ if modern then
 		pending = p
 
 		local me = gmState[player.Name]
-		local who = (if me and me.Gm then tint(Colors.GM, "&lt;GM&gt;") .. " " else "") .. esc(player.DisplayName)
+		local myName = esc(player:GetAttribute("CharacterName") or player.DisplayName)
+		local myClass = player:GetAttribute("CharacterClass")
+		if myClass and classColor[myClass] then
+			myName = tint(classColor[myClass], myName)
+		end
+		local who = (if me and me.Gm then tint(Colors.GM, "&lt;GM&gt;") .. " " else "") .. myName
 		local color, prefix, body = Colors.SAY, who .. " says:", p.Body or ""
 		if p.Kind == "EMOTE" then
-			color, prefix, body = Colors.EMOTE, "", Config.Emotes[p.Emote].Text:format(esc(player.DisplayName))
+			color, prefix, body = Colors.EMOTE, "", Config.Emotes[p.Emote].Text:format(esc(player:GetAttribute("CharacterName") or player.DisplayName))
 		elseif p.Kind == "TICKET" then
 			color, prefix = Colors.COMMAND, "Ticket:"
-		elseif p.Kind == "PARTY" then
+		elseif p.Kind == "PARTY" or p.Kind == "LOGOUT" then
 			color, prefix, body = Colors.COMMAND, ">", message.Text
 		elseif p.Channel == "PARTY" then
 			color, prefix = Colors.PARTY, ("[Party] [%s]:"):format(who)

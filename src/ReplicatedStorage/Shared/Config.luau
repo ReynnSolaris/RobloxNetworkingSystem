@@ -36,6 +36,21 @@ return table.freeze({
 
 	Party = { MaxSize = 5, InviteSeconds = 60 },
 
+	-- Characters per account and the classes they can be, in Blizzard class colours.
+	MaxCharacters = 3,
+	Classes = {
+		{ Name = "Warrior", Color = "#C79C6E" },
+		{ Name = "Paladin", Color = "#F58CBA" },
+		{ Name = "Hunter", Color = "#ABD473" },
+		{ Name = "Rogue", Color = "#FFF569" },
+		{ Name = "Priest", Color = "#FFFFFF" },
+		{ Name = "Death Knight", Color = "#C41F3B" },
+		{ Name = "Shaman", Color = "#0070DE" },
+		{ Name = "Mage", Color = "#69CCF0" },
+		{ Name = "Warlock", Color = "#9482C9" },
+		{ Name = "Druid", Color = "#FF7D0A" },
+	},
+
 	-- Server-side movement check. Allowed distance per sample is
 	-- WalkSpeed * dt * Tolerance + Slack; over it snaps back and counts a strike.
 	Anticheat = { Enabled = true, SampleSeconds = 0.5, Tolerance = 1.6, Slack = 6, Strikes = 3, WindowSeconds = 60 },

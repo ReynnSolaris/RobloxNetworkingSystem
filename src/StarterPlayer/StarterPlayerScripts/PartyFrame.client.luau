@@ -84,7 +84,7 @@ while true do
 		local other = Players:FindFirstChild(name)
 		local humanoid = other and other.Character and other.Character:FindFirstChildOfClass("Humanoid")
 		local health, max = if humanoid then humanoid.Health else 0, if humanoid then humanoid.MaxHealth else 100
-		frame.Label.Text = (if name == leader then "★ " else "") .. (if other then other.DisplayName else name)
+		frame.Label.Text = (if name == leader then "★ " else "") .. (if other then other:GetAttribute("CharacterName") or other.DisplayName else name)
 		frame.Back.Bar.Size = UDim2.fromScale(math.clamp(health / math.max(max, 1), 0, 1), 1)
 		frame.Back.Bar.BackgroundColor3 = if health > 0 then Color3.fromRGB(60, 200, 80) else Color3.fromRGB(120, 120, 120)
 	end

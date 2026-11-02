@@ -14,6 +14,10 @@ local function say(self, player: Player, text: string)
 	self.includes.Chat["Chat.h"]:System(player, text)
 end
 
+local function nameOf(player: Player): string
+	return player:GetAttribute("CharacterName") or player.Name
+end
+
 function module:Of(player: Player)
 	return self.information[player]
 end
@@ -51,7 +55,7 @@ function module:Invite(leader: Player, name: string?)
 		return say(self, leader, target.Name .. " is already in a group.")
 	end
 	invites[target] = { From = leader, Party = party, At = os.time() }
-	self.includes.Security["Packet.h"]:Send(target, Opcodes.SMSG_PARTY_INVITE, { From = leader.DisplayName })
+	self.includes.Security["Packet.h"]:Send(target, Opcodes.SMSG_PARTY_INVITE, { From = nameOf(leader) })
 	say(self, leader, "You have invited " .. target.Name .. " to join your group.")
 end
 
@@ -72,7 +76,7 @@ function module:Accept(player: Player)
 	table.insert(party.Members, player)
 	self.information[player] = party
 	for _, member in party.Members do
-		say(self, member, player.Name .. " joins the party.")
+		say(self, member, nameOf(player) .. " joins the party.")
 	end
 	self:Update(party)
 end
@@ -97,7 +101,7 @@ function module:Leave(player: Player, kicked: boolean?)
 	end
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_PARTY_UPDATE, { Members = {} })
 	for _, member in party.Members do
-		say(self, member, player.Name .. (if kicked then " has been removed from the group." else " leaves the party."))
+		say(self, member, nameOf(player) .. (if kicked then " has been removed from the group." else " leaves the party."))
 	end
 	if #party.Members <= 1 then
 		for _, member in party.Members do
@@ -110,7 +114,7 @@ function module:Leave(player: Player, kicked: boolean?)
 	if party.Leader == player then
 		party.Leader = party.Members[1]
 		for _, member in party.Members do
-			say(self, member, party.Leader.Name .. " is now the group leader.")
+			say(self, member, nameOf(party.Leader) .. " is now the group leader.")
 		end
 	end
 	self:Update(party)
@@ -139,7 +143,7 @@ function module:Promote(leader: Player, name: string?)
 	end
 	party.Leader = target
 	for _, member in party.Members do
-		say(self, member, target.Name .. " is now the group leader.")
+		say(self, member, nameOf(target) .. " is now the group leader.")
 	end
 	self:Update(party)
 end

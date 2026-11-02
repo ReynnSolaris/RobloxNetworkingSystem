@@ -19,7 +19,8 @@ local function findPlayer(name: string?): Player
 	assert(name and #name > 0, "no player given")
 	local lower = name:lower()
 	for _, player in Players:GetPlayers() do
-		if player.Name:lower():sub(1, #lower) == lower or player.DisplayName:lower():sub(1, #lower) == lower then
+		local char = player:GetAttribute("CharacterName") or ""
+		if player.Name:lower():sub(1, #lower) == lower or player.DisplayName:lower():sub(1, #lower) == lower or char:lower():sub(1, #lower) == lower then
 			return player
 		end
 	end
@@ -80,7 +81,9 @@ add("who", 1, ".who", function(self, caller)
 	local Session = self.includes.Security["Session.h"]
 	for _, player in Players:GetPlayers() do
 		local session = Session:Get(player)
-		self:Reply(caller, ("%s (%s) %s%s"):format(player.Name, RBAC:GetRoleName(RBAC:GetRole(player)),
+		self:Reply(caller, ("%s%s (%s) %s%s"):format(player.Name,
+			if player:GetAttribute("CharacterName") then " as " .. player:GetAttribute("CharacterName") else "",
+			RBAC:GetRoleName(RBAC:GetRole(player)),
 			if session and session.Gm then "<GM> " else "", if session and session.Invisible then "[invisible]" else ""))
 	end
 end)

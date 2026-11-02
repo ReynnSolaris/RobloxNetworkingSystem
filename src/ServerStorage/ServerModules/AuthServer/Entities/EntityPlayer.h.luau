@@ -13,22 +13,36 @@ function module:Add(player: Player)
 	self.information[player] = {
 		Instance = player,
 		Character = nil,
-		Saved = self.includes.Database["WorldDatabase.h"]:Load(player),
+		Record = self.includes.Database["WorldDatabase.h"]:Load(player),
+		Active = nil, -- the character record chosen at PLAYER_LOGIN
 	}
+end
+
+function module:Select(player: Player, slot: number)
+	local entity = self.information[player]
+	local char = entity and entity.Record.Characters[slot]
+	if not char then
+		return false
+	end
+	entity.Active = char
+	player:SetAttribute("CharacterName", char.Name)
+	player:SetAttribute("CharacterClass", char.Class)
+	player:SetAttribute("CharacterLevel", char.Level)
+	return true
 end
 
 function module:Get(player: Player)
 	return self.information[player]
 end
 
--- Spawns at `at`, else at the saved position, else at Config.Spawn.
+-- Spawns the active character at `at`, else at its saved position, else at Config.Spawn.
 function module:Spawn(player: Player, at: CFrame?)
 	local entity = self.information[player]
-	if not entity then
+	local saved = entity and entity.Active
+	if not saved then
 		return
 	end
 	local Packet = self.includes.Security["Packet.h"]
-	local saved = entity.Saved
 	at = at or (saved.Position and CFrame.new(table.unpack(saved.Position))) or Config.Spawn
 
 	player:LoadCharacter()
@@ -38,6 +52,7 @@ function module:Spawn(player: Player, at: CFrame?)
 	entity.Character = character
 
 	local humanoid = character:WaitForChild("Humanoid") :: Humanoid
+	humanoid.DisplayName = saved.Name
 	if saved.Health then
 		humanoid.Health = math.clamp(saved.Health, 1, humanoid.MaxHealth)
 		saved.Health = nil
@@ -49,7 +64,8 @@ function module:Spawn(player: Player, at: CFrame?)
 	humanoid.Died:Once(function()
 		Packet:Send(player, Opcodes.SMSG_DESPAWN, {})
 		task.delay(Config.RespawnDelay, function()
-			if self.information[player] then
+			local e = self.information[player]
+			if e and e.Active == saved and e.Character == character then
 				self:Spawn(player, Config.Spawn)
 			end
 		end)
@@ -130,20 +146,39 @@ function module:GiveHat(player: Player, assetId: number): boolean
 	return true
 end
 
+-- Writes the active character's position and health into the record.
 function module:Save(player: Player)
 	local entity = self.information[player]
-	if entity then
-		self.includes.Database["WorldDatabase.h"]:Save(player, entity.Character)
+	local humanoid = humanoidOf(entity)
+	if entity and entity.Active and humanoid and humanoid.Health > 0 then
+		local position = entity.Character:GetPivot().Position
+		entity.Active.Position = { position.X, position.Y, position.Z }
+		entity.Active.Health = humanoid.Health
+		self.includes.Database["WorldDatabase.h"]:Commit(player)
 	end
 end
 
-function module:Remove(player: Player)
+-- Back to character select: save, drop the character, forget the selection.
+function module:Despawn(player: Player)
 	local entity = self.information[player]
-	self.information[player] = nil
-	if entity then
-		self.includes.Database["WorldDatabase.h"]:Save(player, entity.Character)
-		self.includes.Database["WorldDatabase.h"]:Forget(player)
+	if not entity then
+		return
 	end
+	self:Save(player)
+	if entity.Character then
+		entity.Character:Destroy()
+		entity.Character = nil
+	end
+	entity.Active = nil
+	player:SetAttribute("CharacterName", nil)
+	player:SetAttribute("CharacterClass", nil)
+	player:SetAttribute("CharacterLevel", nil)
+end
+
+function module:Remove(player: Player)
+	self:Save(player)
+	self.information[player] = nil
+	self.includes.Database["WorldDatabase.h"]:Forget(player)
 end
 
 return Base(module, {

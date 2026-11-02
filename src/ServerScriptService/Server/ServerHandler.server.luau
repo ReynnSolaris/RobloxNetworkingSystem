@@ -49,6 +49,7 @@ local Zones = World.Zones["Zones.h"]
 local Tickets = Auth.Support["Tickets.h"]
 local Party = Auth.Social["Party.h"]
 local Anticheat = World.Movement["Anticheat.h"]
+local Characters = World.Characters["Characters.h"]
 local Bus = Global.System["Global.h"]
 local Database = Global.Database["Database.h"]
 
@@ -61,8 +62,9 @@ Tickets:Start()
 Commands:Start()
 Party:Start()
 Anticheat:Start()
+Characters:Start()
 Session:OnAuthed(function(player)
-	Entities:Spawn(player)
+	Characters:Enum(player)
 	Commands:SyncState(player)
 end)
 

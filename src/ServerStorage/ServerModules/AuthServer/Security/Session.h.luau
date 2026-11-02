@@ -9,6 +9,15 @@ module.STATE = STATE
 
 local onAuthed: { (Player) -> () } = {}
 
+-- What an authenticated player may send before entering the world.
+local LOBBY = {
+	[Opcodes.CMSG_PING] = true,
+	[Opcodes.CMSG_CHAR_ENUM] = true,
+	[Opcodes.CMSG_CHAR_CREATE] = true,
+	[Opcodes.CMSG_CHAR_DELETE] = true,
+	[Opcodes.CMSG_PLAYER_LOGIN] = true,
+}
+
 -- Called when a player passes CMSG_AUTH_SESSION.
 function module:OnAuthed(fn: (Player) -> ())
 	table.insert(onAuthed, fn)
@@ -56,9 +65,12 @@ function module:Start()
 		if not session then
 			return false
 		end
-		return session.State >= STATE.AUTHED
-			or opcode == Opcodes.CMSG_AUTH_SESSION
-			or opcode == Opcodes.CMSG_PING
+		if session.State >= STATE.IN_WORLD then
+			return true
+		elseif session.State == STATE.AUTHED then
+			return LOBBY[opcode] == true
+		end
+		return opcode == Opcodes.CMSG_AUTH_SESSION or opcode == Opcodes.CMSG_PING
 	end)
 
 	Packet:On(Opcodes.CMSG_AUTH_SESSION, function(player, data)

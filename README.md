@@ -27,12 +27,13 @@ src/ServerStorage/ServerModules/
   AuthServer/Chat/                 Chat, ChatRegistry, ChatFunctions
   AuthServer/Support/              Tickets
   AuthServer/Social/               Party
-  WorldServer/Database/            WorldDatabase (position, health)
+  WorldServer/Database/            WorldDatabase (the account's characters)
+  WorldServer/Characters/          Characters (enum, create, delete, login, logout)
   WorldServer/Zones/               Zones (which zone each player stands in)
   WorldServer/Movement/            Anticheat (movement validation)
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus)
-src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), ZoneBanner, PartyFrame
+src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, ZoneBanner, PartyFrame
 src/Workspace/Zones/                               demo zone parts
 ```
 
@@ -46,8 +47,14 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | Opcode | Direction | Data |
 |---|---|---|
 | CMSG_AUTH_SESSION | client | `{ Build }` must match `Config.Build` |
-| SMSG_AUTH_RESPONSE | server | `{ Ok, SessionId, Role, Reason }` |
+| SMSG_AUTH_RESPONSE | server | `{ Ok, SessionId, Role, Level, Reason }` |
 | CMSG_PING / SMSG_PONG | both | `{ Time }` echoed back, client stores `Latency` attribute |
+| CMSG_CHAR_ENUM / SMSG_CHAR_ENUM | both | `{ Characters = { { Slot, Name, Class, Level } }, Max }` |
+| CMSG_CHAR_CREATE | client | `{ Name, Class }` |
+| CMSG_CHAR_DELETE | client | `{ Slot }` |
+| CMSG_PLAYER_LOGIN | client | `{ Slot }` picks the character; the server then spawns |
+| CMSG_LOGOUT_REQUEST | client | back to character select |
+| SMSG_CHAR_RESULT | server | `{ Ok, Reason }` for create, delete and login |
 | SMSG_SPAWN | server | `{ Position, Health, MaxHealth }` |
 | SMSG_DESPAWN | server | on death, respawn follows after `Config.RespawnDelay` |
 | SMSG_HEALTH_UPDATE | server | `{ Health, MaxHealth }` |
@@ -85,6 +92,17 @@ return Base(module, {
 `ServerHandler` loads every module once, then `Compiler.h` swaps each `includes`
 list for `includes[Folder]["Name.h"]`. One instance per module, so state is shared
 wherever it is imported. Per-instance state lives in `self.information`.
+
+## Login sequence
+
+Like 3.3.5a: auth, then character select, then the world. After `SMSG_AUTH_RESPONSE`
+the client asks for `CHAR_ENUM` and shows the select screen; an account holds up to
+`Config.MaxCharacters` characters, each with a name, one of the ten classes and a
+level. `PLAYER_LOGIN` picks one and only then does the server spawn, with the
+character's name on the Humanoid and its saved position. `/logout` saves and drops
+back to the list. Before entering the world only the character opcodes and ping get
+through the session guard. Character names are what chat, parties and GM commands
+show and accept, coloured by class in Blizzard's class colours.
 
 ## Roles and commands
 
