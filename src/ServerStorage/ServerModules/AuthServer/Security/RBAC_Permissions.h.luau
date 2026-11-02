@@ -6,7 +6,8 @@ local ROLES = { PLAYER = 0, MODERATOR = 1, GAMEMASTER = 2, OWNER = 4, CONSOLE = 
 module.ROLES = ROLES
 
 local function isCreator(player: Player): boolean
-	return game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
+	-- a place opened from a local file has no creator; in Studio whoever is testing owns it
+	return (game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId) or game:GetService("RunService"):IsStudio()
 end
 
 function module:GetRole(player: Player): number

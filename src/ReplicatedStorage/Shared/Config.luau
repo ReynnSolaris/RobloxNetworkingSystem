@@ -2,7 +2,7 @@ return table.freeze({
 	Build = 1, -- client must send the same build to authenticate
 	RealmName = "Northshire",
 
-	Owners = {}, -- UserIds that get the OWNER role besides the place creator
+	Owners = { 44037530 }, -- UserIds that get the OWNER role besides the place creator
 
 	RateLimit = { PerSecond = 20, Burst = 40 },
 	Chat = {
