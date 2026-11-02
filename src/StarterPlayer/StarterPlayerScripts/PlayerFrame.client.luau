@@ -79,6 +79,18 @@ healthText.TextSize = 11
 healthText.TextColor3 = Color3.new(1, 1, 1)
 healthText.Parent = back
 
+local xpBack = Instance.new("Frame")
+xpBack.Position = UDim2.fromOffset(68, 61)
+xpBack.Size = UDim2.new(1, -76, 0, 4)
+xpBack.BackgroundColor3 = Color3.fromRGB(30, 30, 60)
+xpBack.BorderSizePixel = 0
+xpBack.Parent = frame
+local xpBar = Instance.new("Frame")
+xpBar.Size = UDim2.fromScale(0, 1)
+xpBar.BackgroundColor3 = Color3.fromRGB(110, 70, 220)
+xpBar.BorderSizePixel = 0
+xpBar.Parent = xpBack
+
 local latency = Instance.new("TextLabel")
 latency.AnchorPoint = Vector2.new(1, 0)
 latency.Position = UDim2.new(1, -8, 0, 6)
@@ -99,7 +111,7 @@ local function setCoreUi(on: boolean)
 	local window = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
 	local inputBar = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
 	if window then
-		window.Enabled = on
+		window.Enabled = false -- ChatFrame draws chat
 	end
 	if inputBar then
 		inputBar.Enabled = on
@@ -118,6 +130,8 @@ local function refresh()
 	portrait.Text = name:sub(1, 1):upper()
 	portrait.BackgroundColor3 = color
 	infoLabel.Text = ("Level %d %s"):format(player:GetAttribute("CharacterLevel") or 1, class or "")
+	local xp, next_ = player:GetAttribute("CharacterXp") or 0, math.max(player:GetAttribute("CharacterXpNext") or 1, 1)
+	xpBar.Size = UDim2.fromScale(math.clamp(xp / next_, 0, 1), 1)
 end
 
 local function health()
@@ -130,7 +144,7 @@ local function health()
 	latency.Text = if ms then ms .. " ms" else ""
 end
 
-for _, attribute in { "InWorld", "CharacterName", "CharacterClass", "CharacterLevel" } do
+for _, attribute in { "InWorld", "CharacterName", "CharacterClass", "CharacterLevel", "CharacterXp", "CharacterXpNext" } do
 	player:GetAttributeChangedSignal(attribute):Connect(refresh)
 end
 for _, attribute in { "Health", "MaxHealth", "Latency" } do

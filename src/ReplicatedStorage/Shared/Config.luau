@@ -21,7 +21,23 @@ return table.freeze({
 			GM = "#00C0FF",
 			COMMAND = "#9D9D9D",
 			EMOTE = "#FF8040",
+			XP = "#7070FF",
+			LOOT = "#00AA00",
 		},
+	},
+
+	-- Item quality colours, WoW order: poor, common, uncommon, rare, epic, legendary.
+	Quality = { [0] = "#9D9D9D", [1] = "#FFFFFF", [2] = "#1EFF00", [3] = "#0070DD", [4] = "#A335EE", [5] = "#FF8000" },
+
+	Xp = {
+		MaxLevel = 80,
+		Explore = 60, -- first visit to a zone, times the character's level
+		ForLevel = function(level: number): number
+			return math.floor(400 * level * (1 + level * 0.1))
+		end,
+		HealthForLevel = function(level: number): number
+			return 100 + (level - 1) * 10
+		end,
 	},
 
 	-- /wave etc. Text is shown to players in range, Anim is the R15 emote played.

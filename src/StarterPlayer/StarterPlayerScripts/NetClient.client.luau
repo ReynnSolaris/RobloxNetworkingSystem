@@ -46,10 +46,14 @@ local function tint(hex: string, text: string): string
 	return ('<font color="%s">%s</font>'):format(hex, text)
 end
 
-local function display(text: string)
-	if channel then
-		channel:DisplaySystemMessage(text)
-	else
+-- Lines go to ChatFrame (tabs: General, Whispers, Log) through this event.
+local chatLine = Instance.new("BindableEvent")
+chatLine.Name = "ChatLine"
+chatLine.Parent = script.Parent
+
+local function display(text: string, tab: string?)
+	chatLine:Fire(tab or "General", text)
+	if not channel then
 		print((text:gsub("<[^>]->", "")))
 	end
 end
@@ -58,8 +62,18 @@ local function system(text: string)
 	display(tint(Colors.SYSTEM, esc(text)))
 end
 
+-- Notifications land in General and the Log.
+local function notice(text: string)
+	display(text, "General")
+	display(text, "Log")
+end
+
+local function qualityName(name: string, quality: number): string
+	return tint(Config.Quality[quality] or Config.Quality[1], "[" .. esc(name) .. "]")
+end
+
 -- Blizzard phrasing: "Reynn says: hi", "Reynn yells: hi", "Reynn whispers: hi", "[World] [Reynn]: hi"
-local function chatLine(d): string
+local function formatChat(d): string
 	local sender = esc(d.Sender or "?")
 	if d.Class and classColor[d.Class] then
 		sender = tint(classColor[d.Class], sender)
@@ -135,12 +149,38 @@ handlers[Opcodes.SMSG_MESSAGECHAT] = function(d)
 	if d.Channel == "SYSTEM" then
 		system(d.Text or "")
 	else
-		display(chatLine(d))
+		display(formatChat(d), if d.Channel == "WHISPER" then "Whispers" else "General")
 	end
 end
 
 handlers[Opcodes.SMSG_NOTIFICATION] = function(d)
-	system("[Server] " .. tostring(d.Text))
+	notice(tint(Colors.SYSTEM, "[Server] " .. esc(tostring(d.Text))))
+end
+
+handlers[Opcodes.SMSG_XP_GAIN] = function(d)
+	local text = ("You gain %d experience."):format(d.Amount or 0)
+	if d.Reason then
+		text = ("%s: %d experience gained."):format(d.Reason, d.Amount or 0)
+	end
+	notice(tint(Colors.XP, esc(text)))
+end
+
+handlers[Opcodes.SMSG_LEVELUP] = function(d)
+	notice(tint(Colors.SYSTEM, ("You have reached level %d!"):format(d.Level or 1)))
+	player:SetAttribute("LevelUp", d.Level)
+end
+
+handlers[Opcodes.SMSG_ITEM_PUSH] = function(d)
+	local count = if (d.Count or 1) > 1 then "x" .. d.Count else ""
+	notice(tint(Colors.LOOT, "You receive item: ") .. qualityName(d.Name or "?", d.Quality or 1) .. tint(Colors.LOOT, count .. "."))
+end
+
+handlers[Opcodes.SMSG_INVENTORY] = function(d)
+	local items = d.Items or {}
+	system(("Inventory, %d stack(s):"):format(#items))
+	for _, item in items do
+		display("  " .. qualityName(item.Name, item.Quality) .. tint(Colors.SAY, " x" .. tostring(item.Count)))
+	end
 end
 
 -- Zone changes land on attributes; ZoneBanner draws them.
@@ -232,6 +272,8 @@ local function parse(text: string)
 		return { Kind = "TICKET", Body = rest }
 	elseif prefix == "logout" or prefix == "camp" then
 		return { Kind = "LOGOUT" }
+	elseif prefix == "inv" or prefix == "inventory" or prefix == "bags" then
+		return { Kind = "INVENTORY" }
 	elseif prefix == "invite" or prefix == "uninvite" or prefix == "promote" then
 		return { Kind = "PARTY", Action = prefix, Target = rest:match("^(%S+)") }
 	elseif prefix == "accept" or prefix == "decline" or prefix == "leave" then
@@ -259,6 +301,8 @@ local function dispatch(p)
 		send(Opcodes.CMSG_PARTY, { Action = p.Action, Target = p.Target })
 	elseif p.Kind == "LOGOUT" then
 		send(Opcodes.CMSG_LOGOUT_REQUEST, {})
+	elseif p.Kind == "INVENTORY" then
+		send(Opcodes.CMSG_INVENTORY, {})
 	else
 		send(Opcodes.CMSG_MESSAGECHAT, { Channel = p.Channel, Text = p.Body, Target = p.Target })
 	end
@@ -270,18 +314,8 @@ if modern then
 		inputBar.TargetTextChannel = channel
 	end
 
-	-- The chat box echoes what you typed, and that echo is your own line: the
-	-- server never sends you a copy. OnIncomingMessage runs first, so it parses
-	-- the raw text, restyles the echo, and leaves the raw body for SendingMessage.
-	local pending = nil
-
-	TextChatService.OnIncomingMessage = function(message)
-		if not (message.TextSource and message.TextSource.UserId == player.UserId) then
-			return nil
-		end
-		local p = parse(message.Text)
-		pending = p
-
+	-- Roblox's chat window is off; our own line is drawn here when the box sends.
+	local function echo(p)
 		local me = gmState[player.Name]
 		local myName = esc(player:GetAttribute("CharacterName") or player.DisplayName)
 		local myClass = player:GetAttribute("CharacterClass")
@@ -289,33 +323,28 @@ if modern then
 			myName = tint(classColor[myClass], myName)
 		end
 		local who = (if me and me.Gm then tint(Colors.GM, "&lt;GM&gt;") .. " " else "") .. myName
-		local color, prefix, body = Colors.SAY, who .. " says:", p.Body or ""
+		local body = esc(p.Body or "")
 		if p.Kind == "EMOTE" then
-			color, prefix, body = Colors.EMOTE, "", Config.Emotes[p.Emote].Text:format(esc(player:GetAttribute("CharacterName") or player.DisplayName))
-		elseif p.Kind == "TICKET" then
-			color, prefix = Colors.COMMAND, "Ticket:"
-		elseif p.Kind == "PARTY" or p.Kind == "LOGOUT" then
-			color, prefix, body = Colors.COMMAND, ">", message.Text
-		elseif p.Channel == "PARTY" then
-			color, prefix = Colors.PARTY, ("[Party] [%s]:"):format(who)
-		elseif p.Command then
-			color, prefix = Colors.COMMAND, ">"
+			display(tint(Colors.EMOTE, Config.Emotes[p.Emote].Text:format(myName)))
+		elseif p.Kind ~= "CHAT" or p.Command then
+			display(tint(Colors.COMMAND, "&gt; " .. esc(p.Raw or "")), "General")
 		elseif p.Channel == "WHISPER" then
-			color, prefix = Colors.WHISPER, ("To %s:"):format(esc(p.Target or "?"))
+			display(tint(Colors.WHISPER, ("To %s: %s"):format(esc(p.Target or "?"), body)), "Whispers")
 		elseif p.Channel == "YELL" then
-			color, prefix = Colors.YELL, who .. " yells:"
+			display(tint(Colors.YELL, ("%s yells: %s"):format(who, body)))
 		elseif p.Channel == "WORLD" then
-			color, prefix = Colors.WORLD, ("[World] [%s]:"):format(who)
+			display(tint(Colors.WORLD, ("[World] [%s]: %s"):format(who, body)))
+		elseif p.Channel == "PARTY" then
+			display(tint(Colors.PARTY, ("[Party] [%s]: %s"):format(who, body)))
+		else
+			display(tint(Colors.SAY, ("%s says: %s"):format(who, body)))
 		end
-		local props = Instance.new("TextChatMessageProperties")
-		props.PrefixText = tint(color, prefix)
-		props.Text = tint(color, if p.Kind == "EMOTE" then body else esc(body))
-		return props
 	end
 
 	TextChatService.SendingMessage:Connect(function(message)
-		local p = pending or parse(message.Text)
-		pending = nil
+		local p = parse(message.Text)
+		p.Raw = message.Text
+		echo(p)
 		dispatch(p)
 	end)
 else

@@ -25,10 +25,120 @@ function module:Select(player: Player, slot: number)
 		return false
 	end
 	entity.Active = char
+	char.Level = char.Level or 1
+	char.Xp = char.Xp or 0
 	player:SetAttribute("CharacterName", char.Name)
 	player:SetAttribute("CharacterClass", char.Class)
-	player:SetAttribute("CharacterLevel", char.Level)
+	self:SyncLevel(player)
 	return true
+end
+
+function module:SyncLevel(player: Player)
+	local char = self.information[player] and self.information[player].Active
+	if char then
+		player:SetAttribute("CharacterLevel", char.Level)
+		player:SetAttribute("CharacterXp", char.Xp)
+		player:SetAttribute("CharacterXpNext", Config.Xp.ForLevel(char.Level))
+	end
+end
+
+-- Max health follows level; current health keeps its fraction.
+local function applyLevelHealth(humanoid: Humanoid, level: number)
+	local fraction = if humanoid.MaxHealth > 0 then humanoid.Health / humanoid.MaxHealth else 1
+	humanoid.MaxHealth = Config.Xp.HealthForLevel(level)
+	humanoid.Health = math.max(1, humanoid.MaxHealth * fraction)
+end
+
+function module:SetLevel(player: Player, level: number)
+	local entity = self.information[player]
+	local char = entity and entity.Active
+	if not char then
+		return
+	end
+	char.Level = math.clamp(level, 1, Config.Xp.MaxLevel)
+	char.Xp = 0
+	local humanoid = humanoidOf(entity)
+	if humanoid then
+		applyLevelHealth(humanoid, char.Level)
+	end
+	self:SyncLevel(player)
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_LEVELUP, { Level = char.Level })
+end
+
+-- Adds experience, levelling as many times as it takes. reason is shown to the player.
+function module:GrantXp(player: Player, amount: number, reason: string?)
+	local entity = self.information[player]
+	local char = entity and entity.Active
+	if not char or amount <= 0 or char.Level >= Config.Xp.MaxLevel then
+		return
+	end
+	char.Xp += math.floor(amount)
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_XP_GAIN, { Amount = math.floor(amount), Reason = reason })
+	while char.Level < Config.Xp.MaxLevel and char.Xp >= Config.Xp.ForLevel(char.Level) do
+		char.Xp -= Config.Xp.ForLevel(char.Level)
+		char.Level += 1
+		local humanoid = humanoidOf(entity)
+		if humanoid then
+			applyLevelHealth(humanoid, char.Level)
+		end
+		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_LEVELUP, { Level = char.Level })
+	end
+	if char.Level >= Config.Xp.MaxLevel then
+		char.Xp = 0
+	end
+	self:SyncLevel(player)
+end
+
+-- First visit to a zone pays exploration experience.
+function module:Discover(player: Player, zoneName: string)
+	local char = self.information[player] and self.information[player].Active
+	if not char then
+		return
+	end
+	char.Explored = char.Explored or {}
+	if char.Explored[zoneName] then
+		return
+	end
+	char.Explored[zoneName] = os.time()
+	self:GrantXp(player, Config.Xp.Explore * char.Level, "Discovered " .. zoneName)
+end
+
+-- Inventory is a list of { entry, count }; stacks merge up to the template's stack size.
+function module:AddItem(player: Player, entry: number, count: number): boolean
+	local char = self.information[player] and self.information[player].Active
+	local template = self.includes.Database["WorldDB.h"]:Get("item_template", entry)
+	if not char or not template or count <= 0 then
+		return false
+	end
+	char.Inventory = char.Inventory or {}
+	local left = count
+	for _, stack in char.Inventory do
+		if stack.entry == entry and stack.count < (template.stack or 1) then
+			local room = (template.stack or 1) - stack.count
+			local add = math.min(room, left)
+			stack.count += add
+			left -= add
+		end
+	end
+	while left > 0 do
+		local add = math.min(template.stack or 1, left)
+		table.insert(char.Inventory, { entry = entry, count = add })
+		left -= add
+	end
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_ITEM_PUSH,
+		{ Entry = entry, Name = template.name, Quality = template.quality or 1, Count = count })
+	return true
+end
+
+function module:SendInventory(player: Player)
+	local char = self.information[player] and self.information[player].Active
+	local DB = self.includes.Database["WorldDB.h"]
+	local items = {}
+	for _, stack in (char and char.Inventory or {}) do
+		local template = DB:Get("item_template", stack.entry) or {}
+		table.insert(items, { Entry = stack.entry, Name = template.name or "?", Quality = template.quality or 1, Count = stack.count })
+	end
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INVENTORY, { Items = items })
 end
 
 function module:Get(player: Player)
@@ -53,6 +163,8 @@ function module:Spawn(player: Player, at: CFrame?)
 
 	local humanoid = character:WaitForChild("Humanoid") :: Humanoid
 	humanoid.DisplayName = saved.Name
+	humanoid.MaxHealth = Config.Xp.HealthForLevel(saved.Level or 1)
+	humanoid.Health = humanoid.MaxHealth
 	if saved.Health then
 		humanoid.Health = math.clamp(saved.Health, 1, humanoid.MaxHealth)
 		saved.Health = nil
@@ -183,6 +295,6 @@ end
 
 return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h|Session.h" },
-	{ Path = "World/Database", Imports = "WorldDatabase.h" },
+	{ Path = "World/Database", Imports = "WorldDatabase.h|WorldDB.h" },
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
 })

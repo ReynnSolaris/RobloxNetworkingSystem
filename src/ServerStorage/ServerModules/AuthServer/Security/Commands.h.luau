@@ -116,7 +116,7 @@ add("demorph", 2, ".demorph [player]", function(self, caller, args)
 	humanoid(target):ApplyDescription(description)
 end)
 
-add("modify", 2, ".modify hp <amount> [player] | .modify speed <0.1-10> [player] | .modify scale <0.5-4> [player]", function(self, caller, args)
+add("modify", 2, ".modify hp <amount> [player] | .modify speed <0.1-10> [player] | .modify scale <0.5-4> [player] | .modify xp <amount> [player]", function(self, caller, args)
 	local what, value = args[1], assert(tonumber(args[2]), "expected a number")
 	local target = targetOrSelf(args, 3, caller)
 	local h = humanoid(target)
@@ -125,6 +125,8 @@ add("modify", 2, ".modify hp <amount> [player] | .modify speed <0.1-10> [player]
 		h.Health = value
 	elseif what == "speed" then
 		h.WalkSpeed = 16 * math.clamp(value, 0.1, 10)
+	elseif what == "xp" then
+		self.includes.Entities["EntityPlayer.h"]:GrantXp(target, value, "Granted by " .. caller.Name)
 	elseif what == "scale" then
 		value = math.clamp(value, 0.5, 4)
 		for _, name in { "BodyHeightScale", "BodyWidthScale", "BodyDepthScale", "HeadScale" } do
@@ -134,7 +136,7 @@ add("modify", 2, ".modify hp <amount> [player] | .modify speed <0.1-10> [player]
 			end
 		end
 	else
-		error("expected hp, speed or scale", 0)
+		error("expected hp, speed, scale or xp", 0)
 	end
 end)
 
@@ -286,10 +288,10 @@ local function pick(self, list, caller: Player, args, i: number): (Model, number
 	return assert(near[1], "nothing within 15 studs; give a guid"), i
 end
 
-add("lookup", 1, ".lookup creature|object|tele <name>", function(self, caller, args)
+add("lookup", 1, ".lookup creature|object|item|tele <name>", function(self, caller, args)
 	local what, needle = args[1], (table.concat(args, " ", 2)):lower()
-	local tableName = ({ creature = "creature_template", object = "gameobject_template", tele = "game_tele" })[what]
-	assert(tableName, "expected creature, object or tele")
+	local tableName = ({ creature = "creature_template", object = "gameobject_template", item = "item_template", tele = "game_tele" })[what]
+	assert(tableName, "expected creature, object, item or tele")
 	local DB = self.includes.Database["WorldDB.h"]
 	local pk = DB.TABLES[tableName]
 	local hits = 0
@@ -443,6 +445,76 @@ end)
 add("revive", 2, ".revive [player]", function(self, caller, args)
 	local other = targetOrSelf(args, 1, caller)
 	self.includes.Entities["EntityPlayer.h"]:Spawn(other, other.Character and other.Character:GetPivot())
+end)
+
+add("levelup", 2, ".levelup [player] [levels]", function(self, caller, args)
+	local target = if args[1] and not tonumber(args[1]) then findPlayer(args[1]) else caller
+	local levels = tonumber(args[2]) or tonumber(args[1]) or 1
+	local Entities = self.includes.Entities["EntityPlayer.h"]
+	Entities:SetLevel(target, (target:GetAttribute("CharacterLevel") or 1) + levels)
+end)
+
+add("setlevel", 2, ".setlevel <level> [player]", function(self, caller, args)
+	self.includes.Entities["EntityPlayer.h"]:SetLevel(targetOrSelf(args, 2, caller), assert(tonumber(args[1]), "expected a level"))
+end)
+
+add("additem", 2, ".additem <entry> [count] [player]", function(self, caller, args)
+	local entry, count = assert(tonumber(args[1]), "expected an item entry"), tonumber(args[2]) or 1
+	local target = targetOrSelf(args, 3, caller)
+	assert(self.includes.Entities["EntityPlayer.h"]:AddItem(target, entry, count), "no item_template entry " .. entry)
+end)
+
+add("item", 2, ".item template add <name> [quality 0-5] [stack] | .item template list", function(self, caller, args)
+	local DB = self.includes.Database["WorldDB.h"]
+	if args[1] == "template" and args[2] == "add" then
+		local row = DB:Insert("item_template", { name = assert(args[3], "expected a name"), quality = math.clamp(tonumber(args[4]) or 1, 0, 5), stack = tonumber(args[5]) or 1 })
+		self:Reply(caller, ("item_template entry %d: %s"):format(row.entry, row.name))
+	else
+		for _, row in DB:Select("item_template") do
+			self:Reply(caller, ("  %d: %s (quality %d, stack %d)"):format(row.entry, row.name, row.quality or 1, row.stack or 1))
+		end
+	end
+end)
+
+add("db", 4, ".db tables | .db select <table> [limit] | .db get <table> <key> | .db set <table> <key> <field> <value> | .db delete <table> <key>", function(self, caller, args)
+	local DB = self.includes.Database["WorldDB.h"]
+	local sub, tableName = args[1], args[2]
+	if sub == "tables" then
+		local names = {}
+		for name, pk in DB.TABLES do
+			table.insert(names, name .. " (" .. pk .. ")")
+		end
+		table.sort(names)
+		self:Reply(caller, table.concat(names, ", "))
+		return
+	end
+	assert(DB.TABLES[tableName or ""], "no such table; .db tables")
+	local function show(row)
+		local parts = {}
+		for field, value in row do
+			table.insert(parts, field .. "=" .. tostring(value))
+		end
+		table.sort(parts)
+		self:Reply(caller, "  " .. table.concat(parts, " "))
+	end
+	if sub == "select" then
+		local rows = DB:Select(tableName)
+		local limit = tonumber(args[3]) or 10
+		self:Reply(caller, ("%s: %d row(s)"):format(tableName, #rows))
+		for i = 1, math.min(limit, #rows) do
+			show(rows[i])
+		end
+	elseif sub == "get" then
+		show(assert(DB:Get(tableName, args[3]), "no such row"))
+	elseif sub == "set" then
+		local field, raw = assert(args[4], "expected a field"), table.concat(args, " ", 5)
+		local value: any = tonumber(raw) or (if raw == "true" then true elseif raw == "false" then false else raw)
+		show(assert(DB:Update(tableName, args[3], { [field] = value }), "no such row"))
+	elseif sub == "delete" then
+		self:Reply(caller, if DB:Delete(tableName, args[3]) then "Deleted." else "No such row.")
+	else
+		error("expected tables, select, get, set or delete", 0)
+	end
 end)
 
 add("maxhealth", 2, ".maxhealth <amount> [player]", function(self, caller, args)

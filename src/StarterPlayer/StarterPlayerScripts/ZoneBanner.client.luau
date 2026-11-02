@@ -38,15 +38,11 @@ local function fade(l: TextLabel, info: TweenInfo, transparency: number)
 	TweenService:Create(l, info, { TextTransparency = transparency, TextStrokeTransparency = 0.4 + transparency * 0.6 }):Play()
 end
 
-player:GetAttributeChangedSignal("Zone"):Connect(function()
-	local name = player:GetAttribute("Zone")
-	if not name then
-		return
-	end
+local function show(main: string, sub: string)
 	showing += 1
 	local token = showing
-	title.Text = name
-	subtitle.Text = player:GetAttribute("ZoneKind") or ""
+	title.Text = main
+	subtitle.Text = sub
 	fade(title, fadeIn, 0)
 	fade(subtitle, fadeIn, 0)
 	task.delay(3, function()
@@ -55,4 +51,18 @@ player:GetAttributeChangedSignal("Zone"):Connect(function()
 			fade(subtitle, fadeOut, 1)
 		end
 	end)
+end
+
+player:GetAttributeChangedSignal("Zone"):Connect(function()
+	local name = player:GetAttribute("Zone")
+	if name then
+		show(name, player:GetAttribute("ZoneKind") or "")
+	end
+end)
+
+player:GetAttributeChangedSignal("LevelUp"):Connect(function()
+	local level = player:GetAttribute("LevelUp")
+	if level then
+		show(("Level %d"):format(level), "You have reached a new level!")
+	end
 end)

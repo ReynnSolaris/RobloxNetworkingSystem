@@ -11,6 +11,7 @@ local TABLES = {
 	gameobject_template = "entry",
 	gameobject = "guid",
 	game_tele = "id",
+	item_template = "entry",
 }
 module.TABLES = TABLES
 

@@ -42,6 +42,9 @@ function module:Start()
 				local zone = root and self:At(root.Position) or nil
 				if zone ~= self.information[player] then
 					self.information[player] = zone
+					if zone then
+						self.includes.Entities["EntityPlayer.h"]:Discover(player, zone.Name)
+					end
 					Packet:Send(player, Opcodes.SMSG_ZONE_UPDATE, if zone then {
 						Name = zone.Name,
 						Pvp = zone:GetAttribute("Pvp") == true,
@@ -58,4 +61,5 @@ end
 
 return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
+	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 })

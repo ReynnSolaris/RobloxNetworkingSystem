@@ -31,11 +31,11 @@ src/ServerStorage/ServerModules/
   WorldServer/Characters/          Characters (enum, create, delete, login, logout)
   WorldServer/Zones/               Zones (which zone each player stands in)
   WorldServer/Movement/            Anticheat (movement validation)
-  WorldServer/Content/             Creatures, GameObjects, Teleports (spawns from WorldDB rows)
+  WorldServer/Content/             Creatures, GameObjects, Items, Teleports (spawns from WorldDB rows)
 src/ServerStorage/ObjectTemplates/                 models .gobject can place
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus)
-src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, PlayerFrame, ZoneBanner, PartyFrame
+src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, PlayerFrame, ChatFrame, ZoneBanner, PartyFrame
 src/Workspace/Zones/                               demo zone parts
 ```
 
@@ -57,6 +57,10 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | CMSG_PLAYER_LOGIN | client | `{ Slot }` picks the character; the server then spawns |
 | CMSG_LOGOUT_REQUEST | client | back to character select |
 | SMSG_CHAR_RESULT | server | `{ Ok, Reason }` for create, delete and login |
+| SMSG_XP_GAIN | server | `{ Amount, Reason }` |
+| SMSG_LEVELUP | server | `{ Level }` |
+| SMSG_ITEM_PUSH | server | `{ Entry, Name, Quality, Count }` |
+| CMSG_INVENTORY / SMSG_INVENTORY | both | `{}` in, `{ Items = { { Entry, Name, Quality, Count } } }` out |
 | SMSG_SPAWN | server | `{ Position, Health, MaxHealth }` |
 | SMSG_DESPAWN | server | on death, respawn follows after `Config.RespawnDelay` |
 | SMSG_HEALTH_UPDATE | server | `{ Health, MaxHealth }` |
@@ -135,10 +139,13 @@ GAMEMASTER  .buff <all|player> <speed|jump> <multiplier> <seconds>
 MODERATOR   .lookup creature|object|tele <name>
             .speed <0.1-10> [player]  .hurt <player> <amount>  .heal [player]
             .kill [player]  .revive [player]  .maxhealth <amount> [player]  .time <0-24>
+            .levelup [player] [levels]  .setlevel <level> [player]  .modify xp <amount> [player]
+            .additem <entry> [count] [player]  .item template add <name> [quality] [stack] | list
             .morph <userId> [player]  .demorph [player]  .modify hp|speed|scale <value> [player]
             .ban <player> [reason]  .unban <userId>  .announce <text>
             .save [player]  .saveall
 OWNER       .role <player> <PLAYER|MODERATOR|GAMEMASTER|OWNER>
+            .db tables | select <table> [limit] | get <table> <key> | set <table> <key> <field> <value> | delete <table> <key>
 ```
 
 `.help <command>` or `.<command> help` prints a command's forms. Aliases: `.gobj`,
@@ -207,6 +214,7 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | gameobject_template | entry | name, modelid, size |
 | gameobject | guid | id (entry), x, y, z, o, scale, by |
 | game_tele | id | name, x, y, z, o |
+| item_template | entry | name, quality 0-5, stack |
 
 Templates are the assets, spawns reference them by entry, like TC. A creature's
 `modelid` is `default`, `user:<UserId>` (that account's look) or `model:<Name>` for a
@@ -230,6 +238,23 @@ accept the name of someone who is not on this server (looked up to a UserId).
 `.buff all speed 2 60` doubles everyone's WalkSpeed for a minute on every server;
 a multiplier under 1 is a debuff. Without MessagingService (Studio without API
 access) it logs once and runs single-server.
+
+## Chat window, experience, items
+
+`ChatFrame` replaces Roblox's chat window (the input bar stays, for typing and
+filtering) with three tabs: General, Whispers, Log. Entering the world clears General
+and Log; Whispers keep. A hidden tab lights up when it gets a line, pink for whispers.
+
+Characters have a level (cap `Config.Xp.MaxLevel`, 80) and experience on a TC-shaped
+curve in `Config.Xp.ForLevel`; max health follows level. Gains print in XP blue,
+level-ups in yellow with a banner, and the player frame has an XP bar. The first
+visit to a zone pays exploration experience, remembered per character.
+
+`item_template` rows have a WoW quality (0 poor to 5 legendary, coloured to match)
+and a stack size. A character's inventory is a list of stacks; `.additem` pushes one
+and prints "You receive item: [Name]x5." in loot green; `/inv` lists them. `.db`
+reads and edits any world table directly; a write respawns what depends on it, on
+every server.
 
 ## Saving
 
