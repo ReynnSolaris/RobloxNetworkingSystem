@@ -13,20 +13,44 @@ function module:On(kind: string, handler: (any) -> ())
 	handlers[kind] = handler
 end
 
+local queue = {}
+local MAX_QUEUE = 500
+local PUBLISH_INTERVAL = 0.5
+
 function module:Publish(kind: string, data: {})
 	if not online then
 		return false
 	end
 	data.Kind = kind
 	data.Origin = game.JobId
-	task.spawn(function()
-		local ok, err = pcall(MessagingService.PublishAsync, MessagingService, TOPIC, data)
-		if not ok then
-			warn("[Global] publish failed:", err)
-		end
-	end)
+	table.insert(queue, data)
+	if #queue > MAX_QUEUE then
+		table.remove(queue, 1)
+	end
 	return true
 end
+
+-- Publishes drain at a rate MessagingService accepts; seeding a fresh database
+-- can queue hundreds in a second.
+task.spawn(function()
+	local failures = 0
+	while true do
+		task.wait(PUBLISH_INTERVAL)
+		local data = table.remove(queue, 1)
+		if data and online then
+			local ok, err = pcall(MessagingService.PublishAsync, MessagingService, TOPIC, data)
+			if not ok then
+				failures += 1
+				if failures <= 3 then
+					warn("[Global] publish failed:", err)
+				end
+				task.wait(5)
+			else
+				failures = 0
+			end
+		end
+	end
+end)
 
 -- Subscribing can stall in Studio, so it runs off the boot thread; publishes
 -- before it lands are simply not heard by this server.

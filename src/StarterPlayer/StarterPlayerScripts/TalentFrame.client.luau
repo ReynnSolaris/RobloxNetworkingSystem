@@ -86,9 +86,9 @@ end
 
 local tabs = scope:Computed(function(use, scope)
 	local out = {}
-	for i, name in use(data).Tabs do
+	for i, name in (use(data).Tabs or {}) do
 		local spent = 0
-		for _, t in use(data).Talents do
+		for _, t in (use(data).Talents or {}) do
 			if t.Tab == i then
 				spent += t.Rank
 			end
@@ -110,7 +110,7 @@ end)
 
 local tiles = scope:Computed(function(use, scope)
 	local out = {}
-	for _, talent in use(data).Talents do
+	for _, talent in (use(data).Talents or {}) do
 		if talent.Tab == use(tab) then
 			table.insert(out, talentTile(scope, talent))
 		end

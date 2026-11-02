@@ -23,7 +23,7 @@ end)
 
 local categories = scope:Computed(function(use)
 	local seen, out = {}, { "All" }
-	for _, a in use(data).List do
+	for _, a in (use(data).List or {}) do
 		if a.Category and not seen[a.Category] then
 			seen[a.Category] = true
 			table.insert(out, a.Category)
@@ -44,7 +44,7 @@ end)
 
 local rows = scope:Computed(function(use)
 	local out = {}
-	for _, a in use(data).List do
+	for _, a in (use(data).List or {}) do
 		if use(category) == "All" or a.Category == use(category) then
 			table.insert(out, {
 				Text = ('<font color="%s">%s</font>'):format(if a.Earned then "#FFD100" else "#AAAAAA", a.Name),
