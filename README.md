@@ -49,6 +49,7 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | CMSG_MESSAGECHAT | client | `{ Channel, Text, Target }` |
 | SMSG_MESSAGECHAT | server | `{ Channel, Sender, Target, Text }` |
 | SMSG_NOTIFICATION | server | `{ Text }` from `.announce` |
+| SMSG_GM_STATE | server | `{ Name, Gm, Invisible }` how clients draw a GM |
 
 Add an opcode in `Shared/Opcodes.luau`, then `Packet:On(opcode, handler)` on the
 server and `handlers[opcode]` on the client.
@@ -80,21 +81,34 @@ wherever it is imported. Per-instance state lives in `self.information`.
 The place creator and `Config.Owners` are OWNER; everyone else is PLAYER unless
 `.role` stored an override in the Auth DataStore.
 
-Commands are typed in chat with a leading dot, WoW style:
+Commands are typed in chat with a leading dot, WoW style. A PLAYER gets
+"There is no such command"; `.help` lists what the caller's role can run.
 
 ```
-.help                                   .who
-.hurt <player> <amount>                 .heal [player]
-.tele <x> <y> <z> | .tele <player>      .announce <text>
-.kick <player> [reason]                 .ban <player> [reason]      .unban <userId>
-.role <player> <PLAYER|MODERATOR|GAMEMASTER|OWNER>
+MODERATOR   .help  .who  .server info  .gm on|off  .gm invis on|off  .gm list
+            .freeze <player>  .unfreeze <player>  .mute <player> <minutes> [reason]
+            .unmute <player>  .kick <player> [reason]
+GAMEMASTER  .tele <x> <y> <z> | .tele <player>  .appear <player>  .summon <player>
+            .speed <0.1-10> [player]  .hurt <player> <amount>  .heal [player]
+            .kill [player]  .revive [player]  .maxhealth <amount> [player]
+            .ban <player> [reason]  .unban <userId>  .announce <text>
+            .save [player]  .saveall
+OWNER       .role <player> <PLAYER|MODERATOR|GAMEMASTER|OWNER>
 ```
+
+`.gm on` puts a blue `<GM>` tag on the GM's chat. `.gm invis on` fades the GM to 60%
+for staff and hides them completely, nametag included, from players; it is purely
+visual (`LocalTransparencyModifier` on each client), collisions are unchanged.
 
 ## Chat
 
 Channels: SAY (30 studs), YELL (100), WORLD, WHISPER, SYSTEM. On the client, `/y`,
 `/w Name`, and `/world` pick the channel; anything else is SAY. Messages go through
-`TextService` filtering and are delivered by packet. Roblox's own delivery is turned
+`TextService` filtering and are delivered by packet, then drawn as rich text in
+Blizzard's colours and phrasing: white `Reynn says:`, red `Reynn yells:`, pink
+`Reynn whispers:` / `To Reynn:`, channel-pink `[World] [Reynn]:`, yellow system
+lines. Colours live in `Config.Chat.Colors`. The sender's own line is the chat box's
+echo, restyled through `OnIncomingMessage`; the server never sends it back. Roblox's own delivery is turned
 off: the project file sets `CreateDefaultTextChannels` and `CreateDefaultCommands`
 to false on TextChatService (they are not scriptable), and the "Net" channel the
 chat box types into has `ShouldDeliverCallback` returning false.

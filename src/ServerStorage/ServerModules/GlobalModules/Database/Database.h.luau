@@ -5,8 +5,9 @@ local module = {}
 local RETRIES = 3
 local online = true
 
--- Retries with backoff. After a hard failure (no API access in Studio, outage)
--- the whole service goes memory-only instead of stalling every join.
+-- Retries with backoff. After a hard failure the whole service goes memory-only
+-- instead of stalling every join. "Not allowed" (Studio without API access) is
+-- final on the first try.
 local function attempt(fn)
 	if not online then
 		return false, "offline"
@@ -16,6 +17,9 @@ local function attempt(fn)
 		ok, result = pcall(fn)
 		if ok then
 			return true, result
+		end
+		if tostring(result):find("not allowed") then
+			break
 		end
 		if i < RETRIES then
 			task.wait(i)
@@ -38,7 +42,7 @@ function module:Open(name: string)
 	if not ok then
 		online = false
 	end
-	local cache, dirty = {}, {}
+	local cache, dirty, writing = {}, {}, {}
 	local store = {}
 
 	function store.Get(_, key: string, default: any)
@@ -65,13 +69,16 @@ function module:Open(name: string)
 		store:Set(key, fn(store:Get(key)))
 	end
 
+	-- PlayerRemoving and BindToClose both flush at shutdown; one write per key.
 	function store.Flush(_, key: string)
-		if not dirty[key] or not online then
+		if not dirty[key] or not online or writing[key] then
 			return not dirty[key]
 		end
+		writing[key] = true
 		local saved = attempt(function()
 			dataStore:SetAsync(key, cache[key])
 		end)
+		writing[key] = nil
 		if saved then
 			dirty[key] = nil
 		end

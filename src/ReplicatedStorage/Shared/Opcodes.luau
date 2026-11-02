@@ -12,6 +12,8 @@ local Opcodes = {
 	CMSG_MESSAGECHAT = 20,
 	SMSG_MESSAGECHAT = 21,
 	SMSG_NOTIFICATION = 22,
+
+	SMSG_GM_STATE = 30,
 }
 
 local names = {}

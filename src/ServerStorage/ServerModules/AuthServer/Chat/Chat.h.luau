@@ -45,6 +45,11 @@ function module:Start()
 			return self.includes.Security["Commands.h"]:Run(player, text:sub(2))
 		end
 
+		local session = self.includes.Security["Session.h"]:Get(player)
+		if session and session.MutedUntil > os.time() then
+			return self:System(player, ("You are muted for another %d min."):format(math.ceil((session.MutedUntil - os.time()) / 60)))
+		end
+
 		local now = os.clock()
 		if (self.information[player] or 0) + Config.Chat.Cooldown > now then
 			return
@@ -58,19 +63,20 @@ function module:Start()
 		end
 		local packet = {
 			Channel = name,
-			Sender = player.Name,
+			Sender = player.DisplayName,
+			Gm = session ~= nil and session.Gm,
 			Target = if channel.Target then data.Target else nil,
 			Text = Functions:Filter(player, text),
 		}
 		local recipients = Functions:Recipients(channel, player, data.Target)
-		if channel.Target then
-			if #recipients == 0 then
-				return self:System(player, "No player named " .. tostring(data.Target))
-			end
-			table.insert(recipients, player)
+		if channel.Target and #recipients == 0 then
+			return self:System(player, "No player named " .. tostring(data.Target))
 		end
+		-- The sender already sees their own line as the chat box echo.
 		for _, recipient in recipients do
-			Packet:Send(recipient, Opcodes.SMSG_MESSAGECHAT, packet)
+			if recipient ~= player then
+				Packet:Send(recipient, Opcodes.SMSG_MESSAGECHAT, packet)
+			end
 		end
 	end)
 
@@ -81,5 +87,5 @@ end
 
 return Base(module, {
 	{ Path = "Auth/Chat", Imports = "ChatRegistry.h|ChatFunctions.h" },
-	{ Path = "Auth/Security", Imports = "Packet.h|Commands.h" },
+	{ Path = "Auth/Security", Imports = "Packet.h|Commands.h|Session.h" },
 })

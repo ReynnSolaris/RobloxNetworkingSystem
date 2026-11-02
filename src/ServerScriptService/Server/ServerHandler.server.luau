@@ -44,6 +44,7 @@ local Packet = Auth.Security["Packet.h"]
 local Session = Auth.Security["Session.h"]
 local Entities = Auth.Entities["EntityPlayer.h"]
 local Chat = Auth.Chat["Chat.h"]
+local Commands = Auth.Security["Commands.h"]
 local Database = Global.Database["Database.h"]
 
 Packet:Start()
@@ -51,6 +52,7 @@ Session:Start()
 Chat:Start()
 Session:OnAuthed(function(player)
 	Entities:Spawn(player)
+	Commands:SyncState(player)
 end)
 
 -- Both loads yield on DataStores. The entity goes first so a session never exists

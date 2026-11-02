@@ -16,7 +16,7 @@
     },
     "TextChatService": {
       "$className": "TextChatService",
-      "$properties": { "CreateDefaultTextChannels": false, "CreateDefaultCommands": false }
+      "$properties": { "ChatVersion": "TextChatService", "CreateDefaultTextChannels": false, "CreateDefaultCommands": false }
     },
     "StarterPlayer": {
       "$className": "StarterPlayer",

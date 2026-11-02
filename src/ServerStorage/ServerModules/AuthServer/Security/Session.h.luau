@@ -28,6 +28,9 @@ function module:Open(player: Player)
 		State = STATE.CONNECTED,
 		Role = self.includes.Security["RBAC_Permissions.h"]:GetRole(player),
 		Opened = os.time(),
+		MutedUntil = account.MutedUntil or 0,
+		Gm = false,
+		Invisible = false,
 	}
 	self.information[player] = session
 	return session
@@ -68,6 +71,7 @@ function module:Start()
 			Ok = ok,
 			SessionId = if ok then session.Id else nil,
 			Role = RBAC:GetRoleName(session.Role),
+			Level = session.Role,
 			Reason = if ok then nil else "BUILD_MISMATCH",
 		})
 		if not ok then

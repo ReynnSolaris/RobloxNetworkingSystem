@@ -36,7 +36,8 @@ function module:Save(player: Player)
 	self.information[player.UserId] = nil
 end
 
-local function edit(self, userId: number, fn)
+-- Change one account, online or not, and write it through.
+function module:Edit(userId: number, fn: (any) -> ())
 	self:Store():Update(key(userId), function(account)
 		account = account or blank()
 		fn(account)
@@ -46,13 +47,13 @@ local function edit(self, userId: number, fn)
 end
 
 function module:SetRole(userId: number, level: number)
-	edit(self, userId, function(account)
+	self:Edit(userId, function(account)
 		account.Role = level
 	end)
 end
 
 function module:Ban(userId: number, reason: string?, by: Player?)
-	edit(self, userId, function(account)
+	self:Edit(userId, function(account)
 		account.Banned = { Reason = reason, By = by and by.UserId, At = os.time() }
 	end)
 	local online = Players:GetPlayerByUserId(userId)
@@ -62,7 +63,7 @@ function module:Ban(userId: number, reason: string?, by: Player?)
 end
 
 function module:Unban(userId: number)
-	edit(self, userId, function(account)
+	self:Edit(userId, function(account)
 		account.Banned = nil
 	end)
 end
