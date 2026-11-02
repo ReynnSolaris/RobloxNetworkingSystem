@@ -35,6 +35,7 @@ local TABLES = {
 module.TABLES = TABLES
 
 local listeners: { [string]: (string, string, any) -> () } = {}
+local seeding = false
 
 function module:Store()
 	return self.includes.Database["Database.h"]:Open("WorldDB")
@@ -42,6 +43,20 @@ end
 
 local function keyOf(tableName: string, row): string
 	return tostring(row[assert(TABLES[tableName], "no table " .. tableName)])
+end
+
+-- Boot seeds hundreds of rows. Between BeginSeed and EndSeed writes only touch
+-- the cached tables (no UpdateAsync per row, no bus message) and the dirty
+-- tables are written once at the end.
+function module:BeginSeed()
+	seeding = true
+end
+
+function module:EndSeed()
+	seeding = false
+	task.spawn(function()
+		self:Store():FlushAll()
+	end)
 end
 
 -- Every row of a table as an array, sorted by key.
@@ -65,9 +80,25 @@ function module:Get(tableName: string, key)
 end
 
 function module:NextId(tableName: string): number
-	return self:Store():Transform("next_" .. tableName, function(n)
+	local key = "next_" .. tableName
+	if seeding then
+		local n = (self:Store():Get(key, 0) or 0) + 1
+		self:Store():Set(key, n)
+		return n
+	end
+	return self:Store():Transform(key, function(n)
 		return (n or 0) + 1
 	end)
+end
+
+-- Read-modify-write of a whole table: cached during seeding, live otherwise.
+local function edit(self, tableName: string, fn)
+	if seeding then
+		local t = fn(self:Store():Get(tableName, {}) or {})
+		self:Store():Set(tableName, t)
+		return t
+	end
+	return self:Store():Transform(tableName, fn)
 end
 
 local function publish(self, tableName: string, op: string, key: string, row)
@@ -81,18 +112,20 @@ function module:Insert(tableName: string, row)
 		row[pk] = self:NextId(tableName)
 	end
 	local key = keyOf(tableName, row)
-	self:Store():Transform(tableName, function(t)
+	edit(self, tableName, function(t)
 		t = t or {}
 		t[key] = row
 		return t
 	end)
-	publish(self, tableName, "set", key, row)
+	if not seeding then
+		publish(self, tableName, "set", key, row)
+	end
 	return row
 end
 
 function module:Update(tableName: string, key, fields)
 	local updated
-	self:Store():Transform(tableName, function(t)
+	edit(self, tableName, function(t)
 		t = t or {}
 		local row = t[tostring(key)]
 		if row then
@@ -103,7 +136,7 @@ function module:Update(tableName: string, key, fields)
 		end
 		return t
 	end)
-	if updated then
+	if updated and not seeding then
 		publish(self, tableName, "set", tostring(key), updated)
 	end
 	return updated
@@ -111,13 +144,13 @@ end
 
 function module:Delete(tableName: string, key): boolean
 	local existed = false
-	self:Store():Transform(tableName, function(t)
+	edit(self, tableName, function(t)
 		t = t or {}
 		existed = t[tostring(key)] ~= nil
 		t[tostring(key)] = nil
 		return t
 	end)
-	if existed then
+	if existed and not seeding then
 		publish(self, tableName, "del", tostring(key), nil)
 	end
 	return existed
