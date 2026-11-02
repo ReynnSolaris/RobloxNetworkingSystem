@@ -228,12 +228,9 @@ end
 function module:Swing(player: Player, state)
 	local target = self:Target(player)
 	local Auras = self.includes.Spells["Auras.h"]
-	if not target or not self:CanAttack(player, target) then
+	if not target or not self:CanAttack(player, target) or not self:Alive(player) or Auras:Has(player, "stun") then
 		state.Attacking = false
-		return
-	end
-	if not self:Alive(player) or Auras:Has(player, "stun") then
-		state.Attacking = false
+		player:SetAttribute("Attacking", nil)
 		return
 	end
 	local root, targetRoot = self:Root(player), self:Root(target)
@@ -244,6 +241,7 @@ function module:Swing(player: Player, state)
 		return
 	end
 	state.NextSwing = os.clock() + Config.Combat.SwingSeconds
+	player:SetAttribute("Swing", os.clock())
 	local Entities = self.includes.Entities["EntityPlayer.h"]
 	local level = player:GetAttribute("CharacterLevel") or 1
 	local stats = Entities:Stats(player)
@@ -289,7 +287,17 @@ function module:Start()
 	end)
 	Packet:On(Opcodes.CMSG_ATTACK, function(player, data)
 		local s = self:State(player)
+		local was = s.Attacking
 		s.Attacking = typeof(data) == "table" and data.On == true and (s.Target ~= nil or s.TargetPlayer ~= nil)
+		if s.Attacking and not was then
+			local target = self:Target(player)
+			if target then
+				self:Log(player, ("You begin attacking %s."):format(self:Name(target)), Config.Chat.Colors.COMMAND)
+			end
+		elseif was and not s.Attacking then
+			self:Log(player, "You stop attacking.", Config.Chat.Colors.COMMAND)
+		end
+		player:SetAttribute("Attacking", if s.Attacking then true else nil)
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		self.information[player] = nil

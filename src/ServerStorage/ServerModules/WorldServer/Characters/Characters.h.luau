@@ -83,7 +83,7 @@ function module:Create(player: Player, data)
 	if not filtered then
 		return self:Result(player, false, "That name is not allowed.")
 	end
-	table.insert(record.Characters, { Name = name, Class = class.Name, Race = race.Name, Faction = race.Faction, Gender = gender, Level = 1, Created = os.time() })
+	table.insert(record.Characters, { Name = name, Class = class.Name, Race = race.Name, Faction = race.Faction, Gender = gender, Level = 1, Created = os.time(), Starter = true })
 	self.includes.Database["WorldDatabase.h"]:Commit(player)
 	self.includes.Database["WorldDatabase.h"]:Register(name, player.UserId)
 	self:Result(player, true)
@@ -121,6 +121,7 @@ function module:Login(player: Player, data)
 	self.includes.Chat["Chat.h"]:System(player, ("Welcome to %s, %s."):format(Config.RealmName, record.Characters[slot].Name))
 	self.includes.Quests["Quests.h"]:Refresh(player)
 	self.includes.Spells["Spells.h"]:OnLogin(player)
+	self:StarterGear(player)
 	self.includes.Database["WorldDatabase.h"]:Register(record.Characters[slot].Name, player.UserId)
 	self.includes.Social["Social.h"]:OnLogin(player)
 	self.includes.Social["Guild.h"]:OnLogin(player)
@@ -131,6 +132,35 @@ function module:Login(player: Player, data)
 	self.includes.Spells["Skills.h"]:OnLogin(player)
 	self.includes.Social["Achievements.h"]:OnLogin(player)
 	self.includes.Zones["GameEvents.h"]:OnLogin(player)
+end
+
+-- A new character's first login: the recruit's set worn, a sword, food and a
+-- Hearthstone, from Config.StarterGear by class.
+function module:StarterGear(player: Player)
+	local Entities = self.includes.Entities["EntityPlayer.h"]
+	local Items = self.includes.Content["Items.h"]
+	local entity = Entities:Get(player)
+	local c = entity and entity.Active
+	if not c or not c.Starter then
+		return
+	end
+	c.Starter = nil
+	local list = Config.StarterGear[c.Class] or Config.StarterGear.Default
+	for _, entry in list do
+		local item = Items:ByName(entry[1])
+		if item and Entities:AddItem(player, item.entry, entry[2] or 1, true) then
+			if item.slot then
+				for slot = 1, Entities:BagSize(player) do
+					local stack = Entities:StackAt(player, slot)
+					if stack and stack.entry == item.entry then
+						Entities:Equip(player, slot)
+						break
+					end
+				end
+			end
+		end
+	end
+	self.includes.Database["WorldDatabase.h"]:Commit(player)
 end
 
 function module:Logout(player: Player)
@@ -195,7 +225,7 @@ return Base(module, {
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h|Talents.h|Skills.h" },
 	{ Path = "World/Mail", Imports = "Mail.h" },
-	{ Path = "World/Content", Imports = "Trade.h|Pets.h" },
+	{ Path = "World/Content", Imports = "Trade.h|Pets.h|Items.h" },
 	{ Path = "World/Zones", Imports = "GameEvents.h" },
 	{ Path = "Auth/Social", Imports = "Social.h|Guild.h|Reputation.h|Achievements.h" },
 })

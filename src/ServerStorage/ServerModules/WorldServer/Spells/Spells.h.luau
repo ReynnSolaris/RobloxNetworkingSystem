@@ -421,6 +421,7 @@ function module:Cast(player: Player, id, guid, item)
 	s.Gcd = now + Config.Spells.GlobalCooldown
 	if (spell.cast_time or 0) > 0 then
 		s.Casting = { Spell = spell, Target = target, Ends = now + spell.cast_time, From = root.Position, Item = item }
+		player:SetAttribute("CastingSpell", spell.name)
 		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_SPELL_START, { Id = spell.id, Name = spell.name, CastTime = spell.cast_time })
 	else
 		self:Apply(player, spell, target, item)
@@ -440,6 +441,8 @@ function module:Apply(caster, spell, target, item)
 	local s = isPlayer and self:State(caster)
 	if s then
 		s.Casting = nil
+		caster:SetAttribute("CastingSpell", nil)
+		caster:SetAttribute("SpellGo", spell.school .. " " .. os.clock())
 		s.Mana = math.max(0, s.Mana - (spell.cost or 0))
 		if (spell.cooldown or 0) > 0 then
 			s.Cooldowns[spell.id] = os.clock() + spell.cooldown
@@ -519,6 +522,7 @@ function module:Interrupt(player: Player, reason: string)
 	local s = self.information[player]
 	if s and s.Casting then
 		s.Casting = nil
+		player:SetAttribute("CastingSpell", nil)
 		self:Fail(player, reason)
 	end
 end

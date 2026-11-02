@@ -9,14 +9,23 @@ local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 local netSend = script.Parent:WaitForChild("NetSend") :: BindableEvent
 
--- Target frame beside the player frame. Click a creature to target it, T or a
--- second click toggles auto-attack on a hostile one, Escape clears.
+-- Target frame beside the player frame. Left-click a creature to target it,
+-- right-click (or T, or a second left-click) starts auto-attack on a hostile
+-- one, Escape clears. While attacking the frame glows red and a swing bar
+-- fills between swings; the "Attacking" attribute comes back from the server.
 
 local scope = Fusion.scoped(Fusion)
 local Children, peek = Fusion.Children, Fusion.peek
 
+local RunService = game:GetService("RunService")
 local target = scope:Value(nil :: Model?)
 local attacking = scope:Value(false)
+local serverAttacking = Components.attribute(scope, player, "Attacking", false)
+local swingAt = Components.attribute(scope, player, "Swing", 0)
+local now = scope:Value(os.clock())
+RunService.Heartbeat:Connect(function()
+	now:set(os.clock())
+end)
 local health, maxHealth = scope:Value(0), scope:Value(1)
 local duelOpponent = Components.attribute(scope, player, "DuelOpponent", nil)
 local myFaction = Components.attribute(scope, player, "CharacterFaction", "Alliance")
@@ -67,7 +76,40 @@ scope:New "ScreenGui" {
 		return use(target) ~= nil
 	end),
 	Parent = player:WaitForChild("PlayerGui"),
-	[Children] = Components.UnitFrame(scope, {
+	[Children] = {
+		scope:New "Frame" {
+			Position = UDim2.fromOffset(312, 86),
+			Size = UDim2.fromOffset(260, 4),
+			BackgroundColor3 = Color3.fromRGB(40, 20, 20),
+			BorderSizePixel = 0,
+			Visible = scope:Computed(function(use)
+				return use(serverAttacking) == true
+			end),
+			[Children] = scope:New "Frame" {
+				Size = scope:Computed(function(use)
+					local since = use(now) - (use(swingAt) or 0)
+					return UDim2.fromScale(math.clamp(since / Config.Combat.SwingSeconds, 0, 1), 1)
+				end),
+				BackgroundColor3 = Color3.fromRGB(230, 80, 60),
+				BorderSizePixel = 0,
+			},
+		},
+		scope:New "Frame" {
+			Position = UDim2.fromOffset(309, 13),
+			Size = UDim2.fromOffset(266, 74),
+			BackgroundTransparency = 1,
+			[Children] = {
+				scope:New "UICorner" { CornerRadius = UDim.new(0, 8) },
+				scope:New "UIStroke" {
+					Thickness = 2,
+					Color = Color3.fromRGB(230, 60, 60),
+					Transparency = scope:Computed(function(use)
+						return if use(serverAttacking) then 0.1 else 1
+					end),
+				},
+			},
+		},
+		Components.UnitFrame(scope, {
 		Position = UDim2.fromOffset(312, 16),
 		Size = UDim2.fromOffset(260, 68),
 		Title = scope:Computed(function(use)
@@ -103,12 +145,13 @@ scope:New "ScreenGui" {
 			return ("Level %s%s %s"):format(tostring(model:GetAttribute("Level") or "?"), rankText, if use(hostile) then "Hostile" elseif model:GetAttribute("Faction") == "pet" then "Pet" else "Friendly")
 		end),
 		Right = scope:Computed(function(use)
-			return if use(attacking) then "ATTACKING" else ""
+			return if use(serverAttacking) then "ATTACKING" else ""
 		end),
 		Health = health,
 		MaxHealth = maxHealth,
 		HealthColor = Color3.fromRGB(200, 60, 60),
-	}),
+		}),
+	},
 }
 
 local function creatureFrom(part: Instance?): Model?
@@ -131,6 +174,22 @@ mouse.Button1Down:Connect(function()
 		setAttacking(not peek(attacking))
 	elseif model then
 		setTarget(model)
+	end
+end)
+
+-- right-click: target and attack in one, WoW style
+mouse.Button2Down:Connect(function()
+	if player:GetAttribute("InWorld") ~= true then
+		return
+	end
+	local model = creatureFrom(mouse.Target)
+	if model then
+		if model ~= peek(target) then
+			setTarget(model)
+		end
+		if peek(hostile) and not peek(attacking) then
+			setAttacking(true)
+		end
 	end
 end)
 

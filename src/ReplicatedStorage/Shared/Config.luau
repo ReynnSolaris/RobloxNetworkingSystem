@@ -37,6 +37,10 @@ return table.freeze({
 	QuestLogSize = 25,
 	BuybackSlots = 12,
 
+	-- What a new character owns on first login: { item name, count }; gear is worn.
+	StarterGear = {
+		Default = { { "Recruit's Tunic" }, { "Recruit's Pants" }, { "Recruit's Boots" }, { "Worn Shortsword" }, { "Hearthstone" }, { "Tough Jerky", 5 }, { "Linen Bag" } },
+	},
 	-- Equipment slots, in character sheet order; the last four hold bags.
 	Slots = { "head", "chest", "legs", "feet", "mainhand", "ring", "trinket", "bag1", "bag2", "bag3", "bag4" },
 	BagSlotNames = { "bag1", "bag2", "bag3", "bag4" },

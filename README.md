@@ -539,7 +539,8 @@ patrol `creature.waypoints` (`.npc wp add`), wander `wander` studs around home,
 and call nearby creatures of their kind for help when attacked.
 
 Talents open on N from level 10: three trees a class laid out as a scrolling
-grid of three columns, five tiers of talents
+grid of three columns, five tiers with two talents each but the last (the
+tab's Training, Focus, Mastery and Expertise beside the named talent)
 that raise a stat by percent, a school's damage, or crit and dodge. Points come
 one a level; a tier opens with five points in the tree below. The class trainer
 unlearns them for a gold, doubling each time.
@@ -574,9 +575,11 @@ node, and `taxi_path` rows connect nodes (`.taxi node add`, `.taxi path`). Flyin
 anchors the character and tweens it along the path, high up, for the fare.
 Mounts are items whose spell applies a `mount` aura that lasts until cancelled
 or until any damage lands: a horse is drawn under the character and movement is
-faster. A mount with `fly = true` (Gryphon Reins) sets `MountFlying`, and the
-client's flight controller takes over: WASD along the camera, Space to rise,
-Shift to descend, hovering when idle; the anticheat allows flight speed.
+faster. A mount with `fly = true` (Gryphon Reins) sets `MountFlying`. On the ground
+you walk as usual; Space takes off and the client's flight controller carries
+you where the camera looks, WASD along the camera, Space to rise, Shift to
+descend, hovering when idle; holding Shift near the ground lands. The
+anticheat allows flight speed.
 
 `/trade <name>` opens a six slot trade window on both sides once accepted; both
 must accept after any change. `/inspect` shows another player's gear, stats and
@@ -655,6 +658,18 @@ order: name in quality colour, binding, slot and type, armor, green stats, level
 requirement in red when too low, Use line, max stack, sell price in coin colours.
 Spells show cost and range, cast time and cooldown, rank, class, description and
 what the aura does. Items list primary stats and spell power.
+
+## Swings, casts, attacking
+
+Combat state replicates through attributes so every client can animate it:
+`Swing` stamps each melee swing (players, creatures, pets), `CastingSpell` on a
+player and `Casting` on a creature hold a casting pose, `SpellGo` plays the
+release. Roblox's own R15 slash, point and lunge animations are used. Right-
+click a creature to target and attack it in one; the target frame glows red
+with a swing bar while `Attacking` is set by the server, the player frame
+shows "In Combat" with a red portrait, and the log says when you begin and
+stop attacking. New characters log in wearing the recruit's set with a sword,
+food, a Hearthstone and a Linen Bag (`Config.StarterGear`).
 
 ## Corpses
 

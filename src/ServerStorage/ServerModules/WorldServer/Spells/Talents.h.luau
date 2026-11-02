@@ -77,6 +77,30 @@ local TREES = {
 	},
 }
 
+-- Every tier below the last gets a second talent built from the tab, so five
+-- points fit in a tier: Training (a stat), Focus (crit or dodge), Mastery
+-- (the tab's school) and Expertise (health).
+local SECOND = {
+	{ suffix = "Training", mod = function(tab) return pct(tab.stat, 2) end, max = 3 },
+	{ suffix = "Focus", mod = function(tab) return rating(tab.rating, 1) end, max = 2 },
+	{ suffix = "Mastery", mod = function(tab) return school(tab.school, 2) end, max = 3 },
+	{ suffix = "Expertise", mod = function() return pct("Health", 2) end, max = 3 },
+}
+local function tabProfile(tiers)
+	local profile = { stat = "Stamina", rating = "Crit", school = "physical" }
+	for _, talent in tiers do
+		local mod = talent[2]
+		if mod.kind == "school" then
+			profile.school = mod.school
+		elseif mod.kind == "pct" and mod.stat ~= "Health" and mod.stat ~= "Armor" and mod.stat ~= "Damage" and mod.stat ~= "SpellPower" then
+			profile.stat = mod.stat
+		elseif mod.kind == "rating" then
+			profile.rating = mod.stat
+		end
+	end
+	return profile
+end
+
 function module:DB()
 	return self.includes.Database["WorldDB.h"]
 end
@@ -237,18 +261,26 @@ end
 
 function module:Start()
 	local DB = self:DB()
+	local existing = {}
 	for _, row in DB:Select("talent") do
-		local col = (row.tier - 1) % 3 + 1
-		if row.col ~= col then
-			DB:Update("talent", row.id, { col = col })
-		end
+		existing[row.class .. "/" .. row.name] = row
 	end
-	if #DB:Select("talent") == 0 then
-		for class, tabs in TREES do
-			for tab, tiers in tabs do
-				for tier, talent in tiers do
-					DB:Insert("talent", { class = class, tab = tab, tier = tier, col = (tier - 1) % 3 + 1, name = talent[1], description = describe(talent[2]),
-						max_rank = if tier == 5 then 1 else 3, mod = talent[2] })
+	for class, tabs in TREES do
+		for tab, tiers in tabs do
+			local profile = tabProfile(tiers)
+			for tier, talent in tiers do
+				local rows = { { name = talent[1], mod = talent[2], max = if tier == 5 then 1 else 3, col = if tier == 5 then 2 else 1 } }
+				if tier < 5 then
+					local second = SECOND[tier]
+					table.insert(rows, { name = TABS[class][tab] .. " " .. second.suffix, mod = second.mod(profile), max = second.max, col = 3 })
+				end
+				for _, r in rows do
+					local row = existing[class .. "/" .. r.name]
+					if not row then
+						DB:Insert("talent", { class = class, tab = tab, tier = tier, col = r.col, name = r.name, description = describe(r.mod), max_rank = r.max, mod = r.mod })
+					elseif row.col ~= r.col or row.max_rank ~= r.max then
+						DB:Update("talent", row.id, { col = r.col, max_rank = r.max })
+					end
 				end
 			end
 		end

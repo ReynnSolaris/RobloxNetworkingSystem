@@ -197,6 +197,7 @@ function module:Think(state)
 		humanoid:MoveTo(here)
 		if os.clock() >= state.NextSwing then
 			state.NextSwing = os.clock() + Config.Combat.SwingSeconds
+			state.Model:SetAttribute("Swing", os.clock())
 			local template = state.Template
 			local scale = 1 + 0.1 * ((state.Level or 1) - 1)
 			local damage = math.round(math.random(template.dmgmin or 1, math.max(template.dmgmax or 1, template.dmgmin or 1)) * scale)

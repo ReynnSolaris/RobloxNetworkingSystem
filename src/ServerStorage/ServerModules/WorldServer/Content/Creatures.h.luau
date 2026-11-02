@@ -688,6 +688,7 @@ function module:Think(state)
 		humanoid:MoveTo(here)
 		if os.clock() >= state.NextSwing then
 			state.NextSwing = os.clock() + Config.Combat.SwingSeconds
+			state.Model:SetAttribute("Swing", os.clock())
 			local roll = Combat:Roll(state, target)
 			if roll == "miss" or roll == "dodge" then
 				Combat:Log(target, ("%s %s."):format(template.name, if roll == "miss" then "misses you" else "attacks. You dodge"), Config.Chat.Colors.HURT)

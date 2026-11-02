@@ -527,7 +527,7 @@ add("learn", 2, ".learn <spell id|all> [player] | .unlearn <spell id> [player]",
 	if args[1] == "all" then
 		local class = target:GetAttribute("CharacterClass")
 		for _, row in self.includes.Database["WorldDB.h"]:Select("spell_template") do
-			if not row.npc and (row.class == nil or row.class == class) then
+			if not row.npc and row.class == class then
 				Spells:Learn(target, row.id, true)
 			end
 		end
