@@ -22,6 +22,7 @@ local guid = scope:Value(nil :: string?)
 local title = scope:Value("Questgiver")
 local greeting = scope:Value("")
 local quests = scope:Value({})
+local options = scope:Value({})
 local detail = scope:Value(nil :: any)
 
 local MARK = { available = ('<font color="%s">!</font> '):format(Config.Chat.Colors.QUEST), complete = ('<font color="%s">?</font> '):format(Config.Chat.Colors.QUEST), incomplete = '<font color="#888888">?</font> ' }
@@ -31,6 +32,12 @@ local listRows = scope:Computed(function(use)
 	for _, quest in use(quests) do
 		table.insert(rows, { Text = (MARK[quest.Status] or "") .. (quest.Title or "?"), OnClick = function()
 			netSend:Fire(Opcodes.CMSG_QUESTGIVER_QUERY_QUEST, { Guid = peek(guid), Quest = quest.Id })
+		end })
+	end
+	for _, option in use(options) do
+		table.insert(rows, { Text = '<font color="#FFFFFF">' .. (option.Text or "?") .. "</font>", OnClick = function()
+			netSend:Fire(Opcodes.CMSG_GOSSIP_SELECT_OPTION, { Guid = peek(guid), Option = option.Id })
+			open:set(false)
 		end })
 	end
 	return rows
@@ -113,6 +120,7 @@ questList.Event:Connect(function(d)
 	title:set(d.Name or "Questgiver")
 	greeting:set(d.Greeting or "Greetings, traveler.")
 	quests:set(d.Quests or {})
+	options:set(d.Options or {})
 	detail:set(nil)
 	open:set(true)
 	if #(d.Quests or {}) == 1 then

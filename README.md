@@ -34,7 +34,9 @@ src/ServerStorage/ServerModules/
   WorldServer/Content/             Creatures (spawns, AI, loot), GameObjects, Items, Vendors, Teleports
   WorldServer/Combat/              Combat (player melee, combat log), Loot (corpse loot), Death (release, ghosts, corpses)
   WorldServer/Quests/              Quests (templates, questgivers, objectives, rewards)
-  WorldServer/Spells/              Spells (templates, casting, mana, cooldowns, trainers)
+  WorldServer/Spells/              Spells (templates, casting, mana, cooldowns, trainers, item use)
+  WorldServer/Mail/                Mail (letters with money and items, mailboxes)
+  AuthServer/Social/               Party, Social (friends, ignore, who, played)
 src/ServerStorage/ObjectTemplates/                 models .gobject can place
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus), Effects (particles)
@@ -43,6 +45,7 @@ src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), 
                                                    ChatFrame, VendorFrame, BagFrame, CharacterSheet, LootFrame, DeathFrame,
                                                    QuestGiverFrame, QuestLogFrame (log on L, ! and ? markers),
                                                    ActionBar (1-9 0 - =, cast bar), SpellBook (P), TrainerFrame, SpellUi,
+                                                   MailFrame (mailbox prompt), FriendsFrame (O),
                                                    ZoneBanner, PartyFrame, Drag (drag and drop),
                                                    Ui (theme, tooltip), Components (Fusion panels, lists, buttons)
 src/Workspace/Zones/                               demo zone parts
@@ -87,6 +90,11 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | SMSG_SPELL_START / SMSG_SPELL_GO / SMSG_SPELL_FAILURE / SMSG_SPELL_COOLDOWN | server | cast bar, landed (`Target`, `Amount`), `{ Reason }`, `{ Id, Seconds }` |
 | SMSG_INITIAL_SPELLS / SMSG_LEARNED_SPELL / SMSG_ACTION_BUTTONS / CMSG_SET_ACTION_BUTTON | both | known spells, a new one, `{ Buttons = { [slot] = spell } }`, `{ Slot, Spell? }` |
 | SMSG_TRAINER_LIST / CMSG_TRAINER_BUY_SPELL | both | trainer's spells with `Price`, `ReqLevel`, `Known`; `{ Guid, Spell }` |
+| CMSG_GOSSIP_SELECT_OPTION / CMSG_USE_ITEM / SMSG_BINDPOINTUPDATE | both | gossip option `{ Guid, Option }`; use the item in bag slot `{ Bag }`; new home `{ Name }` |
+| CMSG_SEND_MAIL / SMSG_SEND_MAIL_RESULT / SMSG_RECEIVED_MAIL | both | `{ Guid, To, Subject, Body, Money, Items = { bag slots } }`; result; new or unread mail |
+| CMSG_GET_MAIL_LIST / SMSG_MAIL_LIST_RESULT / CMSG_MAIL_TAKE_MONEY / CMSG_MAIL_TAKE_ITEM / CMSG_MAIL_DELETE / CMSG_MAIL_MARK_AS_READ | both | inbox for a mailbox guid; actions by letter `Id` |
+| CMSG_CONTACT_LIST / SMSG_CONTACT_LIST / CMSG_ADD_FRIEND / CMSG_DEL_FRIEND / CMSG_ADD_IGNORE / CMSG_DEL_IGNORE / SMSG_FRIEND_STATUS | both | friends with online state, ignore names; `{ Name }`; "X has come online" |
+| CMSG_WHO / SMSG_WHO / CMSG_PLAYED_TIME / SMSG_PLAYED_TIME | both | who is in the world (`Filter`); seconds played |
 | SMSG_QUESTGIVER_STATUS_MULTIPLE | server | `{ Statuses = { [guid] = available|complete|incomplete|none } }` for the markers |
 | SMSG_VENDOR_LIST | server | `{ Guid, Items }` opens the vendor window |
 | CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
@@ -259,6 +267,9 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | spell_template | id | name, description, class, school, effect, base, per_level, cost, cast_time, cooldown, range, target, buff, mult, duration, icon |
 | playercreateinfo_spell | id | class, spell |
 | npc_trainer | id | entry (creature), spell, cost, reqlevel |
+
+Outside the world tables, the World store also keeps `names` (character name to
+account, for mail and friends) and `mail:<name>` (a character's letters).
 | item_template | entry | name, quality 0-5, stack, class, slot, health, damage, armor, buyprice, sellprice, level |
 | npc_vendor | id | entry (creature), item |
 
@@ -400,6 +411,30 @@ than `InterruptDistance` studs; Escape cancels. Cooldowns sweep over the button
 with the seconds left, and there is a 1.5 second global cooldown. Failures
 ("Out of range.", "Not enough mana.") flash in red and go to the Log tab. Spell
 hits play the school's particle from `Assets/Particles`.
+
+## Gossip, mail, social
+
+Talking to a creature opens a gossip window when it has quests or more than one
+role: its quests, "I seek training.", "Let me browse your goods." and, for an
+innkeeper (`creature_template.innkeeper`), "Make this inn your home.". A
+single-purpose NPC skips the window. Binding sets `Home` on the character; the
+Hearthstone item casts the Hearthstone spell (10 second cast, 60 second cooldown)
+back to it. Items carry a spell through `item_template.use` (the spell's name,
+resolved to `spell`), shown as a green "Use:" line and cast with right-click;
+`consumable` items are used up, like Tough Jerky.
+
+Mail follows TC's mail table: a mailbox game object (`gameobject_template.type ==
+"mailbox"`, place one with `.gobject add`) opens the inbox. Letters have a subject,
+body, money and up to four items dragged from the bag, cost `Config.Mail.Postage`
+plus the money sent, reach offline characters through the `names` index, announce
+themselves when the recipient is online and expire after thirty days. Take the
+money and items before deleting.
+
+Friends and ignore lists live on the character. `/friend`, `/unfriend`, `/ignore`,
+`/unignore`, the Social window on **O** (click an online friend to whisper), and
+"X has come online" lines. Ignored players cannot whisper, invite or be heard.
+`/who [text]` lists everyone in the world with level, class and zone; `/played`
+reports time on the character.
 
 ## Saving
 

@@ -1,0 +1,49 @@
+{
+  "className": "Model",
+  "attributes": {
+    "Type": "mailbox"
+  },
+  "children": [
+    {
+      "name": "Post",
+      "className": "Part",
+      "properties": {
+        "Anchored": true,
+        "Size": [
+          0.8,
+          4,
+          0.8
+        ],
+        "Material": "Wood",
+        "Color": [
+          0.35,
+          0.22,
+          0.12
+        ]
+      }
+    },
+    {
+      "name": "Box",
+      "className": "Part",
+      "properties": {
+        "Anchored": true,
+        "Size": [
+          2.2,
+          1.6,
+          1.4
+        ],
+        "Position": [
+          0,
+          2.8,
+          0
+        ],
+        "Material": "Metal",
+        "Color": [
+          0.12,
+          0.25,
+          0.55
+        ]
+      }
+    }
+  ]
+}

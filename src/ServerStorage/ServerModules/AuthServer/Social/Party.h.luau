@@ -41,7 +41,7 @@ end
 
 function module:Invite(leader: Player, name: string?)
 	local target = self.includes.Entities["EntityPlayer.h"]:FindByName(name)
-	if not target or target == leader then
+	if not target or target == leader or self.includes.Social["Social.h"]:IsIgnoring(target, leader) then
 		return say(self, leader, "No player named " .. tostring(name))
 	end
 	local party = self.information[leader]
@@ -173,4 +173,5 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
+	{ Path = "Auth/Social", Imports = "Social.h" },
 })

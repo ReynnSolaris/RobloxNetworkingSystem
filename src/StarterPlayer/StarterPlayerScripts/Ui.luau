@@ -51,6 +51,7 @@ function Ui.itemTooltip(item, price: string?): string
 		local mine = player:GetAttribute("CharacterLevel") or 1
 		table.insert(lines, ('<font color="%s">Requires Level %d</font>'):format(if mine >= item.Level then "#FFFFFF" else "#FF2020", item.Level))
 	end
+	if item.Use then table.insert(lines, ('<font color="#1EFF00">Use: %s</font>'):format(item.Use)) end
 	if price then table.insert(lines, ('<font color="#FFD700">%s</font>'):format(price)) end
 	return table.concat(lines, "\n")
 end

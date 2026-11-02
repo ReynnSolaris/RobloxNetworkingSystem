@@ -176,8 +176,53 @@ local function describe(self, id, status: string)
 		RewardXp = template.reward_xp or 0, RewardMoney = template.reward_money or 0, RewardItems = rewards, Status = status }
 end
 
--- Talk: list what this questgiver has for the player.
-function module:Hello(player: Player, guid)
+-- Talk. The gossip window lists the NPC's quests and its options (training,
+-- goods, home binding); an NPC with a single purpose and no quests skips the
+-- window and goes straight there.
+function module:Gossip(player: Player, guid)
+	local creature = self.includes.Content["Creatures.h"]:State(guid)
+	if not creature then
+		return
+	end
+	local entry, template = creature.Row.id, creature.Template
+	local options = {}
+	if self.includes.Spells["Spells.h"]:IsTrainer(entry) then
+		table.insert(options, { Id = "train", Text = "I seek training." })
+	end
+	if #self.includes.Content["Vendors.h"]:Stock(entry) > 0 then
+		table.insert(options, { Id = "vendor", Text = "Let me browse your goods." })
+	end
+	if template.innkeeper then
+		table.insert(options, { Id = "bind", Text = "Make this inn your home." })
+	end
+	if not self:IsQuestgiver(entry) and #options <= 1 then
+		if options[1] then
+			return self:Select(player, guid, options[1].Id)
+		end
+		return self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_MESSAGECHAT,
+			{ Channel = "SAY", Sender = template.name, Text = template.gossip or "Greetings, traveler." })
+	end
+	self:Hello(player, guid, options)
+end
+
+function module:Select(player: Player, guid, option)
+	local creature = self.includes.Content["Creatures.h"]:State(guid)
+	if not creature then
+		return
+	end
+	local entry, template = creature.Row.id, creature.Template
+	if option == "train" then
+		self.includes.Spells["Spells.h"]:TrainerList(player, guid)
+	elseif option == "vendor" then
+		self.includes.Content["Vendors.h"]:Open(player, guid, entry)
+	elseif option == "bind" and template.innkeeper then
+		local zone = self.includes.Zones["Zones.h"]:At(creature.Root.Position)
+		self.includes.Entities["EntityPlayer.h"]:SetHome(player, creature.Root.Position, zone and zone.Name or template.name)
+		self.includes.Chat["Chat.h"]:System(player, ("%s: This inn is your home now. Your Hearthstone will bring you back here."):format(template.name))
+	end
+end
+
+function module:Hello(player: Player, guid, options)
 	local creature = self.includes.Content["Creatures.h"]:State(guid)
 	local c = char(self, player)
 	if not creature or not c then
@@ -197,7 +242,7 @@ function module:Hello(player: Player, guid)
 		end
 	end
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTGIVER_QUEST_LIST,
-		{ Guid = tostring(guid), Name = creature.Template.name, Greeting = creature.Template.gossip, Quests = list })
+		{ Guid = tostring(guid), Name = creature.Template.name, Greeting = creature.Template.gossip, Quests = list, Options = options or {} })
 end
 
 function module:Query(player: Player, guid, id)
@@ -384,6 +429,9 @@ function module:Start()
 	Packet:On(Opcodes.CMSG_QUESTGIVER_COMPLETE_QUEST, function(player, data)
 		if typeof(data) == "table" then self:Complete(player, data.Guid, tonumber(data.Quest)) end
 	end)
+	Packet:On(Opcodes.CMSG_GOSSIP_SELECT_OPTION, function(player, data)
+		if typeof(data) == "table" then self:Select(player, data.Guid, data.Option) end
+	end)
 	Packet:On(Opcodes.CMSG_QUESTLOG_REMOVE_QUEST, function(player, data)
 		if typeof(data) == "table" then self:Remove(player, tonumber(data.Quest)) end
 	end)
@@ -394,6 +442,8 @@ return Base(module, {
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
 	{ Path = "Auth/Social", Imports = "Party.h" },
-	{ Path = "World/Content", Imports = "Creatures.h" },
+	{ Path = "World/Content", Imports = "Creatures.h|Vendors.h" },
+	{ Path = "World/Spells", Imports = "Spells.h" },
+	{ Path = "World/Zones", Imports = "Zones.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 })

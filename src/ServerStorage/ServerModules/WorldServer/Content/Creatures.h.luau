@@ -14,7 +14,7 @@ local module = {}
 -- creature_loot_template { id, entry, item, chance, mincount, maxcount }.
 
 local SEED = {
-	{ name = "Innkeeper", subname = "Innkeeper", modelid = "default", scale = 1, gossip = "Welcome, traveler. Rest your feet a while.", faction = "friendly" },
+	{ name = "Innkeeper", subname = "Innkeeper", modelid = "default", scale = 1, gossip = "Welcome, traveler. Rest your feet a while.", faction = "friendly", innkeeper = true },
 	{ name = "Town Guard", subname = "Guard", modelid = "default", scale = 1.05, gossip = "Move along, citizen.", faction = "friendly" },
 	{ name = "Class Trainer", subname = "Trainer", modelid = "default", scale = 1, gossip = "What would you like to learn?", faction = "friendly" },
 	{ name = "General Goods", subname = "Vendor", modelid = "default", scale = 1, gossip = "Fine wares, fair prices.", faction = "friendly" },
@@ -145,16 +145,7 @@ function module:Spawn(row)
 		prompt.RequiresLineOfSight = false
 		prompt.Parent = root
 		prompt.Triggered:Connect(function(player)
-			local Quests, Spells = self.includes.Quests["Quests.h"], self.includes.Spells["Spells.h"]
-			if Quests:IsQuestgiver(row.id) then
-				Quests:Hello(player, row.guid)
-			elseif Spells:IsTrainer(row.id) then
-				Spells:TrainerList(player, row.guid)
-			else
-				self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_MESSAGECHAT,
-					{ Channel = "SAY", Sender = template.name, Text = template.gossip or "Greetings, traveler." })
-			end
-			self.includes.Content["Vendors.h"]:Open(player, row.guid, row.id)
+			self.includes.Quests["Quests.h"]:Gossip(player, row.guid)
 		end)
 	end
 
@@ -359,6 +350,8 @@ function module:Start()
 	for _, template in SEED do
 		if not byName[template.name] then
 			byName[template.name] = DB:Insert("creature_template", table.clone(template))
+		elseif template.innkeeper and not byName[template.name].innkeeper then
+			DB:Update("creature_template", byName[template.name].entry, { innkeeper = true })
 		end
 	end
 	if #DB:Select("creature_loot_template") == 0 then

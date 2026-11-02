@@ -90,6 +90,17 @@ function module:Spawn(row)
 	local box, size = model:GetBoundingBox()
 	local lift = model:GetPivot().Position.Y - (box.Position.Y - size.Y / 2)
 	model:PivotTo(self:DB().ToCFrame(row) * CFrame.new(0, lift, 0))
+	if template.type == "mailbox" then
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Open"
+		prompt.ObjectText = "Mailbox"
+		prompt.MaxActivationDistance = 8
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+		prompt.Triggered:Connect(function(player)
+			self.includes.Mail["Mail.h"]:Open(player, row.guid)
+		end)
+	end
 	model.Parent = folder()
 	return model
 end
@@ -140,9 +151,16 @@ end
 
 function module:Start()
 	local DB = self:DB()
-	if #DB:Select("gameobject_template") == 0 then
-		for _, model in ServerStorage:WaitForChild("ObjectTemplates"):GetChildren() do
-			DB:Insert("gameobject_template", { name = model.Name, modelid = model.Name, size = 1 })
+	local byName = {}
+	for _, row in DB:Select("gameobject_template") do
+		byName[row.name] = row
+	end
+	for _, model in ServerStorage:WaitForChild("ObjectTemplates"):GetChildren() do
+		local kind = model:GetAttribute("Type")
+		if not byName[model.Name] then
+			DB:Insert("gameobject_template", { name = model.Name, modelid = model.Name, size = 1, type = kind })
+		elseif kind and byName[model.Name].type ~= kind then
+			DB:Update("gameobject_template", byName[model.Name].entry, { type = kind })
 		end
 	end
 	self:Respawn()
@@ -163,4 +181,5 @@ end
 
 return Base(module, {
 	{ Path = "World/Database", Imports = "WorldDB.h" },
+	{ Path = "World/Mail", Imports = "Mail.h" },
 })

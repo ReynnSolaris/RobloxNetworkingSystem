@@ -10,7 +10,7 @@ function module:Filter(sender: Player, text: string): string
 	return if ok then result else string.rep("#", #text)
 end
 
-function module:Recipients(channel, sender: Player, targetName: string?): { Player }
+local function gather(self, channel, sender: Player, targetName: string?): { Player }
 	if channel.Target then
 		local target = self.includes.Entities["EntityPlayer.h"]:FindByName(targetName)
 		return if target then { target } else {}
@@ -35,7 +35,19 @@ function module:Recipients(channel, sender: Player, targetName: string?): { Play
 	return out
 end
 
+-- Players ignoring the sender never receive from them.
+function module:Recipients(channel, sender: Player, targetName: string?): { Player }
+	local Social = self.includes.Social["Social.h"]
+	local out = {}
+	for _, player in gather(self, channel, sender, targetName) do
+		if player == sender or not Social:IsIgnoring(player, sender) then
+			table.insert(out, player)
+		end
+	end
+	return out
+end
+
 return Base(module, {
-	{ Path = "Auth/Social", Imports = "Party.h" },
+	{ Path = "Auth/Social", Imports = "Party.h|Social.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 })

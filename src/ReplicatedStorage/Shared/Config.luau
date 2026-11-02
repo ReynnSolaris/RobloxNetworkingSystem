@@ -73,6 +73,10 @@ return table.freeze({
 		end,
 	},
 
+	-- Mail: postage per letter, attachment slots, days before a letter expires.
+	Mail = { Postage = 30, Attachments = 4, ExpireDays = 30, MailboxRange = 12 },
+	Social = { MaxFriends = 50, MaxIgnore = 50 },
+
 	Xp = {
 		MaxLevel = 80,
 		Explore = 60, -- first visit to a zone, times the character's level

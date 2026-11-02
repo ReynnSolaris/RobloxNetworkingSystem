@@ -7,10 +7,10 @@ local module = {}
 -- Seeds reach existing databases by name; missing columns on old rows are filled.
 
 local SEED = {
-	{ name = "Hearthstone", quality = 1, stack = 1, class = "misc", buyprice = 0 },
+	{ name = "Hearthstone", quality = 1, stack = 1, class = "misc", buyprice = 0, use = "Hearthstone" },
 	{ name = "Linen Cloth", quality = 1, stack = 20, class = "misc", buyprice = 10 },
 	{ name = "Worn Shortsword", quality = 1, stack = 1, class = "weapon", slot = "mainhand", damage = 3, buyprice = 60, level = 1 },
-	{ name = "Tough Jerky", quality = 1, stack = 20, class = "consumable", buyprice = 5 },
+	{ name = "Tough Jerky", quality = 1, stack = 20, class = "consumable", buyprice = 5, use = "Food", consumable = true },
 	{ name = "Ring of Precision", quality = 3, stack = 1, class = "armor", slot = "ring", damage = 2, health = 10, buyprice = 2500, level = 3 },
 	{ name = "Recruit's Tunic", quality = 1, stack = 1, class = "armor", slot = "chest", health = 15, armor = 1, buyprice = 80, level = 1 },
 	{ name = "Recruit's Pants", quality = 1, stack = 1, class = "armor", slot = "legs", health = 10, armor = 1, buyprice = 60, level = 1 },
@@ -28,7 +28,7 @@ function module:Start()
 		local existing = byName[item.name]
 		if not existing then
 			byName[item.name] = DB:Insert("item_template", table.clone(item))
-		elseif existing.class == nil then
+		elseif existing.class == nil or (item.use and existing.use == nil) then
 			local fields = table.clone(item)
 			fields.name, fields.quality, fields.stack = nil, nil, nil
 			DB:Update("item_template", existing.entry, fields)
@@ -49,6 +49,7 @@ function module:Start()
 			self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_ITEM_QUERY_SINGLE_RESPONSE, {
 				Entry = item.entry, Name = item.name, Quality = item.quality or 1, Slot = item.slot, Class = item.class, Level = item.level,
 				Health = item.health, Damage = item.damage, Armor = item.armor, Price = item.buyprice,
+				Use = item.spell and (DB:Get("spell_template", item.spell) or {}).description,
 			})
 		end
 	end)

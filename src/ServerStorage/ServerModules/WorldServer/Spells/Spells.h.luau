@@ -45,6 +45,9 @@ local SEED = {
 	dmg("Warlock", "Immolate", "fire", 10, 2, 15, 0, 8, 30, "IM", "Burns the enemy for fire damage."),
 	dmg("Druid", "Wrath", "nature", 14, 3, 18, 2, 0, 30, "WR", "Causes nature damage to the target.", true),
 	heal("Druid", "Healing Touch", 24, 6, 30, 3, "HT", "Heals a friendly target."),
+	-- item spells: no class, never trained
+	{ name = "Hearthstone", school = "arcane", effect = "hearth", cost = 0, cast_time = 10, cooldown = 60, range = 0, target = "self", icon = "HS", description = "Returns you to your home. Speak to an innkeeper to change your home." },
+	{ name = "Food", school = "physical", effect = "heal", base = 15, per_level = 3, cost = 0, cast_time = 0, cooldown = 5, range = 0, target = "self", icon = "FD", description = "Restores health." },
 }
 
 function module:DB()
@@ -187,6 +190,16 @@ function module:SetActionButton(player: Player, slot, id)
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_ACTION_BUTTONS, { Buttons = c.ActionBar })
 end
 
+-- Right-clicking an item with a spell casts it; consumables go when it lands.
+function module:UseItem(player: Player, slot, guid)
+	local Entities = self.includes.Entities["EntityPlayer.h"]
+	local stack = Entities:StackAt(player, tonumber(slot) or 0)
+	local template = stack and self:DB():Get("item_template", stack.entry)
+	if template and template.spell then
+		self:Cast(player, template.spell, guid, { Entry = stack.entry, Consume = template.consumable == true })
+	end
+end
+
 function module:Fail(player: Player, reason: string)
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_SPELL_FAILURE, { Reason = reason })
 end
@@ -195,14 +208,17 @@ local function rootOf(player: Player): BasePart?
 	return player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 end
 
-function module:Cast(player: Player, id, guid)
+function module:Cast(player: Player, id, guid, item)
 	local c = char(self, player)
 	local spell = self:Template(id)
 	local entity = self.includes.Entities["EntityPlayer.h"]:Get(player)
 	local root = rootOf(player)
 	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-	if not c or not spell or not c.Spells[tostring(spell.id)] or not root or not humanoid then
+	if not c or not spell or not root or not humanoid or (not item and not c.Spells[tostring(spell.id)]) then
 		return
+	end
+	if spell.effect == "hearth" and not c.Home then
+		return self:Fail(player, "You have no home set. Speak to an innkeeper.")
 	end
 	if humanoid.Health <= 0 or (entity and entity.Ghost) then
 		return self:Fail(player, "You can't do that while dead.")
@@ -234,14 +250,14 @@ function module:Cast(player: Player, id, guid)
 	end
 	s.Gcd = now + Config.Spells.GlobalCooldown
 	if (spell.cast_time or 0) > 0 then
-		s.Casting = { Spell = spell, Target = target, Ends = now + spell.cast_time, From = root.Position }
+		s.Casting = { Spell = spell, Target = target, Ends = now + spell.cast_time, From = root.Position, Item = item }
 		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_SPELL_START, { Id = spell.id, Name = spell.name, CastTime = spell.cast_time })
 	else
-		self:Apply(player, spell, target)
+		self:Apply(player, spell, target, item)
 	end
 end
 
-function module:Apply(player: Player, spell, target)
+function module:Apply(player: Player, spell, target, item)
 	local s = self:State(player)
 	local Packet = self.includes.Security["Packet.h"]
 	local Combat = self.includes.Combat["Combat.h"]
@@ -280,6 +296,17 @@ function module:Apply(player: Player, spell, target)
 		Effects:Play("Holy", player, 12)
 		Combat:Log(player, ("You gain %s."):format(spell.name), Config.Chat.Colors.LOOT)
 		amount = 0
+	elseif spell.effect == "hearth" then
+		local home = char(self, player).Home
+		if home then
+			Effects:Play("Arcane", player, 16)
+			self.includes.Entities["EntityPlayer.h"]:Teleport(player, CFrame.new(home[1], home[2] + 3, home[3]))
+			self.includes.Chat["Chat.h"]:System(player, ("You return to %s."):format(home.Name or "your home"))
+		end
+		amount = 0
+	end
+	if item and item.Consume then
+		self.includes.Entities["EntityPlayer.h"]:RemoveItem(player, item.Entry, 1)
 	end
 	Packet:Send(player, Opcodes.SMSG_SPELL_GO, { Id = spell.id, Name = spell.name, Target = targetName, Amount = amount })
 	self:Sync(player)
@@ -384,15 +411,25 @@ function module:Start()
 			local spell = byName[seed.name]
 			if seed.starter then
 				DB:Insert("playercreateinfo_spell", { class = seed.class, spell = spell.id })
-			elseif trainer then
+			elseif trainer and seed.class then
 				DB:Insert("npc_trainer", { entry = trainer.entry, spell = spell.id, cost = 100, reqlevel = 2 })
 			end
+		end
+	end
+	-- items name their spell by `use`; resolve to the id once the spell exists
+	for _, item in DB:Select("item_template") do
+		local spell = item.use and byName[item.use]
+		if spell and item.spell ~= spell.id then
+			DB:Update("item_template", item.entry, { spell = spell.id })
 		end
 	end
 
 	local Packet = self.includes.Security["Packet.h"]
 	Packet:On(Opcodes.CMSG_CAST_SPELL, function(player, data)
 		if typeof(data) == "table" then self:Cast(player, tonumber(data.Spell), data.Guid) end
+	end)
+	Packet:On(Opcodes.CMSG_USE_ITEM, function(player, data)
+		if typeof(data) == "table" then self:UseItem(player, data.Bag, data.Guid) end
 	end)
 	Packet:On(Opcodes.CMSG_CANCEL_CAST, function(player)
 		self:Interrupt(player, "Interrupted.")
@@ -420,7 +457,7 @@ function module:Start()
 					if not root or (root.Position - cast.From).Magnitude > Config.Spells.InterruptDistance then
 						self:Interrupt(player, "Interrupted.")
 					elseif os.clock() >= cast.Ends then
-						self:Apply(player, cast.Spell, cast.Target)
+						self:Apply(player, cast.Spell, cast.Target, cast.Item)
 					end
 				end
 				if tick % 10 == 0 and char(self, player) then

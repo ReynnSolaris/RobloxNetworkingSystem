@@ -68,6 +68,7 @@ function module:Create(player: Player, data)
 	end
 	table.insert(record.Characters, { Name = name, Class = class.Name, Level = 1, Created = os.time() })
 	self.includes.Database["WorldDatabase.h"]:Commit(player)
+	self.includes.Database["WorldDatabase.h"]:Register(name, player.UserId)
 	self:Result(player, true)
 	self:Enum(player)
 end
@@ -78,8 +79,9 @@ function module:Delete(player: Player, data)
 	if not record or not slot or not record.Characters[slot] then
 		return self:Result(player, false, "No such character.")
 	end
-	table.remove(record.Characters, slot)
+	local removed = table.remove(record.Characters, slot)
 	self.includes.Database["WorldDatabase.h"]:Commit(player)
+	self.includes.Database["WorldDatabase.h"]:Unregister(removed.Name)
 	self:Result(player, true)
 	self:Enum(player)
 end
@@ -102,6 +104,9 @@ function module:Login(player: Player, data)
 	self.includes.Chat["Chat.h"]:System(player, ("Welcome to %s, %s."):format(Config.RealmName, record.Characters[slot].Name))
 	self.includes.Quests["Quests.h"]:Refresh(player)
 	self.includes.Spells["Spells.h"]:OnLogin(player)
+	self.includes.Database["WorldDatabase.h"]:Register(record.Characters[slot].Name, player.UserId)
+	self.includes.Social["Social.h"]:OnLogin(player)
+	self.includes.Mail["Mail.h"]:OnLogin(player)
 end
 
 function module:Logout(player: Player)
@@ -111,6 +116,7 @@ function module:Logout(player: Player)
 		return
 	end
 	self.includes.Combat["Death.h"]:Forget(player)
+	self.includes.Social["Social.h"]:OnLogout(player)
 	self.includes.Entities["EntityPlayer.h"]:Despawn(player)
 	session.State = Session.STATE.AUTHED
 	self:Enum(player)
@@ -149,4 +155,6 @@ return Base(module, {
 	{ Path = "World/Combat", Imports = "Death.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h" },
+	{ Path = "World/Mail", Imports = "Mail.h" },
+	{ Path = "Auth/Social", Imports = "Social.h" },
 })

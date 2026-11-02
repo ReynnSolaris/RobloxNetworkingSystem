@@ -80,7 +80,7 @@ local function tile(scope, slot: number)
 			local s = peek(stack)
 			if s and not Drag.active() then
 				local hint = if peek(vendorShowing) then "Right-click to sell for " .. Ui.money((s.Sell or 0) * (s.Count or 1))
-					elseif s.Slot then "Right-click to equip" else nil
+					elseif s.Slot then "Right-click to equip" elseif s.Use then "Right-click to use" else nil
 				Ui.showTip(Ui.itemTooltip(s) .. (if hint then '\n<font color="#AAAAAA">' .. hint .. "</font>" else ""), Ui.itemBorder(s))
 			end
 		end,
@@ -109,6 +109,8 @@ local function tile(scope, slot: number)
 				netSend:Fire(Opcodes.CMSG_VENDOR_SELL, { Guid = peek(vendorGuid), Bag = slot })
 			elseif s.Slot then
 				netSend:Fire(Opcodes.CMSG_EQUIP, { Bag = slot })
+			elseif s.Use then
+				netSend:Fire(Opcodes.CMSG_USE_ITEM, { Bag = slot })
 			end
 		end,
 		[Children] = {

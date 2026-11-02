@@ -36,6 +36,32 @@ function module:Commit(player: Player)
 	end
 end
 
+-- Name index "names": { [lowercase] = { UserId, Name } }, so mail and friends
+-- can reach characters that are offline.
+function module:LookupName(name: string?)
+	if not name or #name == 0 then
+		return nil
+	end
+	self:Store():Refresh("names")
+	return self:Store():Get("names", {})[name:lower()]
+end
+
+function module:Register(name: string, userId: number)
+	self:Store():Transform("names", function(index)
+		index = index or {}
+		index[name:lower()] = { UserId = userId, Name = name }
+		return index
+	end)
+end
+
+function module:Unregister(name: string)
+	self:Store():Transform("names", function(index)
+		index = index or {}
+		index[name:lower()] = nil
+		return index
+	end)
+end
+
 function module:Forget(player: Player)
 	self:Commit(player)
 	self:Store():Forget(key(player.UserId))

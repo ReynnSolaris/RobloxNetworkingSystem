@@ -26,6 +26,7 @@ function module:Select(player: Player, slot: number)
 		return false
 	end
 	entity.Active = char
+	entity.LoginAt = os.time()
 	char.Level = char.Level or 1
 	char.Xp = char.Xp or 0
 	player:SetAttribute("CharacterName", char.Name)
@@ -238,6 +239,22 @@ function module:RemoveItem(player: Player, entry: number, count: number): boolea
 end
 
 -- Takes a whole stack out of a bag slot and returns it.
+function module:StackAt(player: Player, slot: number)
+	local char = self.information[player] and self.information[player].Active
+	return char and stackAt(bag(char), slot)
+end
+
+-- Hearthstone home: where the innkeeper stood and the zone's name.
+function module:SetHome(player: Player, position: Vector3, name: string)
+	local char = self.information[player] and self.information[player].Active
+	if not char then
+		return
+	end
+	char.Home = { position.X, position.Y, position.Z, Name = name }
+	self.includes.Database["WorldDatabase.h"]:Commit(player)
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_BINDPOINTUPDATE, { Name = name })
+end
+
 function module:TakeSlot(player: Player, slot: number)
 	local char = self.information[player] and self.information[player].Active
 	local items = char and bag(char)
@@ -363,9 +380,10 @@ function module:SendInventory(player: Player, announce: boolean?)
 	local items = {}
 	for _, stack in (char and bag(char) or {}) do
 		local template = DB:Get("item_template", stack.entry) or {}
+		local spell = template.spell and DB:Get("spell_template", template.spell)
 		table.insert(items, { Bag = stack.slot, Entry = stack.entry, Name = template.name or "?", Quality = template.quality or 1, Count = stack.count,
 			Slot = template.slot, Class = template.class, Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Level = template.level,
-			Health = template.health, Damage = template.damage, Armor = template.armor })
+			Health = template.health, Damage = template.damage, Armor = template.armor, Use = spell and spell.description })
 	end
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INVENTORY, { Items = items, Money = char and char.Money or 0, Bags = Config.BagSlots, Announce = announce == true })
 end
@@ -524,6 +542,10 @@ end
 function module:Save(player: Player)
 	local entity = self.information[player]
 	local humanoid = humanoidOf(entity)
+	if entity and entity.Active and entity.LoginAt then
+		entity.Active.Played = (entity.Active.Played or 0) + (os.time() - entity.LoginAt)
+		entity.LoginAt = os.time()
+	end
 	if entity and entity.Active and humanoid and humanoid.Health > 0 and not entity.Ghost then
 		local position = entity.Character:GetPivot().Position
 		entity.Active.Position = { position.X, position.Y, position.Z }

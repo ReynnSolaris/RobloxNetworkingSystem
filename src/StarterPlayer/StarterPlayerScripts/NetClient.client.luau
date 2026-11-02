@@ -402,6 +402,60 @@ handlers[Opcodes.SMSG_TRAINER_LIST] = function(d)
 	trainerOpen:Fire(d)
 end
 
+-- Mail and social
+local mailOpen = Instance.new("BindableEvent")
+mailOpen.Name = "MailOpen"
+mailOpen.Parent = script.Parent
+
+handlers[Opcodes.SMSG_MAIL_LIST_RESULT] = function(d)
+	player:SetAttribute("Mail", HttpService:JSONEncode(d.Mails or {}))
+	if d.Guid then
+		mailOpen:Fire(d.Guid)
+	end
+end
+
+handlers[Opcodes.SMSG_RECEIVED_MAIL] = function(d)
+	if d.Unread then
+		notice(tint(Colors.SYSTEM, ("You have %d unread letter%s."):format(d.Unread, if d.Unread == 1 then "" else "s")))
+	else
+		notice(tint(Colors.SYSTEM, esc(("You have new mail from %s."):format(d.From or "?"))))
+	end
+end
+
+handlers[Opcodes.SMSG_SEND_MAIL_RESULT] = function(d)
+	player:SetAttribute("MailSent", if d.Ok then os.clock() else nil)
+end
+
+handlers[Opcodes.SMSG_CONTACT_LIST] = function(d)
+	player:SetAttribute("Contacts", HttpService:JSONEncode({ Friends = d.Friends or {}, Ignore = d.Ignore or {} }))
+end
+
+handlers[Opcodes.SMSG_FRIEND_STATUS] = function(d)
+	notice(tint(Colors.SYSTEM, esc(("%s has %s."):format(d.Name or "?", if d.Online then "come online" else "gone offline"))))
+end
+
+handlers[Opcodes.SMSG_WHO] = function(d)
+	local list = d.Players or {}
+	display(tint(Colors.SYSTEM, ("%d player%s total"):format(#list, if #list == 1 then "" else "s")))
+	for _, p in list do
+		display(tint(Colors.SYSTEM, esc(("%s: Level %d %s - %s"):format(p.Name or "?", p.Level or 1, p.Class or "", p.Zone or "Unknown"))))
+	end
+end
+
+local function duration(seconds: number): string
+	local d, h, m = seconds // 86400, (seconds % 86400) // 3600, (seconds % 3600) // 60
+	return ("%d days, %d hours, %d minutes"):format(d, h, m)
+end
+
+handlers[Opcodes.SMSG_PLAYED_TIME] = function(d)
+	display(tint(Colors.SYSTEM, "Total time played: " .. duration(d.Total or 0)))
+	display(tint(Colors.SYSTEM, "Time played this session: " .. duration(d.Session or 0)))
+end
+
+handlers[Opcodes.SMSG_BINDPOINTUPDATE] = function(d)
+	notice(tint(Colors.SYSTEM, esc(("Your home is now %s."):format(d.Name or "here"))))
+end
+
 handlers[Opcodes.SMSG_QUESTGIVER_QUEST_COMPLETE] = function(d)
 	notice(tint(Colors.QUEST, esc("Quest completed: " .. (d.Title or "?"))))
 	questList:Fire(nil)
@@ -509,6 +563,14 @@ local function parse(text: string)
 		return { Kind = "LOGOUT" }
 	elseif prefix == "inv" or prefix == "inventory" or prefix == "bags" then
 		return { Kind = "INVENTORY" }
+	elseif prefix == "friend" or prefix == "unfriend" or prefix == "removefriend" or prefix == "ignore" or prefix == "unignore" then
+		return { Kind = "SOCIAL", Action = prefix, Target = rest:match("^(%S+)") }
+	elseif prefix == "who" then
+		return { Kind = "WHO", Filter = rest }
+	elseif prefix == "played" then
+		return { Kind = "PLAYED" }
+	elseif prefix == "friends" or prefix == "social" then
+		return { Kind = "FRIENDS" }
 	elseif prefix == "invite" or prefix == "uninvite" or prefix == "promote" then
 		return { Kind = "PARTY", Action = prefix, Target = rest:match("^(%S+)") }
 	elseif prefix == "accept" or prefix == "decline" or prefix == "leave" then
@@ -538,6 +600,15 @@ local function dispatch(p)
 		send(Opcodes.CMSG_LOGOUT_REQUEST, {})
 	elseif p.Kind == "INVENTORY" then
 		send(Opcodes.CMSG_INVENTORY, {})
+	elseif p.Kind == "SOCIAL" then
+		local opcode = ({ friend = Opcodes.CMSG_ADD_FRIEND, unfriend = Opcodes.CMSG_DEL_FRIEND, removefriend = Opcodes.CMSG_DEL_FRIEND, ignore = Opcodes.CMSG_ADD_IGNORE, unignore = Opcodes.CMSG_DEL_IGNORE })[p.Action]
+		send(opcode, { Name = p.Target })
+	elseif p.Kind == "WHO" then
+		send(Opcodes.CMSG_WHO, { Filter = p.Filter })
+	elseif p.Kind == "PLAYED" then
+		send(Opcodes.CMSG_PLAYED_TIME, {})
+	elseif p.Kind == "FRIENDS" then
+		player:SetAttribute("ToggleFriends", os.clock())
 	else
 		send(Opcodes.CMSG_MESSAGECHAT, { Channel = p.Channel, Text = p.Body, Target = p.Target })
 	end

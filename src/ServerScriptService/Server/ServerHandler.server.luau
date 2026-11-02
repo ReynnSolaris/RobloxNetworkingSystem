@@ -60,6 +60,8 @@ local Loot = World.Combat["Loot.h"]
 local Death = World.Combat["Death.h"]
 local Quests = World.Quests["Quests.h"]
 local Spells = World.Spells["Spells.h"]
+local Mail = World.Mail["Mail.h"]
+local Social = Auth.Social["Social.h"]
 local Bus = Global.System["Global.h"]
 local Database = Global.Database["Database.h"]
 
@@ -83,6 +85,8 @@ Loot:Start()
 Death:Start()
 Quests:Start()
 Spells:Start()
+Mail:Start()
+Social:Start()
 Session:OnAuthed(function(player)
 	Characters:Enum(player)
 	Commands:SyncState(player)
