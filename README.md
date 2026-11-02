@@ -36,7 +36,7 @@ src/ServerStorage/ServerModules/
   WorldServer/Quests/              Quests (templates, questgivers, objectives, rewards)
   WorldServer/Spells/              Spells (templates, casting, mana, cooldowns, trainers, item use)
   WorldServer/Mail/                Mail (letters with money and items, mailboxes)
-  AuthServer/Social/               Party, Social (friends, ignore, who, played)
+  AuthServer/Social/               Party, Social (friends, ignore, who, played), Guild (ranks, MOTD, roster, invites)
 src/ServerStorage/ObjectTemplates/                 models .gobject can place
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus), Effects (particles)
@@ -45,7 +45,7 @@ src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), 
                                                    ChatFrame, VendorFrame, BagFrame, CharacterSheet, LootFrame, DeathFrame,
                                                    QuestGiverFrame, QuestLogFrame (log on L, ! and ? markers),
                                                    ActionBar (1-9 0 - =, cast bar), SpellBook (P), TrainerFrame, SpellUi,
-                                                   MailFrame (mailbox prompt), FriendsFrame (O),
+                                                   MailFrame (mailbox prompt), FriendsFrame (O: friends, ignore, guild), BankFrame,
                                                    ZoneBanner, PartyFrame, Drag (drag and drop),
                                                    Ui (theme, tooltip), Components (Fusion panels, lists, buttons)
 src/Workspace/Zones/                               demo zone parts
@@ -95,6 +95,8 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | CMSG_GET_MAIL_LIST / SMSG_MAIL_LIST_RESULT / CMSG_MAIL_TAKE_MONEY / CMSG_MAIL_TAKE_ITEM / CMSG_MAIL_DELETE / CMSG_MAIL_MARK_AS_READ | both | inbox for a mailbox guid; actions by letter `Id` |
 | CMSG_CONTACT_LIST / SMSG_CONTACT_LIST / CMSG_ADD_FRIEND / CMSG_DEL_FRIEND / CMSG_ADD_IGNORE / CMSG_DEL_IGNORE / SMSG_FRIEND_STATUS | both | friends with online state, ignore names; `{ Name }`; "X has come online" |
 | CMSG_WHO / SMSG_WHO / CMSG_PLAYED_TIME / SMSG_PLAYED_TIME | both | who is in the world (`Filter`); seconds played |
+| CMSG_GUILD / SMSG_GUILD_ROSTER / SMSG_GUILD_INVITE / SMSG_GUILD_EVENT | both | `{ Action, Target?, Text? }`; roster with ranks and online state; invite; green guild lines |
+| SMSG_SHOW_BANK / CMSG_BANK_DEPOSIT / CMSG_BANK_WITHDRAW / CMSG_BANK_SWAP | both | bank stacks; `{ Bag, Bank? }`, `{ Bank, Bag? }`, `{ From, To }` |
 | SMSG_QUESTGIVER_STATUS_MULTIPLE | server | `{ Statuses = { [guid] = available|complete|incomplete|none } }` for the markers |
 | SMSG_VENDOR_LIST | server | `{ Guid, Items }` opens the vendor window |
 | CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
@@ -269,7 +271,8 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | npc_trainer | id | entry (creature), spell, cost, reqlevel |
 
 Outside the world tables, the World store also keeps `names` (character name to
-account, for mail and friends) and `mail:<name>` (a character's letters).
+account, for mail and friends), `mail:<name>` (a character's letters),
+`guild:<id>` (a guild with its members and ranks) and `guildnames`.
 | item_template | entry | name, quality 0-5, stack, class, slot, health, damage, armor, buyprice, sellprice, level |
 | npc_vendor | id | entry (creature), item |
 
@@ -435,6 +438,32 @@ Friends and ignore lists live on the character. `/friend`, `/unfriend`, `/ignore
 "X has come online" lines. Ignored players cannot whisper, invite or be heard.
 `/who [text]` lists everyone in the world with level, class and zone; `/played`
 reports time on the character.
+
+## Guilds and bank
+
+Guilds follow TC's guild and guild_member: founding costs `Config.Guild.CreateCost`,
+ranks are Guild Master, Officer and Member, officers invite and kick, the master
+promotes, demotes, hands over leadership and disbands. Guild chat is `/g`
+(`/world` or `/1` for the realm channel), the MOTD shows on login, and joins,
+leaves, kicks and promotions announce in guild green. The Guild tab of the Social
+window on **O** has the roster, MOTD and buttons; the commands are `/gcreate <name>`,
+`/ginvite`, `/gaccept`, `/gdecline`, `/gkick`, `/gpromote`, `/gdemote`, `/gleader`,
+`/gmotd <text>`, `/gleave`, `/gdisband`, `/groster`. Players show their guild in
+the mouseover tooltip.
+
+A creature with `creature_template.banker` (the seeded Banker) offers "I would
+like to check my deposit box." and opens the bank: `Config.BankSlots` slots on
+the character's `Bank`. Drag from the bag to deposit, onto the bag to withdraw,
+between bank slots to move; right-click withdraws.
+
+## Tooltips
+
+One tooltip serves everything. It does not follow the mouse: beside the element
+it describes, or in the bottom right corner for creatures and players in the
+world (name in faction or class colour, subname, level, guild). Items use the WoW
+order: name in quality colour, binding, slot and type, armor, green stats, level
+requirement in red when too low, Use line, max stack, sell price in coin colours.
+Spells show cost and range, cast time and cooldown, class and description.
 
 ## Saving
 

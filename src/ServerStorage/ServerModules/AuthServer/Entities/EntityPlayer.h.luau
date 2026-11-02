@@ -239,6 +239,84 @@ function module:RemoveItem(player: Player, entry: number, count: number): boolea
 end
 
 -- Takes a whole stack out of a bag slot and returns it.
+-- Bank: a second slotted container, reached through a banker's gossip.
+local function bank(char)
+	char.Bank = char.Bank or {}
+	return char.Bank
+end
+
+local function describe(DB, stack, key: string)
+	local template = DB:Get("item_template", stack.entry) or {}
+	local spell = template.spell and DB:Get("spell_template", template.spell)
+	local out = { Entry = stack.entry, Name = template.name or "?", Quality = template.quality or 1, Count = stack.count, Stack = template.stack,
+		Slot = template.slot, Class = template.class, Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Level = template.level,
+		Health = template.health, Damage = template.damage, Armor = template.armor, Use = spell and spell.description }
+	out[key] = stack.slot
+	return out
+end
+
+function module:SendBank(player: Player, open: boolean?)
+	local char = self.information[player] and self.information[player].Active
+	if not char then
+		return
+	end
+	local DB = self.includes.Database["WorldDB.h"]
+	local items = {}
+	for _, stack in bank(char) do
+		table.insert(items, describe(DB, stack, "Bank"))
+	end
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_SHOW_BANK, { Items = items, Slots = Config.BankSlots, Open = open == true })
+end
+
+-- Move a stack between the bag and the bank, swapping with whatever sits in the
+-- destination slot. from/to are "bag"/"bank".
+function module:MoveStack(player: Player, from: string, fromSlot: number, to: string, toSlot: number?)
+	local char = self.information[player] and self.information[player].Active
+	if not char then
+		return
+	end
+	local lists = { bag = bag(char), bank = bank(char) }
+	local limits = { bag = Config.BagSlots, bank = Config.BankSlots }
+	local source, dest = lists[from], lists[to]
+	if not source or not dest then
+		return
+	end
+	local a = stackAt(source, fromSlot)
+	if not a then
+		return
+	end
+	if not toSlot then
+		for slot = 1, limits[to] do
+			if not stackAt(dest, slot) then
+				toSlot = slot
+				break
+			end
+		end
+		if not toSlot then
+			return self:System(player, if to == "bag" then "Inventory is full." else "Your bank is full.")
+		end
+	end
+	if toSlot < 1 or toSlot > limits[to] then
+		return
+	end
+	local b = stackAt(dest, toSlot)
+	if source == dest and a == b then
+		return
+	end
+	table.remove(source, table.find(source, a))
+	if b then
+		table.remove(dest, table.find(dest, b))
+		b.slot = fromSlot
+		table.insert(source, b)
+	end
+	a.slot = toSlot
+	table.insert(dest, a)
+	self.includes.Database["WorldDatabase.h"]:Commit(player)
+	self:SendInventory(player, false)
+	self:SendBank(player)
+	self.includes.Quests["Quests.h"]:OnItemChange(player)
+end
+
 function module:StackAt(player: Player, slot: number)
 	local char = self.information[player] and self.information[player].Active
 	return char and stackAt(bag(char), slot)

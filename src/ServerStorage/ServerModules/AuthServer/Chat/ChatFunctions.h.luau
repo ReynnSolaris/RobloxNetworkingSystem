@@ -18,6 +18,9 @@ local function gather(self, channel, sender: Player, targetName: string?): { Pla
 	if channel.Party then
 		return self.includes.Social["Party.h"]:MembersOf(sender)
 	end
+	if channel.Guild then
+		return self.includes.Social["Guild.h"]:Online(sender)
+	end
 	if not channel.Range then
 		return Players:GetPlayers()
 	end
@@ -48,6 +51,6 @@ function module:Recipients(channel, sender: Player, targetName: string?): { Play
 end
 
 return Base(module, {
-	{ Path = "Auth/Social", Imports = "Party.h|Social.h" },
+	{ Path = "Auth/Social", Imports = "Party.h|Social.h|Guild.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 })

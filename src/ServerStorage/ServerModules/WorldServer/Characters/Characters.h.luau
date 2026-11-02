@@ -106,6 +106,7 @@ function module:Login(player: Player, data)
 	self.includes.Spells["Spells.h"]:OnLogin(player)
 	self.includes.Database["WorldDatabase.h"]:Register(record.Characters[slot].Name, player.UserId)
 	self.includes.Social["Social.h"]:OnLogin(player)
+	self.includes.Social["Guild.h"]:OnLogin(player)
 	self.includes.Mail["Mail.h"]:OnLogin(player)
 end
 
@@ -117,6 +118,7 @@ function module:Logout(player: Player)
 	end
 	self.includes.Combat["Death.h"]:Forget(player)
 	self.includes.Social["Social.h"]:OnLogout(player)
+	self.includes.Social["Guild.h"]:OnLogout(player)
 	self.includes.Entities["EntityPlayer.h"]:Despawn(player)
 	session.State = Session.STATE.AUTHED
 	self:Enum(player)
@@ -156,5 +158,5 @@ return Base(module, {
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h" },
 	{ Path = "World/Mail", Imports = "Mail.h" },
-	{ Path = "Auth/Social", Imports = "Social.h" },
+	{ Path = "Auth/Social", Imports = "Social.h|Guild.h" },
 })

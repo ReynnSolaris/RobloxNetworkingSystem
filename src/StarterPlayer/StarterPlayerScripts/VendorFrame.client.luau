@@ -34,7 +34,7 @@ local stockRows = scope:Computed(function(use)
 	local rows = {}
 	for _, item in decode(use(stock)) do
 		local price = Ui.money(item.Price or 0)
-		table.insert(rows, { Text = Ui.itemName(item), Right = price, Tooltip = Ui.itemTooltip(item, price), TooltipBorder = Ui.itemBorder(item), Link = "[" .. (item.Name or "?") .. "]", OnClick = function()
+		table.insert(rows, { Text = Ui.itemName(item), Right = price, Tooltip = Ui.itemTooltip(item, "Price: " .. price), TooltipBorder = Ui.itemBorder(item), Link = "[" .. (item.Name or "?") .. "]", OnClick = function()
 			netSend:Fire(Opcodes.CMSG_VENDOR_BUY, { Guid = player:GetAttribute("VendorGuid"), Entry = item.Entry, Count = 1 })
 		end })
 	end

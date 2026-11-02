@@ -16,6 +16,7 @@ local module = {}
 local SEED = {
 	{ name = "Innkeeper", subname = "Innkeeper", modelid = "default", scale = 1, gossip = "Welcome, traveler. Rest your feet a while.", faction = "friendly", innkeeper = true },
 	{ name = "Town Guard", subname = "Guard", modelid = "default", scale = 1.05, gossip = "Move along, citizen.", faction = "friendly" },
+	{ name = "Banker", subname = "Banker", modelid = "default", scale = 1, gossip = "Your deposits are safe with us.", faction = "friendly", banker = true },
 	{ name = "Class Trainer", subname = "Trainer", modelid = "default", scale = 1, gossip = "What would you like to learn?", faction = "friendly" },
 	{ name = "General Goods", subname = "Vendor", modelid = "default", scale = 1, gossip = "Fine wares, fair prices.", faction = "friendly" },
 	{ name = "Kobold Vermin", modelid = "default", scale = 0.85, faction = "hostile", minlevel = 1, maxlevel = 2, health = 40, dmgmin = 2, dmgmax = 4, aggro = 15, speed = 12, mingold = 1, maxgold = 5 },
@@ -124,6 +125,7 @@ function module:Spawn(row)
 	model:SetAttribute("Guid", tostring(row.guid))
 	model:SetAttribute("Entry", tostring(row.id))
 	model:SetAttribute("Level", level)
+	model:SetAttribute("Subname", template.subname)
 	model:SetAttribute("Faction", template.faction or "friendly")
 	local humanoid = assert(model:FindFirstChildOfClass("Humanoid"), "creature model needs a Humanoid") :: Humanoid
 	local root = assert(model:FindFirstChild("HumanoidRootPart"), "creature model needs a HumanoidRootPart") :: BasePart
@@ -352,6 +354,8 @@ function module:Start()
 			byName[template.name] = DB:Insert("creature_template", table.clone(template))
 		elseif template.innkeeper and not byName[template.name].innkeeper then
 			DB:Update("creature_template", byName[template.name].entry, { innkeeper = true })
+		elseif template.banker and not byName[template.name].banker then
+			DB:Update("creature_template", byName[template.name].entry, { banker = true })
 		end
 	end
 	if #DB:Select("creature_loot_template") == 0 then

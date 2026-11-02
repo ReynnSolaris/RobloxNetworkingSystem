@@ -32,7 +32,7 @@ local rows = scope:Computed(function(use)
 		local color = if spell.Known then "#808080" elseif use(level) < (spell.ReqLevel or 1) then "#FF4040" elseif use(money) < (spell.Price or 0) then "#FFD100" else "#40FF40"
 		table.insert(out, {
 			Text = ('<font color="%s">%s</font>'):format(color, spell.Name or "?"),
-			Right = if spell.Known then "Known" else ('%s   <font color="#FFD700">%s</font>'):format(if (spell.ReqLevel or 1) > 1 then ("Level %d"):format(spell.ReqLevel) else "", Ui.money(spell.Price or 0)),
+			Right = if spell.Known then "Known" else ('%s   %s'):format(if (spell.ReqLevel or 1) > 1 then ("Level %d"):format(spell.ReqLevel) else "", Ui.money(spell.Price or 0)),
 			Tooltip = SpellUi.tooltip(spell),
 			TooltipBorder = SpellUi.color(spell),
 			OnClick = function()

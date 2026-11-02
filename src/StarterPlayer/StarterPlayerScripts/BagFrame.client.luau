@@ -141,6 +141,8 @@ local function tile(scope, slot: number)
 	Drag.target(button, function(payload)
 		if payload.Bag and payload.Bag ~= slot then
 			netSend:Fire(Opcodes.CMSG_SWAP_INV_ITEM, { From = payload.Bag, To = slot })
+		elseif payload.Bank then
+			netSend:Fire(Opcodes.CMSG_BANK_WITHDRAW, { Bank = payload.Bank, Bag = slot })
 		elseif payload.Equip then
 			netSend:Fire(Opcodes.CMSG_UNEQUIP, { Slot = payload.Equip, To = slot })
 		end

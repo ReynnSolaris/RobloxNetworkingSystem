@@ -27,6 +27,7 @@ return table.freeze({
 			HIT = "#FFFF80",
 			HURT = "#FF8080",
 			QUEST = "#FFFF00",
+			GUILD = "#40FB40",
 		},
 	},
 
@@ -76,6 +77,8 @@ return table.freeze({
 	-- Mail: postage per letter, attachment slots, days before a letter expires.
 	Mail = { Postage = 30, Attachments = 4, ExpireDays = 30, MailboxRange = 12 },
 	Social = { MaxFriends = 50, MaxIgnore = 50 },
+	Guild = { CreateCost = 1000, MaxMembers = 100, InviteSeconds = 60 },
+	BankSlots = 24,
 
 	Xp = {
 		MaxLevel = 80,

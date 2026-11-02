@@ -43,6 +43,16 @@ function module:Start()
 		end
 	end)
 	-- What the client needs to draw a tooltip for an item it only knows by entry (chat links).
+	local Entities = self.includes.Entities["EntityPlayer.h"]
+	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_BANK_DEPOSIT, function(player, data)
+		if typeof(data) == "table" then Entities:MoveStack(player, "bag", tonumber(data.Bag) or 0, "bank", tonumber(data.Bank)) end
+	end)
+	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_BANK_WITHDRAW, function(player, data)
+		if typeof(data) == "table" then Entities:MoveStack(player, "bank", tonumber(data.Bank) or 0, "bag", tonumber(data.Bag)) end
+	end)
+	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_BANK_SWAP, function(player, data)
+		if typeof(data) == "table" then Entities:MoveStack(player, "bank", tonumber(data.From) or 0, "bank", tonumber(data.To)) end
+	end)
 	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_ITEM_QUERY_SINGLE, function(player, data)
 		local item = DB:Get("item_template", tonumber(typeof(data) == "table" and data.Entry) or 0)
 		if item then

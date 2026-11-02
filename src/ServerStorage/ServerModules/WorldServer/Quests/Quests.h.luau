@@ -195,6 +195,9 @@ function module:Gossip(player: Player, guid)
 	if template.innkeeper then
 		table.insert(options, { Id = "bind", Text = "Make this inn your home." })
 	end
+	if template.banker then
+		table.insert(options, { Id = "bank", Text = "I would like to check my deposit box." })
+	end
 	if not self:IsQuestgiver(entry) and #options <= 1 then
 		if options[1] then
 			return self:Select(player, guid, options[1].Id)
@@ -215,6 +218,8 @@ function module:Select(player: Player, guid, option)
 		self.includes.Spells["Spells.h"]:TrainerList(player, guid)
 	elseif option == "vendor" then
 		self.includes.Content["Vendors.h"]:Open(player, guid, entry)
+	elseif option == "bank" and template.banker then
+		self.includes.Entities["EntityPlayer.h"]:SendBank(player, true)
 	elseif option == "bind" and template.innkeeper then
 		local zone = self.includes.Zones["Zones.h"]:At(creature.Root.Position)
 		self.includes.Entities["EntityPlayer.h"]:SetHome(player, creature.Root.Position, zone and zone.Name or template.name)

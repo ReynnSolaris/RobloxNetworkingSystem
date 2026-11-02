@@ -119,6 +119,8 @@ local function formatChat(d): string
 		return tint(color, ("[World] [%s]: %s"):format(name, text))
 	elseif d.Channel == "PARTY" then
 		return tint(color, ("[Party] [%s]: %s"):format(name, text))
+	elseif d.Channel == "GUILD" then
+		return tint(color, ("[Guild] [%s]: %s"):format(name, text))
 	end
 	return tint(color, ("%s says: %s"):format(name, text))
 end
@@ -456,6 +458,31 @@ handlers[Opcodes.SMSG_BINDPOINTUPDATE] = function(d)
 	notice(tint(Colors.SYSTEM, esc(("Your home is now %s."):format(d.Name or "here"))))
 end
 
+-- Guild and bank
+local bankOpen = Instance.new("BindableEvent")
+bankOpen.Name = "BankOpen"
+bankOpen.Parent = script.Parent
+
+handlers[Opcodes.SMSG_GUILD_ROSTER] = function(d)
+	player:SetAttribute("GuildRoster", if d.Name then HttpService:JSONEncode(d) else nil)
+end
+
+handlers[Opcodes.SMSG_GUILD_INVITE] = function(d)
+	display(tint(Colors.GUILD, esc(("%s has invited you to join the guild <%s>. /gaccept or /gdecline"):format(d.From or "?", d.Guild or "?"))))
+end
+
+handlers[Opcodes.SMSG_GUILD_EVENT] = function(d)
+	display(tint(Colors.GUILD, esc(tostring(d.Text))))
+end
+
+handlers[Opcodes.SMSG_SHOW_BANK] = function(d)
+	player:SetAttribute("Bank", HttpService:JSONEncode(d.Items or {}))
+	player:SetAttribute("BankSlots", d.Slots)
+	if d.Open then
+		bankOpen:Fire()
+	end
+end
+
 handlers[Opcodes.SMSG_QUESTGIVER_QUEST_COMPLETE] = function(d)
 	notice(tint(Colors.QUEST, esc("Quest completed: " .. (d.Title or "?"))))
 	questList:Fire(nil)
@@ -579,8 +606,16 @@ local function parse(text: string)
 		return { Kind = "CHAT", Channel = "PARTY", Body = rest }
 	elseif prefix == "y" or prefix == "yell" then
 		return { Kind = "CHAT", Channel = "YELL", Body = rest }
-	elseif prefix == "world" or prefix == "g" then
+	elseif prefix == "world" or prefix == "1" then
 		return { Kind = "CHAT", Channel = "WORLD", Body = rest }
+	elseif prefix == "g" or prefix == "guild" then
+		return { Kind = "CHAT", Channel = "GUILD", Body = rest }
+	elseif prefix == "gcreate" or prefix == "gmotd" then
+		return { Kind = "GUILD", Action = prefix:sub(2), Text = rest }
+	elseif prefix == "ginvite" or prefix == "gkick" or prefix == "gpromote" or prefix == "gdemote" or prefix == "gleader" then
+		return { Kind = "GUILD", Action = prefix:sub(2), Target = rest:match("^(%S+)") }
+	elseif prefix == "gaccept" or prefix == "gdecline" or prefix == "gleave" or prefix == "gdisband" or prefix == "groster" then
+		return { Kind = "GUILD", Action = prefix:sub(2) }
 	elseif prefix == "w" or prefix == "whisper" then
 		local target, body = rest:match("^(%S+)%s+(.*)$")
 		return { Kind = "CHAT", Channel = "WHISPER", Body = body or "", Target = target }
@@ -600,6 +635,8 @@ local function dispatch(p)
 		send(Opcodes.CMSG_LOGOUT_REQUEST, {})
 	elseif p.Kind == "INVENTORY" then
 		send(Opcodes.CMSG_INVENTORY, {})
+	elseif p.Kind == "GUILD" then
+		send(Opcodes.CMSG_GUILD, { Action = p.Action, Target = p.Target, Text = p.Text })
 	elseif p.Kind == "SOCIAL" then
 		local opcode = ({ friend = Opcodes.CMSG_ADD_FRIEND, unfriend = Opcodes.CMSG_DEL_FRIEND, removefriend = Opcodes.CMSG_DEL_FRIEND, ignore = Opcodes.CMSG_ADD_IGNORE, unignore = Opcodes.CMSG_DEL_IGNORE })[p.Action]
 		send(opcode, { Name = p.Target })

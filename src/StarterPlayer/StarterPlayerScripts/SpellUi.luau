@@ -23,7 +23,7 @@ function SpellUi.color(spell): Color3
 end
 
 function SpellUi.tooltip(spell, extra: string?): string
-	local lines = { ('<font size="18"><b>%s</b></font>'):format(spell.Name or "?") }
+	local lines = { ('<font size="17" color="#FFFFFF"><b>%s</b></font>'):format(spell.Name or "?") }
 	local cost = if (spell.Cost or 0) > 0 then ("%d Mana"):format(spell.Cost) else nil
 	local range = if (spell.Range or 0) > 0 then ("%d yd range"):format(spell.Range) else nil
 	if cost or range then

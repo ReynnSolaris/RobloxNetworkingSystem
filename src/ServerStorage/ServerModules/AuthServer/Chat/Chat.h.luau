@@ -87,6 +87,9 @@ function module:Start()
 		if channel.Party and #recipients == 0 then
 			return self:System(player, "You are not in a party.")
 		end
+		if channel.Guild and #recipients == 0 then
+			return self:System(player, "You are not in a guild.")
+		end
 		-- The sender gets the same line back, filtered and with links resolved.
 		if not table.find(recipients, player) then
 			table.insert(recipients, player)

@@ -51,7 +51,7 @@ local body = scope:Computed(function(use)
 	local lines = { ('<font size="20" color="%s"><b>%s</b></font>'):format(Config.Chat.Colors.QUEST, d.Title or "?"), "", d.Details or "", "",
 		'<font color="#FFD100"><b>Objectives</b></font>', d.Objectives or "", "", '<font color="#FFD100"><b>Rewards</b></font>' }
 	if (d.RewardXp or 0) > 0 then table.insert(lines, ("%d experience"):format(d.RewardXp)) end
-	if (d.RewardMoney or 0) > 0 then table.insert(lines, ('<font color="#FFD700">%s</font>'):format(Ui.money(d.RewardMoney))) end
+	if (d.RewardMoney or 0) > 0 then table.insert(lines, Ui.money(d.RewardMoney)) end
 	for _, item in (d.RewardItems or {}) do
 		table.insert(lines, Ui.itemName(item))
 	end

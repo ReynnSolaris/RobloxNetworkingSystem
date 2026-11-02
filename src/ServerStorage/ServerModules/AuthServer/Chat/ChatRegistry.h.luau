@@ -8,6 +8,7 @@ local CHANNELS = {
 	WORLD = {},
 	WHISPER = { Target = true },
 	PARTY = { Party = true },
+	GUILD = { Guild = true },
 	SYSTEM = { ServerOnly = true },
 }
 module.CHANNELS = CHANNELS

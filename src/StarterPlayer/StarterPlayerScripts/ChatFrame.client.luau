@@ -46,7 +46,7 @@ local function showLinks(json: string)
 		return
 	end
 	local function tip(info)
-		Ui.showTip(Ui.itemTooltip(info, if info.Price then Ui.money(info.Price) else nil), Ui.itemBorder(info))
+		Ui.showTip(Ui.itemTooltip(info), Ui.itemBorder(info))
 	end
 	local info = itemInfo:Invoke(link.Entry)
 	if info then
