@@ -6,6 +6,7 @@ local Fusion = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("
 local UserInputService2 = game:GetService("UserInputService")
 local Ui = require(script.Parent:WaitForChild("Ui"))
 local Drag = require(script.Parent:WaitForChild("Drag"))
+local Settings = require(script.Parent:WaitForChild("Settings"))
 
 local function shiftHeld(): boolean
 	return UserInputService2:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService2:IsKeyDown(Enum.KeyCode.RightShift)
@@ -58,13 +59,16 @@ function Components.Button(scope, props)
 		Visible = props.Visible,
 		AnchorPoint = props.AnchorPoint,
 		BackgroundColor3 = scope:Computed(function(use)
-			return if use(hovered) or (props.Active and use(props.Active)) then Ui.ROW_HOVER else Ui.ROW
+			if props.Plain then
+				return if use(hovered) or (props.Active and use(props.Active)) then Ui.ROW_HOVER else Ui.ROW
+			end
+			return if use(hovered) or (props.Active and use(props.Active)) then Ui.BUTTON_HOVER else Ui.BUTTON
 		end),
 		AutoButtonColor = false,
 		BorderSizePixel = 0,
 		Font = props.Font or Enum.Font.GothamBold,
 		TextSize = props.TextSize or 13,
-		TextColor3 = props.Color or Ui.GOLD,
+		TextColor3 = props.Color or Ui.PARCHMENT,
 		TextXAlignment = props.Align or Enum.TextXAlignment.Center,
 		RichText = true,
 		Text = props.Text,
@@ -81,7 +85,8 @@ function Components.Button(scope, props)
 		[OnEvent "Activated"] = linkOrClick(props),
 		[Children] = {
 			scope:New "UICorner" { CornerRadius = UDim.new(0, 4) },
-			scope:New "UIStroke" { Color = Ui.BORDER },
+			scope:New "UIStroke" { Color = if props.Plain then Ui.BORDER_DARK else Ui.BORDER, Thickness = 1.5 },
+			if props.Plain then nil else scope:New "UIGradient" { Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 150, 150)), Rotation = 90 },
 			props[Children],
 		},
 	}
@@ -93,6 +98,8 @@ function Components.Row(scope, props)
 	return Components.Button(scope, {
 		Size = UDim2.new(1, -6, 0, 30),
 		LayoutOrder = props.LayoutOrder,
+		Plain = true,
+		Color = Color3.new(1, 1, 1),
 		Font = Enum.Font.Gotham,
 		Align = Enum.TextXAlignment.Left,
 		Text = "  " .. props.Text,
@@ -135,6 +142,14 @@ end
 function Components.Panel(scope, props)
 	local position = scope:Value(props.Position or UDim2.fromScale(0.5, 0.5))
 	local dragStart, startPos = nil, nil
+	-- windows open where they were left, per account
+	local key = "window." .. tostring(props.Name)
+	Settings.onReady(function()
+		local saved = Settings.get(key)
+		if typeof(saved) == "table" and #saved == 4 then
+			position:set(UDim2.new(saved[1], saved[2], saved[3], saved[4]))
+		end
+	end)
 
 	UserInputService.InputChanged:Connect(function(input)
 		if dragStart and input.UserInputType == Enum.UserInputType.MouseMovement then
@@ -143,8 +158,10 @@ function Components.Panel(scope, props)
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 and dragStart then
 			dragStart = nil
+			local p = peek(position)
+			Settings.set(key, { p.X.Scale, p.X.Offset, p.Y.Scale, p.Y.Offset })
 		end
 	end)
 
@@ -159,11 +176,12 @@ function Components.Panel(scope, props)
 			Position = position,
 			Size = props.Size,
 			BackgroundColor3 = Ui.PANEL,
-			BackgroundTransparency = 0.05,
+			BackgroundTransparency = 0.04,
 			BorderSizePixel = 0,
 			[Children] = {
-				scope:New "UICorner" { CornerRadius = UDim.new(0, 8) },
-				scope:New "UIStroke" { Color = Ui.BORDER },
+				scope:New "UICorner" { CornerRadius = UDim.new(0, 6) },
+				scope:New "UIStroke" { Color = Ui.BORDER, Thickness = 2 },
+				scope:New "UIGradient" { Color = ColorSequence.new(Ui.PANEL_LIGHT, Ui.PANEL), Rotation = 90 },
 				scope:New "Frame" {
 					Name = "Bar",
 					Size = UDim2.new(1, 0, 0, 36),
@@ -175,10 +193,11 @@ function Components.Panel(scope, props)
 						end
 					end,
 					[Children] = {
-						scope:New "UICorner" { CornerRadius = UDim.new(0, 8) },
+						scope:New "UICorner" { CornerRadius = UDim.new(0, 6) },
 						scope:New "UIGradient" { Color = ColorSequence.new(Ui.BAR_TOP, Ui.BAR_BOTTOM), Rotation = 90 },
-						Components.Text(scope, { Size = UDim2.new(1, -60, 1, 0), Position = UDim2.fromOffset(14, 0), Text = props.Title, Font = Enum.Font.Garamond, TextSize = 24, Color = Ui.GOLD }),
-						Components.Button(scope, { Size = UDim2.fromOffset(24, 24), Position = UDim2.new(1, -30, 0, 6), Text = "X", OnClick = function()
+						scope:New "Frame" { Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = Ui.BORDER, BorderSizePixel = 0 },
+						Components.Text(scope, { Size = UDim2.new(1, -60, 1, 0), Position = UDim2.fromOffset(14, 0), Text = props.Title, Font = Enum.Font.Garamond, TextSize = 24, Color = Ui.PARCHMENT }),
+						Components.Button(scope, { Size = UDim2.fromOffset(24, 24), Position = UDim2.new(1, -30, 0, 6), Text = "×", TextSize = 16, OnClick = function()
 							props.Enabled:set(false)
 						end }),
 					},
@@ -241,13 +260,14 @@ function Components.UnitFrame(scope, props)
 		Name = props.Name,
 		Position = props.Position,
 		Size = props.Size or UDim2.fromOffset(280, 68),
-		BackgroundColor3 = Color3.fromRGB(16, 16, 24),
-		BackgroundTransparency = 0.2,
+		BackgroundColor3 = Ui.PANEL,
+		BackgroundTransparency = 0.15,
 		BorderSizePixel = 0,
 		LayoutOrder = props.LayoutOrder,
 		[Children] = {
 			scope:New "UICorner" { CornerRadius = UDim.new(0, 6) },
-			scope:New "UIStroke" { Color = Ui.BORDER },
+			scope:New "UIStroke" { Color = Ui.BORDER, Thickness = 1.5 },
+			scope:New "UIGradient" { Color = ColorSequence.new(Ui.PANEL_LIGHT, Ui.PANEL), Rotation = 90 },
 			if props.Portrait then scope:New "TextLabel" {
 				Size = UDim2.fromOffset(52, 52),
 				Position = UDim2.fromOffset(8, 8),

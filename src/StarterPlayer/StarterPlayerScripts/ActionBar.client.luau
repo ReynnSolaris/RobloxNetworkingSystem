@@ -47,6 +47,7 @@ local casting = scope:Computed(function(use)
 	return SpellUi.decode(use(castingJson), nil)
 end)
 local castError = attr("CastError", "")
+local barKey = attr("ActionBarKey", "none")
 local now = scope:Value(os.clock())
 RunService.Heartbeat:Connect(function()
 	now:set(os.clock())
@@ -134,6 +135,18 @@ scope:New "ScreenGui" {
 			BackgroundTransparency = 1,
 			[Children] = tiles,
 		},
+		Components.Text(scope, {
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(0.5, -width / 2 - 8, 1, -14),
+			Size = UDim2.fromOffset(90, 16),
+			Align = Enum.TextXAlignment.Right,
+			TextSize = 11,
+			Color = Ui.DIM,
+			Text = scope:Computed(function(use)
+				local key = use(barKey) or "none"
+				return if key == "none" then "" elseif key:sub(1, 1) == "s" then "stance bar" else key:sub(1, 1):upper() .. key:sub(2) .. " bar"
+			end),
+		}),
 		-- cast bar
 		scope:New "Frame" {
 			AnchorPoint = Vector2.new(0.5, 1),

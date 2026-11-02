@@ -48,6 +48,7 @@ local Chat = Auth.Chat["Chat.h"]
 local Commands = Auth.Security["Commands.h"]
 local Zones = World.Zones["Zones.h"]
 local Tickets = Auth.Support["Tickets.h"]
+local Settings = Auth.Support["Settings.h"]
 local Party = Auth.Social["Party.h"]
 local Anticheat = World.Movement["Anticheat.h"]
 local Characters = World.Characters["Characters.h"]
@@ -86,6 +87,7 @@ Session:Start()
 Chat:Start()
 Zones:Start()
 Tickets:Start()
+Settings:Start()
 Commands:Start()
 Party:Start()
 Anticheat:Start()
@@ -120,6 +122,7 @@ Battleground:Start()
 WorldDB:EndSeed()
 print("[Boot] ready")
 Session:OnAuthed(function(player)
+	Settings:Send(player)
 	Characters:Enum(player)
 	Commands:SyncState(player)
 end)

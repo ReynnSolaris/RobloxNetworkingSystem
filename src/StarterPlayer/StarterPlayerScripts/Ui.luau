@@ -7,15 +7,22 @@ local HttpService = game:GetService("HttpService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local player = Players.LocalPlayer
 
+-- Blizzard's palette: near-black blue panels, antique gold trim, parchment
+-- titles, dark red buttons with gold text.
 local Ui = {}
-Ui.GOLD = Color3.fromRGB(255, 210, 100)
+Ui.GOLD = Color3.fromRGB(255, 209, 0)
+Ui.PARCHMENT = Color3.fromRGB(255, 240, 200)
 Ui.DIM = Color3.fromRGB(170, 170, 180)
-Ui.PANEL = Color3.fromRGB(14, 14, 22)
-Ui.ROW = Color3.fromRGB(28, 26, 34)
-Ui.ROW_HOVER = Color3.fromRGB(52, 44, 28)
-Ui.BORDER = Color3.fromRGB(120, 95, 40)
-Ui.BAR_TOP = Color3.fromRGB(80, 60, 24)
-Ui.BAR_BOTTOM = Color3.fromRGB(30, 24, 14)
+Ui.PANEL = Color3.fromRGB(10, 12, 24)
+Ui.PANEL_LIGHT = Color3.fromRGB(22, 26, 48)
+Ui.ROW = Color3.fromRGB(24, 26, 44)
+Ui.ROW_HOVER = Color3.fromRGB(58, 48, 26)
+Ui.BORDER = Color3.fromRGB(176, 142, 62)
+Ui.BORDER_DARK = Color3.fromRGB(70, 56, 24)
+Ui.BAR_TOP = Color3.fromRGB(110, 86, 34)
+Ui.BAR_BOTTOM = Color3.fromRGB(44, 34, 14)
+Ui.BUTTON = Color3.fromRGB(96, 22, 22)
+Ui.BUTTON_HOVER = Color3.fromRGB(140, 34, 30)
 
 function Ui.quality(q: number?): string
 	return Config.Quality[q or 1] or Config.Quality[1]
@@ -169,7 +176,7 @@ tip.Parent = tipGui
 Instance.new("UICorner", tip).CornerRadius = UDim.new(0, 4)
 local tipStroke = Instance.new("UIStroke", tip)
 tipStroke.Color = Ui.BORDER
-tipStroke.Thickness = 1.5
+tipStroke.Thickness = 2
 tipStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 local gradient = Instance.new("UIGradient", tip)
 gradient.Color = ColorSequence.new(Color3.fromRGB(26, 26, 48), Color3.fromRGB(6, 6, 12))

@@ -390,6 +390,11 @@ end
 
 handlers[Opcodes.SMSG_ACTION_BUTTONS] = function(d)
 	player:SetAttribute("ActionBar", HttpService:JSONEncode(d.Buttons or {}))
+	player:SetAttribute("ActionBarKey", d.Key or "none")
+end
+
+handlers[Opcodes.SMSG_SETTINGS] = function(d)
+	player:SetAttribute("UiSettings", HttpService:JSONEncode(d.Settings or {}))
 end
 
 handlers[Opcodes.SMSG_LEARNED_SPELL] = function(d)

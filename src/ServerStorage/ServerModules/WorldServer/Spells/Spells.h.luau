@@ -240,9 +240,54 @@ local function char(self, player: Player)
 	local c = entity and entity.Active
 	if c then
 		c.Spells = c.Spells or {}
-		c.ActionBar = c.ActionBar or {}
+		c.ActionBars = c.ActionBars or { none = c.ActionBar or {} }
+		c.ActionBar = nil
 	end
 	return c
+end
+
+-- Action bars swap with the form or stance, WoW style: one bar per key, the
+-- key being the form, else the active stance-group aura's spell, else "none".
+function module:BarKey(player: Player): string
+	local Auras = self.includes.Spells["Auras.h"]
+	local form = Auras:CurrentForm(player)
+	if form then
+		return form
+	end
+	for _, aura in Auras:List(player) do
+		if aura.Group == "stance" or aura.Group == "presence" then
+			return "s" .. tostring(aura.Id)
+		end
+	end
+	return "none"
+end
+
+function module:Bar(player: Player)
+	local c = char(self, player)
+	if not c then
+		return {}
+	end
+	local key = self:BarKey(player)
+	c.ActionBars[key] = c.ActionBars[key] or {}
+	return c.ActionBars[key], key
+end
+
+function module:SendBar(player: Player)
+	local bar, key = self:Bar(player)
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_ACTION_BUTTONS, { Buttons = bar, Key = key })
+end
+
+-- Only real actions land on the bar by themselves: no passives, procs, forms,
+-- stances or anything else on the stance bar.
+local function autoBar(spell): boolean
+	if spell.effect == "passive" or spell.proc then
+		return false
+	end
+	local aura = spell.aura
+	if aura and (aura.group or aura.kind == "form" or aura.kind == "stealth" or aura.kind == "mount") then
+		return false
+	end
+	return true
 end
 
 local function commit(self, player: Player)
@@ -324,7 +369,7 @@ function module:SendSpells(player: Player)
 	end)
 	local Packet = self.includes.Security["Packet.h"]
 	Packet:Send(player, Opcodes.SMSG_INITIAL_SPELLS, { Spells = list })
-	Packet:Send(player, Opcodes.SMSG_ACTION_BUTTONS, { Buttons = c.ActionBar })
+	self:SendBar(player)
 end
 
 -- Learning a higher rank replaces the lower one wherever it sat.
@@ -346,15 +391,21 @@ function module:Learn(player: Player, id, quiet: boolean?)
 	c.Spells[tostring(spell.id)] = true
 	if replaced then
 		c.Spells[tostring(replaced)] = nil
-		for slot, spellId in c.ActionBar do
-			if spellId == replaced then
-				c.ActionBar[slot] = spell.id
+		for _, bar in c.ActionBars do
+			for slot, spellId in bar do
+				if spellId == replaced then
+					bar[slot] = spell.id
+				end
 			end
 		end
-	else
+	elseif autoBar(spell) then
+		-- onto the bar it belongs to: a form ability goes to that form's bar
+		local key = if spell.forms and not table.find(spell.forms, "none") then spell.forms[1] else "none"
+		c.ActionBars[key] = c.ActionBars[key] or {}
+		local bar = c.ActionBars[key]
 		for slot = 1, Config.Spells.ActionButtons do
-			if c.ActionBar[tostring(slot)] == nil then
-				c.ActionBar[tostring(slot)] = spell.id
+			if bar[tostring(slot)] == nil then
+				bar[tostring(slot)] = spell.id
 				break
 			end
 		end
@@ -371,9 +422,11 @@ function module:Unlearn(player: Player, id)
 	local c = char(self, player)
 	if c and c.Spells[tostring(id)] then
 		c.Spells[tostring(id)] = nil
-		for slot, spellId in c.ActionBar do
-			if spellId == tonumber(id) then
-				c.ActionBar[slot] = nil
+		for _, bar in c.ActionBars do
+			for slot, spellId in bar do
+				if spellId == tonumber(id) then
+					bar[slot] = nil
+				end
 			end
 		end
 		commit(self, player)
@@ -402,9 +455,10 @@ function module:SetActionButton(player: Player, slot, id)
 		return
 	end
 	id = tonumber(id)
-	c.ActionBar[tostring(slot)] = if id and c.Spells[tostring(id)] then id else nil
+	local bar = self:Bar(player)
+	bar[tostring(slot)] = if id and c.Spells[tostring(id)] then id else nil
 	commit(self, player)
-	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_ACTION_BUTTONS, { Buttons = c.ActionBar })
+	self:SendBar(player)
 end
 
 -- Right-clicking an item with a spell casts it; consumables go when it lands.

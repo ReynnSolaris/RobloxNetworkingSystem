@@ -158,6 +158,9 @@ function module:Apply(caster, unit, spell, amount: number?)
 	self:Sync(unit)
 	if Combat:IsPlayer(unit) then
 		Combat:Log(unit, (if aura.Harmful then "You are afflicted by %s." else "You gain %s."):format(spell.name), if aura.Harmful then Config.Chat.Colors.HURT else Config.Chat.Colors.LOOT)
+		if aura.Kind == "form" or aura.Group == "stance" or aura.Group == "presence" then
+			self.includes.Spells["Spells.h"]:SendBar(unit)
+		end
 	end
 	if aura.Harmful and caster and Combat:IsPlayer(caster) and not Combat:IsPlayer(unit) then
 		self.includes.Content["Creatures.h"]:Aggro(unit.Row.guid, caster)
@@ -190,6 +193,9 @@ function module:Remove(unit, id, quiet: boolean?)
 			local Combat = self.includes.Combat["Combat.h"]
 			if not quiet and Combat:IsPlayer(unit) then
 				Combat:Log(unit, ("%s fades from you."):format(aura.Name), Config.Chat.Colors.COMMAND)
+			end
+			if Combat:IsPlayer(unit) and (aura.Kind == "form" or aura.Group == "stance" or aura.Group == "presence") then
+				self.includes.Spells["Spells.h"]:SendBar(unit)
 			end
 			return true
 		end
@@ -291,4 +297,5 @@ return Base(module, {
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "World/Combat", Imports = "Combat.h" },
 	{ Path = "World/Content", Imports = "Creatures.h" },
+	{ Path = "World/Spells", Imports = "Spells.h" },
 })

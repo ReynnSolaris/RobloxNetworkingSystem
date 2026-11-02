@@ -124,6 +124,7 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | SMSG_RESURRECT_REQUEST / CMSG_RESURRECT_RESPONSE | both | `{ From }`; `{ Accept }` |
 | CMSG_BATTLEMASTER_JOIN / CMSG_LEAVE_BATTLEFIELD / SMSG_BATTLEFIELD_STATUS | both | `{ Id }`; leave or cancel; `{ Status = queued|active|ended|none, Scores, Flags, Winner }` |
 | CMSG_CONVERT_RAID / CMSG_SET_SUBGROUP | client | party to raid; `{ Target, Group }` |
+| CMSG_SAVE_SETTINGS / SMSG_SETTINGS | both | `{ Settings }` JSON under 8 KB, per account |
 | SMSG_QUESTGIVER_STATUS_MULTIPLE | server | `{ Statuses = { [guid] = available|complete|incomplete|none } }` for the markers |
 | SMSG_VENDOR_LIST | server | `{ Guid, Items }` opens the vendor window |
 | CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
@@ -704,6 +705,19 @@ riding skill you have not trained. Trinkets carry `proc = { spell, chance }`
 for "Chance on hit" effects (Flickering Candle, Bandit's Insignia, from
 Goldtooth) or a `use` spell used by right-clicking the worn trinket (Vial of
 Vigor, Swiftness Charm). Every window scales with the viewport height.
+
+## Blizzlike UI, spellbook tabs, bars per form, saved settings
+
+The shared components follow Blizzard's palette: near-black blue panels with a
+gradient, antique gold trim, parchment titles, dark red buttons with gold text,
+plain dark rows in lists; every window scales with the viewport. The spellbook
+has tabs down the right: General (forms, stances, passives, mounts), one per
+school of your class spells, and Skills with professions and passives. Action
+bars swap with the form or stance like WoW (`ActionBars[key]` on the character,
+the key being the form, the active stance or presence, else "none"), a form
+ability learned lands on that form's bar, and only real actions auto-fill a
+bar: no passives, procs, forms or stances. Window positions and the spellbook
+tab are saved per account (CMSG_SAVE_SETTINGS, back as SMSG_SETTINGS on login).
 
 ## Factions, guards, equip rules, spirit healers, GM tools
 
