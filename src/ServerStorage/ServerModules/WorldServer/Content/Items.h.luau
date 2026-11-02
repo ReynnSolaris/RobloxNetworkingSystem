@@ -95,13 +95,13 @@ local SEED = {
 	{ name = "Trainee's Shadow Staff", quality = 2, stack = 1, class = "weapon", slot = "mainhand", damage = 3, spellpower = 5, stamina = 1, buyprice = 800, level = 3 },
 	{ name = "Trainee's Wild Staff", quality = 2, stack = 1, class = "weapon", slot = "mainhand", damage = 3, spellpower = 4, spirit = 2, buyprice = 800, level = 3 },
 	-- the gamemaster's set, from .gm gear
-	{ name = "Gamemaster's Hood", quality = 5, stack = 1, class = "armor", slot = "head", armor = 500, stamina = 200, strength = 100, intellect = 100, buyprice = 0, level = 1, bind = "pickup", flavor = "Whatever you say goes." },
-	{ name = "Gamemaster's Robe", quality = 5, stack = 1, class = "armor", slot = "chest", armor = 800, stamina = 300, strength = 100, intellect = 100, spirit = 100, buyprice = 0, level = 1, bind = "pickup" },
-	{ name = "Gamemaster's Leggings", quality = 5, stack = 1, class = "armor", slot = "legs", armor = 700, stamina = 250, agility = 100, buyprice = 0, level = 1, bind = "pickup" },
-	{ name = "Gamemaster's Boots", quality = 5, stack = 1, class = "armor", slot = "feet", armor = 400, stamina = 150, agility = 100, buyprice = 0, level = 1, bind = "pickup" },
-	{ name = "Gamemaster's Blade", quality = 5, stack = 1, class = "weapon", slot = "mainhand", damage = 500, spellpower = 500, buyprice = 0, level = 1, bind = "pickup", flavor = "One swing is usually enough." },
-	{ name = "Gamemaster's Shield", quality = 5, stack = 1, class = "armor", slot = "offhand", armor = 900, stamina = 200, buyprice = 0, level = 1, bind = "pickup" },
-	{ name = "Gamemaster's Band", quality = 5, stack = 1, class = "armor", slot = "ring", stamina = 100, intellect = 100, strength = 100, agility = 100, spirit = 100, buyprice = 0, level = 1, bind = "pickup" },
+	{ name = "Gamemaster's Hood", quality = 5, stack = 1, class = "armor", slot = "head", armor = 500, stamina = 200, strength = 100, intellect = 100, buyprice = 0, level = 1, bind = "pickup", anyclass = true, flavor = "Whatever you say goes." },
+	{ name = "Gamemaster's Robe", quality = 5, stack = 1, class = "armor", slot = "chest", armor = 800, stamina = 300, strength = 100, intellect = 100, spirit = 100, buyprice = 0, level = 1, bind = "pickup", anyclass = true },
+	{ name = "Gamemaster's Leggings", quality = 5, stack = 1, class = "armor", slot = "legs", armor = 700, stamina = 250, agility = 100, buyprice = 0, level = 1, bind = "pickup", anyclass = true },
+	{ name = "Gamemaster's Boots", quality = 5, stack = 1, class = "armor", slot = "feet", armor = 400, stamina = 150, agility = 100, buyprice = 0, level = 1, bind = "pickup", anyclass = true },
+	{ name = "Gamemaster's Blade", quality = 5, stack = 1, class = "weapon", slot = "mainhand", damage = 500, spellpower = 500, buyprice = 0, level = 1, bind = "pickup", anyclass = true, flavor = "One swing is usually enough." },
+	{ name = "Gamemaster's Shield", quality = 5, stack = 1, class = "armor", slot = "offhand", armor = 900, stamina = 200, buyprice = 0, level = 1, bind = "pickup", anyclass = true },
+	{ name = "Gamemaster's Band", quality = 5, stack = 1, class = "armor", slot = "ring", stamina = 100, intellect = 100, strength = 100, agility = 100, spirit = 100, buyprice = 0, level = 1, bind = "pickup", anyclass = true },
 	{ name = "Pony Reins", quality = 2, stack = 1, class = "misc", buyprice = 50000, level = 10, use = "Summon Pony", flavor = "Built from the Pony mount template." },
 	{ name = "Gryphon Reins", quality = 3, stack = 1, class = "misc", buyprice = 5000000, level = 30, use = "Summon Gryphon", flavor = "The skies of Azeroth await." },
 }
@@ -189,10 +189,10 @@ function module:Start()
 			item[key] = value
 		end
 		local existing = byName[item.name]
-		-- rows written while the armor type sat in `armor`: restore the number, move the type
-		if existing and typeof(existing.armor) == "string" then
-			DB:Update("item_template", existing.entry, { armor = item.armor or 0, armortype = existing.armor })
-			existing.armor, existing.armortype = item.armor, existing.armor
+		-- rows written while the armor type sat in `armor`: the seed is authoritative for both
+		if existing and (typeof(existing.armor) == "string" or typeof(existing.armortype) == "number" or (item.armortype and existing.armortype ~= item.armortype)) then
+			DB:Update("item_template", existing.entry, { armor = item.armor or 0, armortype = item.armortype })
+			existing.armor, existing.armortype = item.armor, item.armortype
 		end
 		if not existing then
 			byName[item.name] = DB:Insert("item_template", table.clone(item))

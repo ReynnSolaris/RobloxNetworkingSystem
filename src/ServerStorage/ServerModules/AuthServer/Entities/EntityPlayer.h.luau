@@ -581,11 +581,13 @@ function module:MayEquip(player: Player, item): (boolean, string?)
 	if not class then
 		return true
 	end
-	if item.subclass and not table.find(class.Weapons, item.subclass) then
-		return false, ("%ss cannot use %s weapons."):format(class.Name, if item.subclass == "shield" then "shields as" else item.subclass)
-	end
-	if item.armortype and not table.find(class.Armor, item.armortype) then
-		return false, ("%ss cannot wear %s."):format(class.Name, item.armortype)
+	if not item.anyclass then
+		if typeof(item.subclass) == "string" and not table.find(class.Weapons, item.subclass) then
+			return false, ("%ss cannot use %s weapons."):format(class.Name, if item.subclass == "shield" then "shields as" else item.subclass)
+		end
+		if typeof(item.armortype) == "string" and not table.find(class.Armor, item.armortype) then
+			return false, ("%ss cannot wear %s."):format(class.Name, item.armortype)
+		end
 	end
 	local DB = self.includes.Database["WorldDB.h"]
 	local main = char.Equipment and char.Equipment.mainhand and DB:Get("item_template", char.Equipment.mainhand)
