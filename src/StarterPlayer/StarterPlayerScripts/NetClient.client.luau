@@ -393,6 +393,14 @@ handlers[Opcodes.SMSG_ACTION_BUTTONS] = function(d)
 	player:SetAttribute("ActionBarKey", d.Key or "none")
 end
 
+handlers[Opcodes.SMSG_LFG_STATUS] = function(d)
+	if d.Status == "list" then
+		player:SetAttribute("LfgDungeons", HttpService:JSONEncode(d.Dungeons or {}))
+	else
+		player:SetAttribute("Lfg", HttpService:JSONEncode(d))
+	end
+end
+
 handlers[Opcodes.SMSG_SETTINGS] = function(d)
 	player:SetAttribute("UiSettings", HttpService:JSONEncode(d.Settings or {}))
 end
@@ -628,6 +636,7 @@ handlers[Opcodes.SMSG_PARTY_UPDATE] = function(d)
 	player:SetAttribute("PartyMembers", if #members > 0 then table.concat(members, ",") else nil)
 	player:SetAttribute("PartyLeader", if #members > 0 then d.Leader else nil)
 	player:SetAttribute("PartyRaid", if #members > 0 and d.Raid then true else nil)
+	player:SetAttribute("PartyLoot", if #members > 0 then (d.LootMethod or "group") .. (if d.MasterLooter then " " .. d.MasterLooter else "") else nil)
 	player:SetAttribute("PartyGroups", if #members > 0 then HttpService:JSONEncode(d.Groups or {}) else nil)
 end
 
@@ -731,6 +740,13 @@ local function parse(text: string)
 		return { Kind = "DISMOUNT" }
 	elseif prefix == "mountspecial" then
 		return { Kind = "MOUNTSPECIAL" }
+	elseif prefix == "loot" then
+		local method, target = rest:match("^(%S+)%s*(%S*)")
+		return { Kind = "LOOTMETHOD", Method = method, Target = if target ~= "" then target else nil }
+	elseif prefix == "title" then
+		return { Kind = "TITLE", Title = rest }
+	elseif prefix == "lfg" or prefix == "lfd" then
+		return { Kind = "LFG" }
 	elseif prefix == "petattack" or prefix == "petfollow" or prefix == "petpassive" or prefix == "petaggressive" or prefix == "petdefensive" or prefix == "petdismiss" then
 		return { Kind = "PET", Action = prefix:sub(4) }
 	elseif prefix == "need" or prefix == "greed" or prefix == "pass" then
@@ -812,6 +828,12 @@ local function dispatch(p)
 		if p.Id then
 			send(Opcodes.CMSG_LOOT_ROLL, { Id = p.Id, Vote = p.Vote })
 		end
+	elseif p.Kind == "LOOTMETHOD" then
+		send(Opcodes.CMSG_LOOT_METHOD, { Method = p.Method, Target = p.Target })
+	elseif p.Kind == "TITLE" then
+		send(Opcodes.CMSG_SET_TITLE, { Title = p.Title })
+	elseif p.Kind == "LFG" then
+		player:SetAttribute("ToggleLfg", os.clock())
 	elseif p.Kind == "MOUNTSPECIAL" then
 		send(Opcodes.CMSG_MOUNT_SPECIAL, {})
 	elseif p.Kind == "DISMOUNT" then

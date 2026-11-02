@@ -132,6 +132,7 @@ function module:Login(player: Player, data)
 	self.includes.Spells["Skills.h"]:OnLogin(player)
 	self.includes.Social["Achievements.h"]:OnLogin(player)
 	self.includes.Zones["GameEvents.h"]:OnLogin(player)
+	self.includes.Social["Titles.h"]:OnLogin(player)
 end
 
 -- A new character's first login: the recruit's set worn, a sword, food and a
@@ -178,6 +179,7 @@ function module:Logout(player: Player)
 	self.includes.Content["Trade.h"]:Cancel(player, "Trade cancelled.")
 	self.includes.Content["Pets.h"]:OnLogout(player)
 	self.includes.Combat["Battleground.h"]:Leave(player, true)
+	self.includes.Social["Lfg.h"]:Leave(player, true)
 	self.includes.Combat["Death.h"]:Forget(player)
 	self.includes.Social["Social.h"]:OnLogout(player)
 	self.includes.Social["Guild.h"]:OnLogout(player)
@@ -232,5 +234,5 @@ return Base(module, {
 	{ Path = "World/Mail", Imports = "Mail.h" },
 	{ Path = "World/Content", Imports = "Trade.h|Pets.h|Items.h" },
 	{ Path = "World/Zones", Imports = "GameEvents.h" },
-	{ Path = "Auth/Social", Imports = "Social.h|Guild.h|Reputation.h|Achievements.h" },
+	{ Path = "Auth/Social", Imports = "Social.h|Guild.h|Reputation.h|Achievements.h|Titles.h|Lfg.h" },
 })

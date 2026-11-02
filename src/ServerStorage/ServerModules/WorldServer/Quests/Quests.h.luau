@@ -42,6 +42,28 @@ local SEED = {
 		starter = "Town Guard", ender = "Town Guard",
 	},
 }
+table.insert(SEED, {
+	title = "Candle Tax", daily = true,
+	details = "The kobolds breed faster than we can clear them. Every day the guard pays for five more.",
+	objectives = "Slay 5 Kobold Vermin and return to the Town Guard. Daily.",
+	minlevel = 2, level = 3, reward_xp = 120, reward_money = 60,
+	req_creature = { { creature = "Kobold Vermin", count = 5 } },
+	starter = "Town Guard", ender = "Town Guard",
+})
+table.insert(SEED, {
+	title = "Survey the Forest",
+	details = "Walk out of the valley into Elwynn Forest and tell me what the road looks like these days.",
+	objectives = "Explore Elwynn Forest, then return to the Innkeeper.",
+	minlevel = 1, level = 2, reward_xp = 100, reward_money = 20, req_explore = "Elwynn Forest",
+	starter = "Innkeeper", ender = "Innkeeper",
+})
+table.insert(SEED, {
+	title = "Report for Training",
+	details = "You have proven useful. The trainer in town will want a word with someone of your talents.",
+	objectives = "Speak with the Class Trainer.",
+	minlevel = 1, level = 1, reward_xp = 60, reward_money = 10, req_talk = "Class Trainer", prevquest = "Vermin Problem",
+	starter = "Town Guard", ender = "Class Trainer",
+})
 -- one per class from the class trainer: prove yourself on the kobolds, take a weapon
 local CLASS_QUESTS = {
 	Warrior = { title = "The Way of Arms", weapon = "Trainee's Broadsword" }, Paladin = { title = "The Light's Charge", weapon = "Trainee's Hammer" },
@@ -106,9 +128,30 @@ local function endersOf(self, entry)
 	return out
 end
 
--- May this character take the quest: level, class, race and the quest before it.
+-- Daily quests reset at Config.Daily.ResetHour UTC; the key names the day.
+function module:DailyKey(): number
+	return (os.time() - Config.Daily.ResetHour * 3600) // 86400
+end
+
+-- Done for good, or done today for a daily.
+function module:IsDone(c, id): boolean
+	local done = (c.Done or {})[tostring(id)]
+	if not done then
+		return false
+	end
+	local template = self:Template(id)
+	if template and template.daily and typeof(done) == "number" then
+		return (done - Config.Daily.ResetHour * 3600) // 86400 >= self:DailyKey()
+	end
+	return true
+end
+
+-- May this character take the quest: level, class, race, the quest before it,
+-- and the daily limit.
 function module:Eligible(c, template): boolean
 	if (c.Level or 1) < (template.minlevel or 1) then
+		return false
+	elseif template.daily and c.Dailies and c.Dailies.Day == self:DailyKey() and c.Dailies.Count >= Config.Daily.Limit then
 		return false
 	elseif template.class and template.class ~= c.Class then
 		return false
@@ -142,7 +185,50 @@ function module:Progress(player: Player, id)
 		local item = DB:Get("item_template", req.entry) or {}
 		table.insert(lines, { Text = item.name or "?", Have = math.min(self.includes.Entities["EntityPlayer.h"]:CountItem(player, req.entry), req.count), Need = req.count })
 	end
+	if template.req_explore then
+		table.insert(lines, { Text = "Explore " .. template.req_explore, Have = if state.Explored then 1 else 0, Need = 1 })
+	end
+	if template.req_talk then
+		local creature = DB:Get("creature_template", template.req_talk) or {}
+		table.insert(lines, { Text = "Speak with " .. (creature.name or "?"), Have = if state.Talked then 1 else 0, Need = 1 })
+	end
 	return lines
+end
+
+-- Zone entered: explore objectives of active quests.
+function module:OnZone(player: Player, zoneName: string)
+	local c = char(self, player)
+	if not c then
+		return
+	end
+	for id, state in c.Quests do
+		local template = self:Template(id)
+		if template and template.req_explore == zoneName and not state.Explored then
+			state.Explored = true
+			self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTUPDATE_ADD_KILL, { Name = "Explore " .. zoneName, Have = 1, Need = 1 })
+			if self:IsComplete(player, id) then
+				self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTUPDATE_COMPLETE, { Title = template.title })
+			end
+		end
+	end
+	self:Refresh(player)
+end
+
+-- Spoke to a creature: talk objectives.
+function module:OnTalk(player: Player, entry)
+	local c = char(self, player)
+	if not c then
+		return
+	end
+	for id, state in c.Quests do
+		local template = self:Template(id)
+		if template and tostring(template.req_talk) == tostring(entry) and not state.Talked then
+			state.Talked = true
+			if self:IsComplete(player, id) then
+				self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTUPDATE_COMPLETE, { Title = template.title })
+			end
+		end
+	end
 end
 
 function module:IsComplete(player: Player, id): boolean
@@ -169,7 +255,7 @@ function module:StatusFor(player: Player, entry): string?
 	end
 	for _, id in startersOf(self, entry) do
 		local template = self:Template(id)
-		if template and not c.Quests[tostring(id)] and not c.Done[tostring(id)] and self:Eligible(c, template) then
+		if template and not c.Quests[tostring(id)] and not self:IsDone(c, id) and self:Eligible(c, template) then
 			return "available"
 		end
 	end
@@ -226,6 +312,7 @@ function module:Gossip(player: Player, guid)
 		return
 	end
 	local entry, template = creature.Row.id, creature.Template
+	self:OnTalk(player, entry)
 	local options = {}
 	local Death = self.includes.Combat["Death.h"]
 	if template.spirithealer then
@@ -342,7 +429,7 @@ function module:Hello(player: Player, guid, options)
 	end
 	for _, id in startersOf(self, entry) do
 		local template = self:Template(id)
-		if template and not c.Quests[tostring(id)] and not c.Done[tostring(id)] and self:Eligible(c, template) then
+		if template and not c.Quests[tostring(id)] and not self:IsDone(c, id) and self:Eligible(c, template) then
 			table.insert(list, { Id = id, Title = template.title, Status = "available" })
 		end
 	end
@@ -369,7 +456,7 @@ function module:Accept(player: Player, guid, id)
 	if not c or not template or not creature or not table.find(startersOf(self, creature.Row.id), template.id) then
 		return
 	end
-	if c.Quests[tostring(id)] or c.Done[tostring(id)] or not self:Eligible(c, template) then
+	if c.Quests[tostring(id)] or self:IsDone(c, id) or not self:Eligible(c, template) then
 		return
 	end
 	local count = 0
@@ -406,7 +493,12 @@ function module:Complete(player: Player, guid, id)
 		Entities:AddMoney(player, template.reward_money)
 	end
 	c.Quests[tostring(id)] = nil
-	c.Done[tostring(id)] = true
+	c.Done[tostring(id)] = if template.daily then os.time() else true
+	if template.daily then
+		local today = self:DailyKey()
+		c.Dailies = if c.Dailies and c.Dailies.Day == today then c.Dailies else { Day = today, Count = 0 }
+		c.Dailies.Count += 1
+	end
 	self.includes.Social["Achievements.h"]:OnQuest(player)
 	if template.reward_rep then
 		self.includes.Social["Reputation.h"]:Modify(player, template.reward_rep.faction, template.reward_rep.amount or 250)
@@ -513,7 +605,8 @@ function module:Start()
 			end
 			local quest = { title = seed.title, details = seed.details, objectives = seed.objectives, minlevel = seed.minlevel, level = seed.level,
 				reward_xp = seed.reward_xp, reward_money = seed.reward_money, reward_items = {}, req_creature = {}, req_item = {}, class = seed.class, race = seed.race,
-				prevquest = seed.prevquest and byTitle[seed.prevquest] and byTitle[seed.prevquest].id }
+				prevquest = seed.prevquest and byTitle[seed.prevquest] and byTitle[seed.prevquest].id, daily = seed.daily, req_explore = seed.req_explore,
+				req_talk = seed.req_talk and creatures[seed.req_talk] }
 			for _, r in (seed.reward_items or {}) do
 				if items[r.item] then table.insert(quest.reward_items, { entry = items[r.item], count = r.count }) end
 			end

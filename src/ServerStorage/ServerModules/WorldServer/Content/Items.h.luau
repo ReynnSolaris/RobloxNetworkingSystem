@@ -144,8 +144,28 @@ local function kindOf(item)
 	return out
 end
 
+-- item_set: { id, name, items = { entries }, bonuses = { [count] = { stat = amount } } },
+-- seeded by item names. Wearing pieces of a set grants the bonuses in ApplyStats
+-- and the tooltip lists the set, like WoW.
+local SETS = {
+	{ name = "Recruit's Set", items = { "Recruit's Tunic", "Recruit's Pants", "Recruit's Boots", "Recruit's Gloves", "Recruit's Belt", "Recruit's Bracers", "Recruit's Shoulderpads" },
+		bonuses = { ["2"] = { Stamina = 3 }, ["4"] = { Armor = 10, Strength = 3 }, ["6"] = { Health = 50, Stamina = 5 } } },
+	{ name = "Gamemaster's Regalia", items = { "Gamemaster's Hood", "Gamemaster's Robe", "Gamemaster's Leggings", "Gamemaster's Boots", "Gamemaster's Blade", "Gamemaster's Shield", "Gamemaster's Band" },
+		bonuses = { ["3"] = { Stamina = 500 }, ["5"] = { Damage = 500, SpellPower = 500 }, ["7"] = { Health = 10000 } } },
+}
+
 function module:DB()
 	return self.includes.Database["WorldDB.h"]
+end
+
+-- The set an item belongs to, with a lookup cached per boot.
+local setOf: { [string]: any } = {}
+function module:SetOf(entry)
+	return setOf[tostring(entry)]
+end
+
+function module:Sets()
+	return self:DB():Select("item_set")
 end
 
 function module:Template(entry)
@@ -171,7 +191,8 @@ function module:Describe(item, extra)
 	local template = if typeof(item) == "table" then item else (self:Template(item) or {})
 	local spell = template.spell and DB:Get("spell_template", template.spell)
 	local proc = template.proc_spell and DB:Get("spell_template", template.proc_spell)
-	local out = { Entry = template.entry, Name = template.name or "?", Quality = template.quality or 1, Stack = template.stack, Slot = template.slot,
+	local set = self:SetOf(template.entry)
+	local out = { Set = set and { Id = set.id, Name = set.name, Items = set.items, Bonuses = set.bonuses } or nil, Entry = template.entry, Name = template.name or "?", Quality = template.quality or 1, Stack = template.stack, Slot = template.slot,
 		Proc = proc and ("Chance on hit: %s"):format(proc.description or proc.name), ProcChance = template.proc_chance, AnyClass = template.anyclass,
 		Class = template.class, Level = template.level, Health = template.health, Damage = template.damage, Armor = template.armor,
 		Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Use = spell and spell.description, Flavor = template.flavor,
@@ -213,6 +234,29 @@ function module:Start()
 			if next(fields) then
 				DB:Update("item_template", existing.entry, fields)
 			end
+		end
+	end
+	-- sets by name, resolved to entries
+	local existingSets = {}
+	for _, row in DB:Select("item_set") do
+		existingSets[row.name] = row
+	end
+	for _, seed in SETS do
+		local entries = {}
+		for _, name in seed.items do
+			local item = byName[name]
+			if item then
+				table.insert(entries, item.entry)
+			end
+		end
+		local row = existingSets[seed.name]
+		if not row then
+			row = DB:Insert("item_set", { name = seed.name, items = entries, bonuses = seed.bonuses })
+		elseif #row.items ~= #entries then
+			row = DB:Update("item_set", row.id, { items = entries, bonuses = seed.bonuses }) or row
+		end
+		for _, entry in row.items do
+			setOf[tostring(entry)] = row
 		end
 	end
 	local Packet = self.includes.Security["Packet.h"]

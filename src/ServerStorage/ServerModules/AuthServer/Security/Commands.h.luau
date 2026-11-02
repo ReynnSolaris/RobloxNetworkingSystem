@@ -1050,6 +1050,39 @@ add("bg", 2, ".bg create <name> [minlevel] | .bg spawn <id> Alliance|Horde | .bg
 	end
 end)
 
+add("lfg", 2, ".lfg entrance <dungeon id> | .lfg list", function(self, caller, args)
+	local Lfg = self.includes.Social["Lfg.h"]
+	if args[1] == "entrance" then
+		Lfg:SetEntrance(assert(tonumber(args[2]), "expected a dungeon id"), assert(caller.Character, "you have no character"):GetPivot())
+		self:Reply(caller, "Entrance set here.")
+	elseif args[1] == "list" then
+		for _, row in self.includes.Database["WorldDB.h"]:Select("lfg_dungeon") do
+			self:Reply(caller, ("  %s: %s (%d-%d) %s"):format(tostring(row.id), row.name, row.minlevel or 1, row.maxlevel or 80, if row.x then "ready" else "no entrance"))
+		end
+	else
+		error("expected entrance or list", 0)
+	end
+end)
+
+add("title", 2, ".title add <title> [player] | .title set <title> [player] | .title list", function(self, caller, args)
+	local Titles = self.includes.Social["Titles.h"]
+	if args[1] == "list" then
+		for _, rank in Config.Titles.Ranks do
+			self:Reply(caller, ("  %s (%d honor)"):format(rank.Name, rank.Honor))
+		end
+		return
+	end
+	local title = assert(args[2], "expected a title")
+	if args[1] == "add" then
+		Titles:Grant(targetOrSelf(args, 3, caller), title)
+	elseif args[1] == "set" then
+		Titles:Set(targetOrSelf(args, 3, caller), title)
+	else
+		error("expected add, set or list", 0)
+	end
+	self:Reply(caller, "Done.")
+end)
+
 add("honor", 2, ".honor add <amount> [player]", function(self, caller, args)
 	assert(args[1] == "add", "expected add")
 	local target = targetOrSelf(args, 3, caller)
@@ -1121,7 +1154,7 @@ return Base(module, {
 	{ Path = "World/Combat", Imports = "Death.h|Battleground.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h|Auras.h|Skills.h|Talents.h" },
-	{ Path = "Auth/Social", Imports = "Reputation.h|Achievements.h" },
+	{ Path = "Auth/Social", Imports = "Reputation.h|Achievements.h|Lfg.h|Titles.h" },
 	{ Path = "World/Content", Imports = "Teleports.h|GameObjects.h|Creatures.h|Taxi.h|Pets.h|Items.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 	{ Path = "Global/Database", Imports = "Database.h" },

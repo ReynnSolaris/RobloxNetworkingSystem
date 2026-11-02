@@ -59,6 +59,7 @@ function module:OnKill(killer: Player, victim: Player)
 	killer:SetAttribute("Honor", char.Honor)
 	killer:SetAttribute("HonorKills", char.HonorKills)
 	self.includes.Social["Achievements.h"]:OnHonor(killer, char.HonorKills)
+	self.includes.Social["Titles.h"]:OnHonor(killer, char.Honor)
 	local Chat = self.includes.Chat["Chat.h"]
 	local name = victim:GetAttribute("CharacterName") or victim.Name
 	Chat:System(killer, if honor > 0 then ("%s dies, honorable kill Rank: %d honor."):format(name, honor) else ("%s dies, no honor gained."):format(name))
@@ -95,7 +96,7 @@ end
 return Base(module, {
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
-	{ Path = "Auth/Social", Imports = "Achievements.h" },
+	{ Path = "Auth/Social", Imports = "Achievements.h|Titles.h" },
 	{ Path = "World/Zones", Imports = "Zones.h" },
 	{ Path = "World/Combat", Imports = "Battleground.h" },
 })

@@ -37,10 +37,16 @@ local charClass = Components.attribute(scope, player, "CharacterClass", "")
 local charRace = Components.attribute(scope, player, "CharacterRace", "")
 local honor = Components.attribute(scope, player, "Honor", 0)
 local honorKills = Components.attribute(scope, player, "HonorKills", 0)
+local titlesJson = Components.attribute(scope, player, "Titles", "[]")
+local currentTitle = Components.attribute(scope, player, "CharacterTitle", "")
+local titleOpen = scope:Value(false)
 
 local function decode(json: string, default)
 	local ok, value = pcall(HttpService.JSONDecode, HttpService, json)
 	return if ok and typeof(value) == "table" then value else default
+end
+local function SpellUiDecode(json)
+	return decode(json or "[]", {})
 end
 
 local worn = scope:Computed(function(use)
@@ -244,6 +250,39 @@ Components.Panel(scope, {
 		Components.Text(scope, { Size = UDim2.new(1, -24, 0, 20), Position = UDim2.new(0, 12, 1, -26), Color = Ui.GOLD, Align = Enum.TextXAlignment.Right, Text = scope:Computed(function(use)
 			return Ui.money(use(money))
 		end) }),
+		-- title picker
+		Components.Button(scope, { Size = UDim2.fromOffset(150, 22), Position = UDim2.new(0, 12, 1, -26), TextSize = 11, Text = scope:Computed(function(use)
+			local t = use(currentTitle)
+			return if t ~= "" then "Title: " .. (t:gsub("%%s", "")):gsub("^%s+", ""):gsub("%s+$", "") else "Title: none"
+		end), OnClick = function()
+			titleOpen:set(not peek(titleOpen))
+		end }),
+		scope:New "Frame" {
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 12, 1, -50),
+			Size = UDim2.fromOffset(220, 160),
+			BackgroundColor3 = Ui.PANEL,
+			BorderSizePixel = 0,
+			Visible = titleOpen,
+			ZIndex = 5,
+			[Children] = {
+				scope:New "UICorner" { CornerRadius = UDim.new(0, 4) },
+				scope:New "UIStroke" { Color = Ui.BORDER },
+				Components.List(scope, { Size = UDim2.new(1, -8, 1, -8), Position = UDim2.fromOffset(4, 4), Rows = scope:Computed(function(use)
+					local out = { { Text = "No title", OnClick = function()
+						netSend:Fire(Opcodes.CMSG_SET_TITLE, { Title = "" })
+						titleOpen:set(false)
+					end } }
+					for _, title in SpellUiDecode(use(titlesJson)) do
+						table.insert(out, { Text = (title:gsub("%%s", use(charName))), OnClick = function()
+							netSend:Fire(Opcodes.CMSG_SET_TITLE, { Title = title })
+							titleOpen:set(false)
+						end })
+					end
+					return out
+				end) }),
+			},
+		},
 	},
 })
 

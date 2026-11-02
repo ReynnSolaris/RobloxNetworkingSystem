@@ -97,6 +97,23 @@ function Ui.itemTooltip(item, price: string?): string
 	end
 	if item.Flavor then table.insert(lines, ('<font color="#FFD100"><i>"%s"</i></font>'):format(item.Flavor)) end
 	if (item.Stack or 1) > 1 then table.insert(lines, ('<font color="#AAAAAA">Max Stack: %d</font>'):format(item.Stack)) end
+	if item.Set then
+		local ok, stats = pcall(HttpService.JSONDecode, HttpService, player:GetAttribute("Stats") or "{}")
+		local worn = if ok and typeof(stats) == "table" and stats.Sets then stats.Sets[tostring(item.Set.Id)] or 0 else 0
+		table.insert(lines, ('<font color="#FFD100">%s (%d/%d)</font>'):format(item.Set.Name, worn, #(item.Set.Items or {})))
+		local counts = {}
+		for need in (item.Set.Bonuses or {}) do
+			table.insert(counts, tonumber(need))
+		end
+		table.sort(counts)
+		for _, need in counts do
+			local parts = {}
+			for stat, value in item.Set.Bonuses[tostring(need)] do
+				table.insert(parts, ("+%d %s"):format(value, if stat == "SpellPower" then "Spell Power" else stat))
+			end
+			table.insert(lines, ('<font color="%s">(%d) Set: %s</font>'):format(if worn >= need then "#1EFF00" else "#808080", need, table.concat(parts, ", ")))
+		end
+	end
 	if item.Slot then
 		table.insert(lines, ('<font color="#AAAAAA">Item Score %d</font>'):format(Ui.itemScore(item)))
 	end
@@ -381,8 +398,13 @@ task.spawn(function()
 						color = c.Color
 					end
 				end
+				local title = other:GetAttribute("CharacterTitle")
+				local shown = other:GetAttribute("CharacterName") or other.DisplayName
+				if title and title ~= "" then
+					shown = if title:find("%%s") then title:format(shown) else title .. " " .. shown
+				end
 				show = ('<font size="16" color="%s"><b>%s</b></font>%s\n<font color="#FFFFFF">Level %d %s %s</font>%s'):format(color,
-					other:GetAttribute("CharacterName") or other.DisplayName,
+					shown,
 					if other:GetAttribute("Guild") then ('\n<font color="#40FB40">&lt;%s&gt;</font>'):format(other:GetAttribute("Guild")) else "",
 					other:GetAttribute("CharacterLevel") or 1, other:GetAttribute("CharacterRace") or "", class or "",
 					if other:GetAttribute("PvpFlag") then '\n<font color="#FF4040">PvP</font>' else "")

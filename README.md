@@ -125,6 +125,8 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | CMSG_BATTLEMASTER_JOIN / CMSG_LEAVE_BATTLEFIELD / SMSG_BATTLEFIELD_STATUS | both | `{ Id }`; leave or cancel; `{ Status = queued|active|ended|none, Scores, Flags, Winner }` |
 | CMSG_CONVERT_RAID / CMSG_SET_SUBGROUP | client | party to raid; `{ Target, Group }` |
 | CMSG_SAVE_SETTINGS / SMSG_SETTINGS | both | `{ Settings }` JSON under 8 KB, per account |
+| CMSG_SET_TITLE / CMSG_LOOT_METHOD / CMSG_MOUNT_SPECIAL | client | `{ Title }`; `{ Method, Target? }`; rear up |
+| CMSG_LFG_JOIN / CMSG_LFG_LEAVE / SMSG_LFG_STATUS | both | `{ Dungeon, Role }` or `{ List = true }`; leave; `{ Status, Have, Need }` or the dungeon list |
 | SMSG_QUESTGIVER_STATUS_MULTIPLE | server | `{ Statuses = { [guid] = available|complete|incomplete|none } }` for the markers |
 | SMSG_VENDOR_LIST | server | `{ Guid, Items }` opens the vendor window |
 | CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
@@ -214,7 +216,7 @@ GAMEMASTER  .buff <all|player> <speed|jump> <multiplier> <seconds>
             .taxi node add <name> [cost] | .taxi path <from> <to> [cost] | .taxi list | .taxi learn all [player]
             .npc wp add [guid] [wait] | .npc wp clear [guid]
             .event list | .event info <id> | .pet <creature entry> [player] | .pet dismiss [player]
-            .gm gear | .gm testarea [clear]
+            .gm gear | .gm testarea [clear] | .lfg entrance <id> | .lfg list | .title add|set <title> [player] | .title list
             .bg create <name> [minlevel] | .bg spawn <id> Alliance|Horde | .bg flag <id> Alliance|Horde | .bg list | .bg leave [player]
             .npc add <entry> | delete [guid] | move [guid] | kill [guid] | say [guid] <text> | info [guid] | near
             .loot template add <creatureEntry> <itemEntry> <chance> [min] [max] | template list [entry]
@@ -301,7 +303,7 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | gameobject | guid | id (entry), x, y, z, o, scale, spawntimesecs, by |
 | game_tele | id | name, x, y, z, o |
 | game_graveyard | id | name, x, y, z, o |
-| quest_template | id | title, details, objectives, minlevel, level, reward_xp, reward_money, reward_items, req_creature, req_item, class, race, prevquest, reward_rep |
+| quest_template | id | title, details, objectives, minlevel, level, reward_xp, reward_money, reward_items, req_creature, req_item, req_explore, req_talk, daily, class, race, prevquest, reward_rep |
 | creature_queststarter / creature_questender | id | entry (creature), quest |
 | spell_template | id | name, rank, description, class, school, effect (damage, heal, aura, hearth), base, per_level, cost, cast_time, cooldown, range, target (enemy, friend, self), aura = { kind, stat, mult, interval, duration, harmful }, icon, npc |
 | playercreateinfo_spell | id | class, spell |
@@ -315,6 +317,8 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | taxi_nodes / taxi_path | id | name, x, y, z, cost / from, to, cost, points |
 | game_event | id | name, description, start, length (min), occurrence (min), xp_mult |
 | battleground_template | id | name, minlevel, spawn = { Alliance, Horde }, flag = { Alliance, Horde } |
+| item_set | id | name, items, bonuses = { [count] = { stat = amount } } |
+| lfg_dungeon | id | name, minlevel, maxlevel, x, y, z, o |
 
 Outside the world tables, the World store also keeps `names` (character name to
 account, for mail and friends), `mail:<name>` (a character's letters),
@@ -708,6 +712,23 @@ riding skill you have not trained. Trinkets carry `proc = { spell, chance }`
 for "Chance on hit" effects (Flickering Candle, Bandit's Insignia, from
 Goldtooth) or a `use` spell used by right-clicking the worn trinket (Vial of
 Vigor, Swiftness Charm). Every window scales with the viewport height.
+
+## Item sets, titles, quest types, loot methods, dungeon finder
+
+`item_set` rows (Recruit's Set, Gamemaster's Regalia) name their pieces and
+bonuses by count; worn pieces add the bonuses in ApplyStats and the tooltip
+lists the set with its bonuses lit as you reach them. Titles come from honor
+ranks (`Config.Titles.Ranks`, Private to Grand Marshal) and from achievements
+with a `title` ("%s the Explorer"); pick one on the character sheet or with
+`/title`, and it shows over the head and in tooltips. Quests may ask you to
+explore a zone (`req_explore`), speak with a creature (`req_talk`), or be
+`daily` (reset at `Config.Daily.ResetHour` UTC, `Limit` a day); "Candle Tax",
+"Survey the Forest" and "Report for Training" seed each. `/loot group|ffa|master
+[name]` sets the party's loot method: group rolls, free for all, or only the
+master looter takes uncommon and better. The dungeon finder on I (or `/lfg`)
+lists `lfg_dungeon` rows with entrances set by `.lfg entrance`; queue as tank,
+healer or damage, and with `Config.Lfg.Roles` filled a party forms with group
+loot and ports to the entrance.
 
 ## Blizzlike UI, spellbook tabs, bars per form, saved settings
 

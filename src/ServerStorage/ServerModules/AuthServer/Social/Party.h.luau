@@ -56,8 +56,64 @@ function module:Update(party)
 		groups[member.Name] = party.Groups[member] or 1
 	end
 	for _, member in party.Members do
-		Packet:Send(member, Opcodes.SMSG_PARTY_UPDATE, { Leader = party.Leader.Name, Members = names, Raid = party.Raid == true, Groups = groups })
+		Packet:Send(member, Opcodes.SMSG_PARTY_UPDATE, { Leader = party.Leader.Name, Members = names, Raid = party.Raid == true, Groups = groups, LootMethod = party.LootMethod or "group", MasterLooter = party.MasterLooter and party.MasterLooter.Name })
 	end
+end
+
+-- Loot method: "group" rolls on uncommon and better, "ffa" takes freely,
+-- "master" leaves those items to the master looter.
+function module:LootMethod(player: Player): (string, Player?)
+	local party = self.information[player]
+	if not party then
+		return "ffa", nil
+	end
+	return party.LootMethod or "group", party.MasterLooter or party.Leader
+end
+
+function module:SetLootMethod(leader: Player, method: string?, name: string?)
+	local party = self.information[leader]
+	if not party or party.Leader ~= leader then
+		return say(self, leader, "You are not the party leader.")
+	elseif method ~= "group" and method ~= "ffa" and method ~= "master" then
+		return say(self, leader, "Loot methods are group, ffa and master.")
+	end
+	party.LootMethod = method
+	if method == "master" then
+		local target = if name then self.includes.Entities["EntityPlayer.h"]:FindByName(name) else leader
+		if not target or self.information[target] ~= party then
+			return say(self, leader, tostring(name) .. " is not in your party.")
+		end
+		party.MasterLooter = target
+	end
+	local text = if method == "master" then ("Loot method set to Master Looter: %s."):format(nameOf(party.MasterLooter)) elseif method == "ffa" then "Loot method set to Free for All." else "Loot method set to Group Loot."
+	for _, member in party.Members do
+		say(self, member, text)
+	end
+	self:Update(party)
+end
+
+-- A party made for the player list (the dungeon finder), first member leads.
+function module:Form(members: { Player }): any?
+	local party = { Leader = members[1], Members = {}, Groups = {}, LootMethod = "group" }
+	for _, member in members do
+		if self.information[member] then
+			self:Leave(member)
+		end
+		table.insert(party.Members, member)
+		party.Groups[member] = 1
+		self.information[member] = party
+	end
+	if #party.Members < 2 then
+		for _, member in party.Members do
+			self.information[member] = nil
+		end
+		return nil
+	end
+	for _, member in party.Members do
+		say(self, member, "Your group has been formed.")
+	end
+	self:Update(party)
+	return party
 end
 
 function module:IsRaid(player: Player): boolean
@@ -226,6 +282,11 @@ function module:Start()
 		uninvite = function(player, target) self:Uninvite(player, target) end,
 		promote = function(player, target) self:Promote(player, target) end,
 	}
+	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_LOOT_METHOD, function(player, data)
+		if typeof(data) == "table" then
+			self:SetLootMethod(player, data.Method, data.Target)
+		end
+	end)
 	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_CONVERT_RAID, function(player)
 		self:Convert(player)
 	end)

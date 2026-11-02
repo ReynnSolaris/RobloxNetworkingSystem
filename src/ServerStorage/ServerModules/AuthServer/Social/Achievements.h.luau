@@ -16,13 +16,13 @@ local SEED = {
 	{ name = "Level 40", description = "Reach level 40.", category = "General", points = 10, criteria = { type = "level", value = 40 } },
 	{ name = "Level 80", description = "Reach level 80.", category = "General", points = 20, criteria = { type = "level", value = 80 } },
 	{ name = "Creature Comforts", description = "Slay 50 creatures.", category = "Kill", points = 10, criteria = { type = "kills", value = 50 } },
-	{ name = "Need More Candles", description = "Slay 500 creatures.", category = "Kill", points = 10, criteria = { type = "kills", value = 500 } },
+	{ name = "Need More Candles", description = "Slay 500 creatures.", category = "Kill", points = 10, criteria = { type = "kills", value = 500 }, title = "Candlekeeper %s" },
 	{ name = "First Steps", description = "Complete a quest.", category = "Quests", points = 10, criteria = { type = "quests", value = 1 } },
 	{ name = "50 Quests Completed", description = "Complete 50 quests.", category = "Quests", points = 10, criteria = { type = "quests", value = 50 } },
 	{ name = "Explore Northshire", description = "Discover Northshire Valley.", category = "Exploration", points = 10, criteria = { type = "explore", name = "Northshire Valley" } },
-	{ name = "Explore Elwynn Forest", description = "Discover Elwynn Forest.", category = "Exploration", points = 10, criteria = { type = "explore", name = "Elwynn Forest" } },
+	{ name = "Explore Elwynn Forest", description = "Discover Elwynn Forest.", category = "Exploration", points = 10, criteria = { type = "explore", name = "Elwynn Forest" }, title = "%s the Explorer" },
 	{ name = "Got My Mind On My Money", description = "Loot 100 gold.", category = "General", points = 10, criteria = { type = "money", value = 1000000 } },
-	{ name = "Duel-icious", description = "Win a duel.", category = "PvP", points = 10, criteria = { type = "duels", value = 1 } },
+	{ name = "Duel-icious", description = "Win a duel.", category = "PvP", points = 10, criteria = { type = "duels", value = 1 }, title = "%s the Duelist" },
 	{ name = "That Takes Class", description = "Earn 10 honorable kills.", category = "PvP", points = 10, criteria = { type = "honor", value = 10 } },
 	{ name = "Journeyman Cook", description = "Reach 75 skill in Cooking.", category = "Professions", points = 10, criteria = { type = "skill", name = "Cooking", value = 75 } },
 	{ name = "Professional", description = "Reach 75 skill in any profession.", category = "Professions", points = 10, criteria = { type = "skill", value = 75 } },
@@ -65,6 +65,9 @@ function module:Award(player: Player, row)
 	end
 	c.Achievements[tostring(row.id)] = os.time()
 	self.includes.Database["WorldDatabase.h"]:Commit(player)
+	if row.title then
+		self.includes.Social["Titles.h"]:Grant(player, row.title)
+	end
 	local Packet = self.includes.Security["Packet.h"]
 	Packet:Send(player, Opcodes.SMSG_ACHIEVEMENT_EARNED, { Id = row.id, Name = row.name, Description = row.description, Points = row.points or 10 })
 	local name = player:GetAttribute("CharacterName") or player.Name
@@ -177,5 +180,6 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h|ChatFunctions.h|ChatRegistry.h" },
+	{ Path = "Auth/Social", Imports = "Titles.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 })

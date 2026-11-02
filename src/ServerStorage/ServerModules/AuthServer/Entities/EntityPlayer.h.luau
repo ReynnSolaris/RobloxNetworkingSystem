@@ -83,6 +83,26 @@ function module:ApplyStats(player: Player)
 			end
 		end
 	end
+	-- set bonuses: count worn pieces of each set, add every bonus reached
+	local Items = self.includes.Content["Items.h"]
+	local worn = {}
+	for slot, entry in (char.Equipment or {}) do
+		local set = Items:SetOf(entry)
+		if set and not (slot:sub(1, 3) == "bag") then
+			worn[set.id] = (worn[set.id] or 0) + 1
+		end
+	end
+	for id, count in worn do
+		local set = DB:Get("item_set", id)
+		for need, bonus in (set and set.bonuses or {}) do
+			if count >= tonumber(need) then
+				for stat, value in bonus do
+					stats[stat] = (stats[stat] or 0) + value
+				end
+			end
+		end
+	end
+	stats.Sets = worn
 	local mods = self.includes.Spells["Auras.h"]:Mods(player)
 	for _, name in S.Names do
 		stats[name] += (mods[name] or 0) + (mods.Stats[name] or 0)
@@ -100,6 +120,11 @@ function module:ApplyStats(player: Player)
 		if typeof(value) == "number" then
 			stats[key] = math.floor(value * 10 + 0.5) / 10
 		end
+	end
+	-- the title in the name over the head
+	local humanoid0 = humanoidOf(entity)
+	if humanoid0 and char.Title then
+		humanoid0.DisplayName = self.includes.Social["Titles.h"].Format(char.Title, char.Name)
 	end
 	stats.Health = math.floor(stats.Health)
 	entity.Stats = stats
@@ -1293,6 +1318,6 @@ return Base(module, {
 	{ Path = "World/Spells", Imports = "Spells.h|Auras.h|Talents.h" },
 	{ Path = "World/Zones", Imports = "Zones.h|GameEvents.h" },
 	{ Path = "World/Content", Imports = "Creatures.h|Items.h" },
-	{ Path = "Auth/Social", Imports = "Achievements.h" },
+	{ Path = "Auth/Social", Imports = "Achievements.h|Titles.h" },
 	{ Path = "Global/System", Imports = "Effects.h" },
 })

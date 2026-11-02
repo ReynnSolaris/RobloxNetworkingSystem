@@ -186,8 +186,13 @@ function module:TakeItem(player: Player, index: number)
 		return
 	end
 	local template = self.includes.Content["Items.h"]:Template(entry.Entry)
-	if template and (template.quality or 1) >= Config.Loot.RollQuality and self:StartRoll(player, source, index, entry) then
-		return
+	if template and (template.quality or 1) >= Config.Loot.RollQuality then
+		local method, master = self.includes.Social["Party.h"]:LootMethod(player)
+		if method == "master" and master and master ~= player then
+			return self.includes.Chat["Chat.h"]:System(player, ("Only the master looter, %s, may take that."):format(master:GetAttribute("CharacterName") or master.Name))
+		elseif method == "group" and self:StartRoll(player, source, index, entry) then
+			return
+		end
 	end
 	if self.includes.Entities["EntityPlayer.h"]:AddItem(player, entry.Entry, entry.Count) then
 		source.Loot.Items[index] = nil

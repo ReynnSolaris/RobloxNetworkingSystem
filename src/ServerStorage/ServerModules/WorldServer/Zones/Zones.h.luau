@@ -44,6 +44,7 @@ function module:Start()
 					self.information[player] = zone
 					if zone then
 						self.includes.Entities["EntityPlayer.h"]:Discover(player, zone.Name)
+						self.includes.Quests["Quests.h"]:OnZone(player, zone.Name)
 					end
 					Packet:Send(player, Opcodes.SMSG_ZONE_UPDATE, if zone then {
 						Name = zone.Name,
@@ -83,4 +84,5 @@ end
 return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
+	{ Path = "World/Quests", Imports = "Quests.h" },
 })

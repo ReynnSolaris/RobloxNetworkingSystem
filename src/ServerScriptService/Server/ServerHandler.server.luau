@@ -78,6 +78,8 @@ local Trade = World.Content["Trade.h"]
 local Pets = World.Content["Pets.h"]
 local GameEvents = World.Zones["GameEvents.h"]
 local Battleground = World.Combat["Battleground.h"]
+local Titles = Auth.Social["Titles.h"]
+local Lfg = Auth.Social["Lfg.h"]
 local Bus = Global.System["Global.h"]
 local Database = Global.Database["Database.h"]
 
@@ -119,6 +121,8 @@ Trade:Start()
 Pets:Start()
 GameEvents:Start()
 Battleground:Start()
+Titles:Start()
+Lfg:Start()
 WorldDB:EndSeed()
 print("[Boot] ready")
 Session:OnAuthed(function(player)

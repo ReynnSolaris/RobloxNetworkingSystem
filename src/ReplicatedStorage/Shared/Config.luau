@@ -235,6 +235,17 @@ return table.freeze({
 	-- One game day lasts DayMinutes real minutes; weather rerolls every WeatherMinutes.
 	World = { DayMinutes = 60, WeatherMinutes = 10, Weathers = { "clear", "clear", "clear", "rain", "storm", "snow", "fog" } },
 	GuildBank = { Slots = 48 },
+	-- PvP rank titles by honor earned, lowest first.
+	Titles = {
+		Ranks = { { Honor = 100, Name = "Private" }, { Honor = 300, Name = "Corporal" }, { Honor = 600, Name = "Sergeant" }, { Honor = 1000, Name = "Master Sergeant" },
+			{ Honor = 1500, Name = "Sergeant Major" }, { Honor = 2500, Name = "Knight" }, { Honor = 4000, Name = "Knight-Lieutenant" }, { Honor = 6000, Name = "Knight-Captain" },
+			{ Honor = 9000, Name = "Knight-Champion" }, { Honor = 13000, Name = "Lieutenant Commander" }, { Honor = 18000, Name = "Commander" }, { Honor = 25000, Name = "Marshal" },
+			{ Honor = 35000, Name = "Field Marshal" }, { Honor = 50000, Name = "Grand Marshal" } },
+	},
+	-- Daily quests reset at this UTC hour and a character may complete this many a day.
+	Daily = { ResetHour = 4, Limit = 25 },
+	-- Dungeon finder: the roles a group needs, and the party size it makes.
+	Lfg = { Roles = { tank = 1, healer = 1, dps = 3 } },
 	-- Reputation standings, WoW thresholds, with the vendor discount each earns.
 	Reputation = {
 		Min = -42000, Max = 42999,

@@ -308,6 +308,7 @@ function module:Finish(match, winner: string)
 			local honor = if factionOf(member) == winner then Config.Battleground.HonorWin else Config.Battleground.HonorLoss
 			char.Honor = (char.Honor or 0) + honor
 			member:SetAttribute("Honor", char.Honor)
+			self.includes.Social["Titles.h"]:OnHonor(member, char.Honor)
 			self.includes.Chat["Chat.h"]:System(member, ("You receive %d honor."):format(honor))
 		end
 	end
@@ -406,6 +407,7 @@ return Base(module, {
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
 	{ Path = "World/Combat", Imports = "Death.h" },
+	{ Path = "Auth/Social", Imports = "Titles.h" },
 	{ Path = "World/Spells", Imports = "Auras.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h" },
 })

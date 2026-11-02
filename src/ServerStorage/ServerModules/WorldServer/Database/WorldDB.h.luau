@@ -32,6 +32,8 @@ local TABLES = {
 	achievement = "id",
 	game_event = "id",
 	battleground_template = "id",
+	item_set = "id",
+	lfg_dungeon = "id",
 }
 module.TABLES = TABLES
 
