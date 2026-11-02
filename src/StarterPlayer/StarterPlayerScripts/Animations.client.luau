@@ -149,7 +149,7 @@ local function rigPlay(body: Model, state: string)
 	if rigState[body] == state then
 		return
 	end
-	local controller = body:FindFirstChildOfClass("AnimationController") or body:FindFirstChildOfClass("Humanoid")
+	local controller = body:FindFirstChildWhichIsA("AnimationController", true) or body:FindFirstChildWhichIsA("Humanoid", true)
 	if not controller then
 		return
 	end

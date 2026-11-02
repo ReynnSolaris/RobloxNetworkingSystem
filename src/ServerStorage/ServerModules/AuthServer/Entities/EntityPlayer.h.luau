@@ -1009,25 +1009,36 @@ local function attachRigged(character: Model, name: string, template: Model, roo
 		min, max = bounds(model)
 	end
 	local center = (min + max) / 2
-	local halfHeight = (max.Y - min.Y) / 2
+	local size = max - min
+	local halfHeight = size.Y / 2
 	local rotation = model:GetAttribute("Rotation")
 	local offset = model:GetAttribute("Offset")
-	local rot = if typeof(rotation) == "Vector3" then CFrame.Angles(math.rad(rotation.X), math.rad(rotation.Y), math.rad(rotation.Z)) else CFrame.new()
+	-- an animal is longer than it is wide: a body stretched along X turns to face -Z like the rider
+	local rot
+	if typeof(rotation) == "Vector3" then
+		rot = CFrame.Angles(math.rad(rotation.X), math.rad(rotation.Y), math.rad(rotation.Z))
+	elseif size.X > size.Z * 1.2 then
+		rot = CFrame.Angles(0, math.rad(90), 0)
+	else
+		rot = CFrame.new()
+	end
 	local nudge = if typeof(offset) == "Vector3" then offset else Vector3.zero
-	-- the rider sits on the back: the top of the body a little under the root
-	local seat = CFrame.new(0, -(halfHeight + 0.8), 0) * CFrame.new(nudge)
+	-- the rider sits on the back, below the head and ears: a little under the
+	-- root, about a fifth of the height down from the top
+	local seatDrop = halfHeight - size.Y * 0.2 + 0.6
+	local seat = CFrame.new(0, -seatDrop, 0) * CFrame.new(nudge)
 	local delta = root.CFrame * rot * seat * CFrame.new(-center)
 	model:PivotTo(delta * model:GetPivot())
-	local body = model.PrimaryPart or model:FindFirstChild("Root") or model:FindFirstChildWhichIsA("BasePart")
+	local body = model.PrimaryPart or model:FindFirstChild("Root", true) or model:FindFirstChild("root", true) or model:FindFirstChildWhichIsA("BasePart", true)
 	local weld = Instance.new("WeldConstraint")
 	weld.Part0, weld.Part1 = root, body
 	weld.Parent = body
 	model:SetAttribute("Rigged", true)
-	if not model:FindFirstChildOfClass("AnimationController") and not model:FindFirstChildOfClass("Humanoid") then
+	if not model:FindFirstChildWhichIsA("AnimationController", true) and not model:FindFirstChildWhichIsA("Humanoid", true) then
 		Instance.new("AnimationController", model)
 	end
 	model.Parent = character
-	return model, -(halfHeight * 2 + 0.8) + nudge.Y
+	return model, -(seatDrop + halfHeight) + nudge.Y
 end
 
 -- Reads a template Model into the part list attachBody takes.

@@ -750,10 +750,12 @@ AnimationController or Humanoid on the Model, drop it in MountTemplates or
 FormTemplates named like the spell's `aura.model` or form, and set its
 attributes AnimIdle, AnimWalk, AnimFly and AnimSpecial to the uploaded
 animation ids (upload each clip from the Animation Editor). Stand the template
-upright facing -Z in ServerStorage; the server ignores the importer's pivot,
-scales the rig to `Height` studs (5.5 by default), turns it by `Rotation`
-(degrees) and nudges it by `Offset`, seats the rider on its back, raises the
-rider by its depth, and welds its root part. The clients play the clip for the
+upright in ServerStorage; the server ignores the importer's pivot, scales the
+rig to `Height` studs (5.5 by default), turns a body that is longer along X to
+face the rider's way (or by `Rotation` in degrees when set), nudges it by
+`Offset`, seats the rider on its back a fifth of the height below the top,
+raises the rider by its depth, and welds its root part. The animation
+controller may sit anywhere inside the rig. The clients play the clip for the
 state instead of the procedural legs. Creatures with `texts` chatter from them at
 random when someone is near, TC's creature_text.
 
