@@ -1,0 +1,10 @@
+{
+  "className": "Part",
+  "properties": {
+    "Anchored": true,
+    "Size": [80, 2, 80],
+    "Position": [-400, -1, -400],
+    "Material": "Grass",
+    "Color": [0.35, 0.55, 0.3]
+  }
+}

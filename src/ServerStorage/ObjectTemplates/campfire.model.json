@@ -1,0 +1,5 @@
+{ "className": "Model", "children": [
+  { "name": "Logs", "className": "Part", "properties": { "Anchored": true, "Shape": "Cylinder", "Size": [1, 4, 4], "Orientation": [0, 0, 90], "Material": "Wood", "Color": [0.3, 0.2, 0.1] } },
+  { "name": "Flame", "className": "Part", "properties": { "Anchored": true, "CanCollide": false, "Shape": "Ball", "Size": [2, 2, 2], "Position": [0, 1.5, 0], "Material": "Neon", "Color": [1, 0.55, 0.1] },
+    "children": [ { "name": "Light", "className": "PointLight", "properties": { "Color": [1, 0.6, 0.2], "Range": 18, "Brightness": 2 } } ] }
+] }

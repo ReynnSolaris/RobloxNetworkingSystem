@@ -27,10 +27,12 @@ src/ServerStorage/ServerModules/
   AuthServer/Chat/                 Chat, ChatRegistry, ChatFunctions
   AuthServer/Support/              Tickets
   AuthServer/Social/               Party
-  WorldServer/Database/            WorldDatabase (the account's characters)
+  WorldServer/Database/            WorldDatabase (the account's characters), WorldDB (TrinityCore-style tables)
   WorldServer/Characters/          Characters (enum, create, delete, login, logout)
   WorldServer/Zones/               Zones (which zone each player stands in)
   WorldServer/Movement/            Anticheat (movement validation)
+  WorldServer/Content/             Creatures, GameObjects, Teleports (spawns from WorldDB rows)
+src/ServerStorage/ObjectTemplates/                 models .gobject can place
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus)
 src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, ZoneBanner, PartyFrame
@@ -114,19 +116,29 @@ Commands are typed in chat with a leading dot, WoW style. A PLAYER gets
 "There is no such command"; `.help` lists what the caller's role can run.
 
 ```
-MODERATOR   .help  .who  .server info  .zone  .gm on|off  .gm invis on|off  .gm list
+MODERATOR   .help [command]  .who  .server info  .zone  .gps  .gm on|off  .gm invis on|off  .gm list
             .ac status | .ac reset <player> | .ac on|off
             .ticket list | view <id> | reply <id> <text> | close <id>
             .freeze <player>  .unfreeze <player>  .mute <player> <minutes> [reason]
             .unmute <player>  .kick <player> [reason]
 GAMEMASTER  .buff <all|player> <speed|jump> <multiplier> <seconds>
-            .tele <x> <y> <z> | .tele <player>  .appear <player>  .summon <player>
+            .tele <name> | <x> <y> <z> | add <name> | del <name> | list
+            .appear <player>  .summon <player>  .reload creature|gameobject
+            .gobject add <entry> [yaw] [scale] | delete [guid] | move [guid] | turn [guid] <deg> | near
+            .gobject template add <name> <modelid> [size] | template list
+            .npc add <entry> | delete [guid] | move [guid] | say [guid] <text> | info [guid] | near
+            .npc template add <name> [modelid] [subname] | template set <entry> <field> <value> | template list
+MODERATOR   .lookup creature|object|tele <name>
             .speed <0.1-10> [player]  .hurt <player> <amount>  .heal [player]
-            .kill [player]  .revive [player]  .maxhealth <amount> [player]
+            .kill [player]  .revive [player]  .maxhealth <amount> [player]  .time <0-24>
+            .morph <userId> [player]  .demorph [player]  .modify hp|speed|scale <value> [player]
             .ban <player> [reason]  .unban <userId>  .announce <text>
             .save [player]  .saveall
 OWNER       .role <player> <PLAYER|MODERATOR|GAMEMASTER|OWNER>
 ```
+
+`.help <command>` or `.<command> help` prints a command's forms. Aliases: `.gobj`,
+`.go`, `.look`, `.tp`, `.goname`, `.namego`, `.ann`, `.h`, `.die`.
 
 `.gm on` puts a blue `<GM>` tag on the GM's chat. `.gm invis on` fades the GM to 60%
 for staff and hides them completely, nametag included, from players; it is purely
@@ -177,6 +189,33 @@ the player back to the last good position and counts a strike; strikes decay aft
 `WindowSeconds`; at `Strikes` every online GM gets a yellow alert. Server-side moves
 (`.tele`, `.summon`, spawns) call `Anticheat:Allow` first so they never trip it, and
 GM mode is exempt. `.ac` shows strikes, resets a player, or toggles the check.
+
+## World database
+
+`WorldDB.h` is the TrinityCore world database on a DataStore. Each table is one
+record edited with `UpdateAsync` and every write goes out on the bus, so a GM
+placing something on one server sees it appear on all of them. Tables and keys:
+
+| Table | Key | Columns |
+|---|---|---|
+| creature_template | entry | name, subname, modelid, scale, gossip |
+| creature | guid | id (entry), x, y, z, o, by |
+| gameobject_template | entry | name, modelid, size |
+| gameobject | guid | id (entry), x, y, z, o, scale, by |
+| game_tele | id | name, x, y, z, o |
+
+Templates are the assets, spawns reference them by entry, like TC. A creature's
+`modelid` is `default`, `user:<UserId>` (that account's look) or `model:<Name>` for a
+rig under `ServerStorage/CreatureModels`. An object's `modelid` is a Model name under
+`ServerStorage/ObjectTemplates` (crate, barrel, campfire, stone ship and seed the
+table on first run) or `asset:<id>`. Spawns sit flush on the ground, facing the GM
+who placed them, and keep a yaw. Creatures stand anchored with a Talk prompt that
+says the template's `gossip`. Three creature templates seed the table.
+
+Commands follow TC: `.lookup creature guard`, `.npc add 2`, `.npc template set 2
+gossip Halt!`, `.gobject add 3 45`, `.gobject turn 90`, `.reload creature`. Where a
+command takes `[guid]`, leaving it out picks the nearest spawn within 15 studs.
+Change a template and every spawn of it respawns, on every server.
 
 ## Cross-server
 

@@ -1,0 +1,3 @@
+{ "className": "Model", "children": [
+  { "name": "Body", "className": "Part", "properties": { "Anchored": true, "Shape": "Ball", "Size": [5, 5, 5], "Material": "Slate", "Color": [0.45, 0.45, 0.47] } }
+] }

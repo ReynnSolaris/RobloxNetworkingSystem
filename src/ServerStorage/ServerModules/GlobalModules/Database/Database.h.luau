@@ -102,9 +102,10 @@ function module:Open(name: string)
 		return cache[key]
 	end
 
-	-- Drop the cached copy so the next Get reads the live value.
+	-- Drop the cached copy so the next Get reads the live value. In memory-only
+	-- mode the cache is the only copy, so it stays.
 	function store.Refresh(_, key: string)
-		if not dirty[key] then
+		if online and not dirty[key] then
 			cache[key] = nil
 		end
 	end

@@ -60,19 +60,81 @@ end
 
 -- info
 
-add("help", 1, ".help", function(self, caller)
+local ALIASES = { gobj = "gobject", go = "gobject", look = "lookup", tp = "tele", goname = "appear", namego = "summon", ann = "announce", h = "help", die = "kill" }
+
+-- One line per form of a command's usage.
+function module:Usage(caller: Player, name: string)
+	local command = commands[name]
+	if not command then
+		return self:Reply(caller, "There is no such command. Try .help")
+	end
+	self:Reply(caller, "." .. name .. " (" .. self.includes.Security["RBAC_Permissions.h"]:GetRoleName(command.level) .. "):")
+	for _, form in command.usage:split(" | ") do
+		self:Reply(caller, "  " .. form)
+	end
+end
+
+add("help", 1, ".help [command]", function(self, caller, args)
+	if args[1] then
+		return self:Usage(caller, ALIASES[args[1]:lower()] or args[1]:lower())
+	end
 	local RBAC = self.includes.Security["RBAC_Permissions.h"]
 	local role = RBAC:GetRole(caller)
 	local lines = {}
-	for _, cmd in commands do
+	for name, cmd in commands do
 		if role >= cmd.level then
-			table.insert(lines, cmd.usage)
+			table.insert(lines, "." .. name)
 		end
 	end
 	table.sort(lines)
-	self:Reply(caller, ("Commands for %s:"):format(RBAC:GetRoleName(role)))
-	for _, line in lines do
-		self:Reply(caller, "  " .. line)
+	self:Reply(caller, ("Commands for %s (.help <command> for forms):"):format(RBAC:GetRoleName(role)))
+	self:Reply(caller, "  " .. table.concat(lines, "  "))
+end)
+
+add("gps", 1, ".gps", function(self, caller)
+	local pivot = assert(caller.Character, "you have no character"):GetPivot()
+	local _, yaw = pivot:ToEulerAnglesYXZ()
+	local zone = self.includes.Zones["Zones.h"]:Current(caller)
+	self:Reply(caller, ("X %.1f Y %.1f Z %.1f, facing %.0f, %s"):format(pivot.X, pivot.Y, pivot.Z, math.deg(yaw), if zone then zone.Name else "no zone"))
+end)
+
+add("time", 2, ".time <0-24>", function(self, caller, args)
+	game:GetService("Lighting").ClockTime = math.clamp(assert(tonumber(args[1]), "expected an hour"), 0, 24)
+end)
+
+add("morph", 2, ".morph <userId> [player]", function(self, caller, args)
+	local target = targetOrSelf(args, 2, caller)
+	local ok, description = pcall(Players.GetHumanoidDescriptionFromUserId, Players, assert(tonumber(args[1]), "expected a UserId"))
+	assert(ok, "no such user")
+	humanoid(target):ApplyDescription(description)
+end)
+
+add("demorph", 2, ".demorph [player]", function(self, caller, args)
+	local target = targetOrSelf(args, 1, caller)
+	local ok, description = pcall(Players.GetHumanoidDescriptionFromUserId, Players, target.UserId)
+	assert(ok, "could not load the player's look")
+	humanoid(target):ApplyDescription(description)
+end)
+
+add("modify", 2, ".modify hp <amount> [player] | .modify speed <0.1-10> [player] | .modify scale <0.5-4> [player]", function(self, caller, args)
+	local what, value = args[1], assert(tonumber(args[2]), "expected a number")
+	local target = targetOrSelf(args, 3, caller)
+	local h = humanoid(target)
+	if what == "hp" then
+		h.MaxHealth = value
+		h.Health = value
+	elseif what == "speed" then
+		h.WalkSpeed = 16 * math.clamp(value, 0.1, 10)
+	elseif what == "scale" then
+		value = math.clamp(value, 0.5, 4)
+		for _, name in { "BodyHeightScale", "BodyWidthScale", "BodyDepthScale", "HeadScale" } do
+			local v = h:FindFirstChild(name)
+			if v then
+				v.Value = value
+			end
+		end
+	else
+		error("expected hp, speed or scale", 0)
 	end
 end)
 
@@ -168,19 +230,174 @@ end)
 
 -- movement
 
-add("tele", 2, ".tele <x> <y> <z> | .tele <player>", function(self, caller, args)
+add("tele", 2, ".tele <name> | .tele <x> <y> <z> | .tele add <name> | .tele del <name> | .tele list", function(self, caller, args)
 	local Entities = self.includes.Entities["EntityPlayer.h"]
-	if #args == 3 then
+	local Teleports = self.includes.Content["Teleports.h"]
+	local sub = args[1]
+	if sub == "list" then
+		local names = {}
+		for _, row in Teleports:All() do
+			table.insert(names, row.name)
+		end
+		for _, part in self.includes.Zones["Zones.h"]:All() do
+			table.insert(names, part.Name)
+		end
+		table.sort(names)
+		self:Reply(caller, "Locations: " .. table.concat(names, ", "))
+	elseif sub == "add" then
+		local name = assert(args[2], "expected a name")
+		Teleports:Add(name, assert(caller.Character, "you have no character"):GetPivot(), caller)
+		self:Reply(caller, ("Saved %s, all servers."):format(name))
+	elseif sub == "del" then
+		self:Reply(caller, if Teleports:Remove(assert(args[2], "expected a name")) then "Removed." else "No such location.")
+	elseif #args == 3 then
 		local x, y, z = tonumber(args[1]), tonumber(args[2]), tonumber(args[3])
 		Entities:Teleport(caller, CFrame.new(assert(x), assert(y), assert(z)))
 	else
-		local other = findPlayer(args[1])
-		Entities:Teleport(caller, assert(other.Character, "target has no character"):GetPivot() * CFrame.new(0, 0, 3))
+		local at, name = Teleports:Resolve(assert(sub, "expected a location"))
+		assert(at, "no location named " .. tostring(sub))
+		Entities:Teleport(caller, at)
+		self:Reply(caller, "Teleported to " .. name)
 	end
 end)
 
 add("appear", 2, ".appear <player>", function(self, caller, args)
-	commands.tele.run(self, caller, { args[1] })
+	local other = findPlayer(args[1])
+	self.includes.Entities["EntityPlayer.h"]:Teleport(caller, assert(other.Character, "target has no character"):GetPivot() * CFrame.new(0, 0, 3))
+end)
+
+-- A ground spot 4 studs in front of the caller, facing them, turned by `yaw` degrees.
+local function placement(self, caller: Player, yaw: number?): CFrame
+	local pivot = assert(caller.Character, "you have no character"):GetPivot()
+	local ahead = (pivot * CFrame.new(0, 0, -4)).Position
+	local ignore = { caller.Character, workspace:FindFirstChild("GameObjects"), workspace:FindFirstChild("Creatures") }
+	local y = self.includes.Content["GameObjects.h"].GroundY(ahead, ignore)
+	local _, facing = pivot:ToEulerAnglesYXZ()
+	return CFrame.new(ahead.X, y, ahead.Z) * CFrame.Angles(0, facing + math.pi + math.rad(yaw or 0), 0)
+end
+
+-- Nearest spawn of a kind, or the one with the given guid when args[i] is a number.
+local function pick(self, list, caller: Player, args, i: number): (Model, number)
+	local module_ = self.includes.Content[list]
+	if tonumber(args[i]) and module_:Find(args[i]) then
+		return module_:Find(args[i]), i + 1
+	end
+	local near = module_:Near(assert(caller.Character, "you have no character"):GetPivot().Position, 15)
+	return assert(near[1], "nothing within 15 studs; give a guid"), i
+end
+
+add("lookup", 1, ".lookup creature|object|tele <name>", function(self, caller, args)
+	local what, needle = args[1], (table.concat(args, " ", 2)):lower()
+	local tableName = ({ creature = "creature_template", object = "gameobject_template", tele = "game_tele" })[what]
+	assert(tableName, "expected creature, object or tele")
+	local DB = self.includes.Database["WorldDB.h"]
+	local pk = DB.TABLES[tableName]
+	local hits = 0
+	for _, row in DB:Select(tableName) do
+		if hits < 20 and (needle == "" or tostring(row.name):lower():find(needle, 1, true)) then
+			hits += 1
+			self:Reply(caller, ("  %s: %s%s"):format(tostring(row[pk]), tostring(row.name), if row.subname then " <" .. row.subname .. ">" else ""))
+		end
+	end
+	self:Reply(caller, ("%d match(es)"):format(hits))
+end)
+
+add("reload", 2, ".reload creature|gameobject", function(self, caller, args)
+	local Content = self.includes.Content
+	if args[1] == "creature" then
+		Content["Creatures.h"]:Respawn()
+	elseif args[1] == "gameobject" then
+		Content["GameObjects.h"]:Respawn()
+	else
+		error("expected creature or gameobject", 0)
+	end
+	self:Reply(caller, "Reloaded " .. args[1] .. " from the world database.")
+end)
+
+add("gobject", 2, ".gobject add <entry> [yaw] [scale] | delete [guid] | move [guid] | turn [guid] <degrees> | near [radius] | template add <name> <modelid> [size] | template list", function(self, caller, args)
+	local Objects = self.includes.Content["GameObjects.h"]
+	local DB = self.includes.Database["WorldDB.h"]
+	local sub = args[1]
+	if sub == "template" then
+		if args[2] == "add" then
+			local row = DB:Insert("gameobject_template", { name = assert(args[3], "expected a name"), modelid = assert(args[4], "expected a modelid"), size = tonumber(args[5]) or 1 })
+			self:Reply(caller, ("gameobject_template entry %d: %s"):format(row.entry, row.name))
+		else
+			for _, row in DB:Select("gameobject_template") do
+				self:Reply(caller, ("  %d: %s (%s, size %s)"):format(row.entry, row.name, row.modelid, tostring(row.size or 1)))
+			end
+		end
+	elseif sub == "add" then
+		local row = Objects:Add(assert(tonumber(args[2]), "expected an entry"), placement(self, caller, tonumber(args[3])), tonumber(args[4]), caller)
+		self:Reply(caller, ("Placed %s, guid %d."):format(Objects:Template(row.id).name, row.guid))
+	elseif sub == "delete" then
+		local model = pick(self, "GameObjects.h", caller, args, 2)
+		Objects:Delete(model:GetAttribute("Guid"))
+		self:Reply(caller, "Deleted " .. model.Name .. ".")
+	elseif sub == "move" then
+		local model = pick(self, "GameObjects.h", caller, args, 2)
+		Objects:Move(model:GetAttribute("Guid"), placement(self, caller))
+		self:Reply(caller, "Moved.")
+	elseif sub == "turn" then
+		local model, i = pick(self, "GameObjects.h", caller, args, 2)
+		Objects:Turn(model:GetAttribute("Guid"), assert(tonumber(args[i]), "expected degrees"))
+		self:Reply(caller, "Turned.")
+	else
+		local here = assert(caller.Character, "you have no character"):GetPivot().Position
+		for _, model in Objects:Near(here, tonumber(args[2]) or 30) do
+			self:Reply(caller, ("  guid %s entry %s %s, %.0f studs"):format(model:GetAttribute("Guid"), model:GetAttribute("Entry"), model.Name, (model:GetPivot().Position - here).Magnitude))
+		end
+	end
+end)
+
+add("npc", 2, ".npc add <entry> | delete [guid] | move [guid] | say [guid] <text> | info [guid] | near [radius] | template add <name> [modelid] [subname] | template set <entry> <field> <value> | template list", function(self, caller, args)
+	local Creatures = self.includes.Content["Creatures.h"]
+	local DB = self.includes.Database["WorldDB.h"]
+	local sub = args[1]
+	if sub == "template" then
+		if args[2] == "add" then
+			local row = DB:Insert("creature_template", { name = assert(args[3], "expected a name"), modelid = args[4] or "default", subname = args[5], scale = 1, gossip = "Greetings, traveler." })
+			self:Reply(caller, ("creature_template entry %d: %s"):format(row.entry, row.name))
+		elseif args[2] == "set" then
+			local entry, field = assert(tonumber(args[3]), "expected an entry"), args[4]
+			assert(({ name = 1, subname = 1, modelid = 1, scale = 1, gossip = 1 })[field or ""], "field is name, subname, modelid, scale or gossip")
+			local value: any = table.concat(args, " ", 5)
+			if field == "scale" then
+				value = assert(tonumber(value), "expected a number")
+			end
+			assert(DB:Update("creature_template", entry, { [field] = value }), "no such entry")
+			Creatures:Respawn(entry)
+			self:Reply(caller, ("Set %s on entry %d."):format(field, entry))
+		else
+			for _, row in DB:Select("creature_template") do
+				self:Reply(caller, ("  %d: %s%s (%s, x%s)"):format(row.entry, row.name, if row.subname then " <" .. row.subname .. ">" else "", row.modelid or "default", tostring(row.scale or 1)))
+			end
+		end
+	elseif sub == "add" then
+		local row = Creatures:Add(assert(tonumber(args[2]), "expected an entry"), placement(self, caller), caller)
+		self:Reply(caller, ("Spawned %s, guid %d."):format(Creatures:Template(row.id).name, row.guid))
+	elseif sub == "delete" then
+		local model = pick(self, "Creatures.h", caller, args, 2)
+		Creatures:Delete(model:GetAttribute("Guid"))
+		self:Reply(caller, "Deleted " .. model.Name .. ".")
+	elseif sub == "move" then
+		local model = pick(self, "Creatures.h", caller, args, 2)
+		Creatures:Move(model:GetAttribute("Guid"), placement(self, caller))
+		self:Reply(caller, "Moved.")
+	elseif sub == "say" then
+		local model, i = pick(self, "Creatures.h", caller, args, 2)
+		Creatures:Say(model, table.concat(args, " ", i))
+	elseif sub == "info" then
+		local model = pick(self, "Creatures.h", caller, args, 2)
+		local t = Creatures:Template(model:GetAttribute("Entry")) or {}
+		self:Reply(caller, ("guid %s, entry %s: %s <%s>, model %s, scale %s"):format(model:GetAttribute("Guid"), model:GetAttribute("Entry"), tostring(t.name), tostring(t.subname), tostring(t.modelid), tostring(t.scale or 1)))
+		self:Reply(caller, "gossip: " .. tostring(t.gossip))
+	else
+		local here = assert(caller.Character, "you have no character"):GetPivot().Position
+		for _, model in Creatures:Near(here, tonumber(args[2]) or 30) do
+			self:Reply(caller, ("  guid %s entry %s %s, %.0f studs"):format(model:GetAttribute("Guid"), model:GetAttribute("Entry"), model.Name, (model:GetPivot().Position - here).Magnitude))
+		end
+	end
 end)
 
 add("summon", 2, ".summon <player>", function(self, caller, args)
@@ -393,9 +610,13 @@ function module:Run(caller: Player, line: string)
 	end
 	local args = line:split(" ")
 	local name = table.remove(args, 1):lower()
+	name = ALIASES[name] or name
 	local command = commands[name]
 	if not command then
 		return self:Reply(caller, "There is no such command. Try .help")
+	end
+	if args[1] == "help" then
+		return self:Usage(caller, name)
 	end
 	if not RBAC:HasLevel(caller, command.level) then
 		return self:Reply(caller, "You do not have permission for ." .. name)
@@ -414,6 +635,8 @@ return Base(module, {
 	{ Path = "Auth/Support", Imports = "Tickets.h" },
 	{ Path = "World/Zones", Imports = "Zones.h" },
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
+	{ Path = "World/Content", Imports = "Teleports.h|GameObjects.h|Creatures.h" },
+	{ Path = "World/Database", Imports = "WorldDB.h" },
 	{ Path = "Global/Database", Imports = "Database.h" },
 	{ Path = "Global/System", Imports = "Global.h" },
 })
