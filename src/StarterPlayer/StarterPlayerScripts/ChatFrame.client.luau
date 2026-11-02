@@ -46,8 +46,11 @@ Instance.new("UICorner", input).CornerRadius = UDim.new(0, 6)
 Instance.new("UIPadding", input).PaddingLeft = UDim.new(0, 8)
 
 input.FocusLost:Connect(function(enterPressed)
-	if enterPressed and #input.Text > 0 then
-		chatSend:Fire(input.Text)
+	local text = input.Text:gsub("^//+", "/")
+	if enterPressed and #text > 0 then
+		chatSend:Fire(text)
+	end
+	if enterPressed then
 		input.Text = ""
 	end
 end)
@@ -58,11 +61,9 @@ UserInputService.InputBegan:Connect(function(keyInput, processed)
 	if keyInput.KeyCode == Enum.KeyCode.Slash then
 		task.defer(function()
 			input:CaptureFocus()
-			if input.Text == "/" then
-				input.Text = ""
-			end
-			input.Text = "/"
-			input.CursorPosition = 2
+			task.wait()
+			input.Text = "/" .. input.Text:gsub("^/+", "")
+			input.CursorPosition = #input.Text + 1
 		end)
 	elseif keyInput.KeyCode == Enum.KeyCode.Return then
 		task.defer(input.CaptureFocus, input)

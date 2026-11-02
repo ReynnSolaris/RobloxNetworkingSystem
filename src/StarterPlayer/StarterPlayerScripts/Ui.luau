@@ -33,19 +33,31 @@ function Ui.itemName(item): string
 	return ('<font color="%s">[%s]</font>%s'):format(Ui.quality(item.Quality), item.Name or "?", count)
 end
 
+-- WoW layout: name in quality colour, slot and type, armor, green stats, level
+-- requirement (red when the character is too low), then the price line.
 function Ui.itemTooltip(item, price: string?): string
-	local lines = { ('<font color="%s"><b>%s</b></font>'):format(Ui.quality(item.Quality), item.Name or "?") }
-	if item.Slot then
-		table.insert(lines, item.Slot:sub(1, 1):upper() .. item.Slot:sub(2))
-	elseif item.Class then
-		table.insert(lines, item.Class)
+	local function cap(word: string?): string
+		return if word then word:sub(1, 1):upper() .. word:sub(2) else ""
 	end
-	if (item.Armor or 0) > 0 then table.insert(lines, ("%d Armor"):format(item.Armor)) end
+	local lines = { ('<font size="18" color="%s"><b>%s</b></font>'):format(Ui.quality(item.Quality), item.Name or "?") }
+	if item.Slot or item.Class then
+		table.insert(lines, ('<font color="#FFFFFF">%s</font>%s'):format(cap(item.Slot or item.Class),
+			if item.Slot and item.Class then ('   <font color="#AAAAAA">%s</font>'):format(cap(item.Class)) else ""))
+	end
+	if (item.Armor or 0) > 0 then table.insert(lines, ('<font color="#FFFFFF">%d Armor</font>'):format(item.Armor)) end
 	if (item.Damage or 0) > 0 then table.insert(lines, ('<font color="#1EFF00">+%d Melee Damage</font>'):format(item.Damage)) end
 	if (item.Health or 0) > 0 then table.insert(lines, ('<font color="#1EFF00">+%d Health</font>'):format(item.Health)) end
-	if (item.Level or 1) > 1 then table.insert(lines, ("Requires Level %d"):format(item.Level)) end
+	if (item.Level or 1) > 1 then
+		local mine = player:GetAttribute("CharacterLevel") or 1
+		table.insert(lines, ('<font color="%s">Requires Level %d</font>'):format(if mine >= item.Level then "#FFFFFF" else "#FF2020", item.Level))
+	end
 	if price then table.insert(lines, ('<font color="#FFD700">%s</font>'):format(price)) end
 	return table.concat(lines, "\n")
+end
+
+-- Border colour for an item's tooltip.
+function Ui.itemBorder(item): Color3
+	return Color3.fromHex(Ui.quality(item.Quality))
 end
 
 -- One tooltip for everything, following the mouse.
@@ -59,26 +71,43 @@ tip.BackgroundColor3 = Ui.PANEL
 tip.BackgroundTransparency = 0.05
 tip.BorderSizePixel = 0
 tip.Font = Enum.Font.Gotham
-tip.TextSize = 13
+tip.TextSize = 14
+tip.LineHeight = 1.15
 tip.TextColor3 = Color3.new(1, 1, 1)
 tip.TextXAlignment = Enum.TextXAlignment.Left
 tip.RichText = true
 tip.Visible = false
 tip.Parent = tipGui
-Instance.new("UICorner", tip).CornerRadius = UDim.new(0, 4)
-Instance.new("UIStroke", tip).Color = Ui.BORDER
+Instance.new("UICorner", tip).CornerRadius = UDim.new(0, 5)
+local tipStroke = Instance.new("UIStroke", tip)
+tipStroke.Color = Ui.BORDER
+tipStroke.Thickness = 1.5
 local pad = Instance.new("UIPadding", tip)
-pad.PaddingLeft, pad.PaddingRight, pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8), UDim.new(0, 6), UDim.new(0, 6)
+pad.PaddingLeft, pad.PaddingRight, pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 12), UDim.new(0, 12), UDim.new(0, 8), UDim.new(0, 8)
+local minWidth = Instance.new("UISizeConstraint", tip)
+minWidth.MinSize = Vector2.new(200, 0)
 tipGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Keep the tooltip on screen, flipping to the other side of the cursor when needed.
+local function place(x: number, y: number)
+	local view = workspace.CurrentCamera.ViewportSize
+	local size = tip.AbsoluteSize
+	local px = if x + 18 + size.X > view.X then x - 18 - size.X else x + 18
+	local py = if y + 18 + size.Y > view.Y then y - 18 - size.Y else y + 18
+	tip.Position = UDim2.fromOffset(math.max(px, 4), math.max(py, 4))
+end
 UserInputService.InputChanged:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseMovement and tip.Visible then
-		tip.Position = UDim2.fromOffset(input.Position.X + 16, input.Position.Y + 16)
+		place(input.Position.X, input.Position.Y)
 	end
 end)
 
-function Ui.showTip(text: string)
+function Ui.showTip(text: string, border: Color3?)
 	tip.Text = text
+	tipStroke.Color = border or Ui.BORDER
 	tip.Visible = true
+	local m = UserInputService:GetMouseLocation()
+	task.defer(place, m.X, m.Y)
 end
 
 function Ui.hideTip()

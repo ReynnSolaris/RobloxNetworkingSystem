@@ -18,13 +18,17 @@ end
 local function findPlayer(name: string?): Player
 	assert(name and #name > 0, "no player given")
 	local lower = name:lower()
+	local prefix = nil
 	for _, player in Players:GetPlayers() do
-		local char = player:GetAttribute("CharacterName") or ""
-		if player.Name:lower():sub(1, #lower) == lower or player.DisplayName:lower():sub(1, #lower) == lower or char:lower():sub(1, #lower) == lower then
-			return player
+		for _, candidate in { player:GetAttribute("CharacterName") or "", player.Name, player.DisplayName } do
+			if candidate:lower() == lower then
+				return player
+			elseif candidate:lower():sub(1, #lower) == lower then
+				prefix = prefix or player
+			end
 		end
 	end
-	error("no player named " .. name, 0)
+	return prefix or error("no player named " .. name, 0)
 end
 
 local function humanoid(player: Player): Humanoid

@@ -40,7 +40,7 @@ function module:Update(party)
 end
 
 function module:Invite(leader: Player, name: string?)
-	local target = name and Players:FindFirstChild(name)
+	local target = self.includes.Entities["EntityPlayer.h"]:FindByName(name)
 	if not target or target == leader then
 		return say(self, leader, "No player named " .. tostring(name))
 	end
@@ -122,7 +122,7 @@ end
 
 function module:Uninvite(leader: Player, name: string?)
 	local party = self.information[leader]
-	local target = name and Players:FindFirstChild(name)
+	local target = self.includes.Entities["EntityPlayer.h"]:FindByName(name)
 	if not party or party.Leader ~= leader then
 		return say(self, leader, "You are not the party leader.")
 	end
@@ -134,7 +134,7 @@ end
 
 function module:Promote(leader: Player, name: string?)
 	local party = self.information[leader]
-	local target = name and Players:FindFirstChild(name)
+	local target = self.includes.Entities["EntityPlayer.h"]:FindByName(name)
 	if not party or party.Leader ~= leader then
 		return say(self, leader, "You are not the party leader.")
 	end
@@ -172,4 +172,5 @@ end
 return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
+	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 })

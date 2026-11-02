@@ -12,7 +12,7 @@ end
 
 function module:Recipients(channel, sender: Player, targetName: string?): { Player }
 	if channel.Target then
-		local target = targetName and Players:FindFirstChild(targetName)
+		local target = self.includes.Entities["EntityPlayer.h"]:FindByName(targetName)
 		return if target then { target } else {}
 	end
 	if channel.Party then
@@ -37,4 +37,5 @@ end
 
 return Base(module, {
 	{ Path = "Auth/Social", Imports = "Party.h" },
+	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 })

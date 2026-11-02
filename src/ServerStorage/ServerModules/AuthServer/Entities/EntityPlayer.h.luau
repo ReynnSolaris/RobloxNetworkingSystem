@@ -1,5 +1,6 @@
 local Base = require(game:GetService("ServerStorage").ServerModules["Template.h"])
 local InsertService = game:GetService("InsertService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Opcodes = require(ReplicatedStorage.Shared.Opcodes)
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -307,14 +308,14 @@ function module:Equip(player: Player, slot: number): (boolean, string?)
 	return true
 end
 
-function module:Unequip(player: Player, slotName: string): boolean
+function module:Unequip(player: Player, slotName: string, toSlot: number?): boolean
 	local char = self.information[player] and self.information[player].Active
 	local entry = char and char.Equipment and char.Equipment[slotName]
 	if not entry then
 		return false
 	end
 	local items = bag(char)
-	local free = freeSlot(items)
+	local free = if toSlot and toSlot >= 1 and toSlot <= Config.BagSlots and not stackAt(items, toSlot) then toSlot else freeSlot(items)
 	if not free then
 		self:System(player, "Inventory is full.")
 		return false
@@ -368,6 +369,27 @@ end
 
 function module:Get(player: Player)
 	return self.information[player]
+end
+
+-- Character name, username or display name, case-insensitive, exact first then prefix.
+function module:FindByName(name: string?): Player?
+	if not name or #name == 0 then
+		return nil
+	end
+	local lower = name:lower()
+	local prefix = nil
+	for _, player in Players:GetPlayers() do
+		local names = { player:GetAttribute("CharacterName") or "", player.Name, player.DisplayName }
+		for _, candidate in names do
+			local c = candidate:lower()
+			if c == lower then
+				return player
+			elseif c:sub(1, #lower) == lower then
+				prefix = prefix or player
+			end
+		end
+	end
+	return prefix
 end
 
 -- Spawns the active character at `at`, else at its saved position, else at Config.Spawn.

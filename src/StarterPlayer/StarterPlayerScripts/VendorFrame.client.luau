@@ -34,7 +34,7 @@ local stockRows = scope:Computed(function(use)
 	local rows = {}
 	for _, item in decode(use(stock)) do
 		local price = Ui.money(item.Price or 0)
-		table.insert(rows, { Text = Ui.itemName(item), Right = price, Tooltip = Ui.itemTooltip(item, price), OnClick = function()
+		table.insert(rows, { Text = Ui.itemName(item), Right = price, Tooltip = Ui.itemTooltip(item, price), TooltipBorder = Ui.itemBorder(item), OnClick = function()
 			netSend:Fire(Opcodes.CMSG_VENDOR_BUY, { Guid = player:GetAttribute("VendorGuid"), Entry = item.Entry, Count = 1 })
 		end })
 	end
@@ -45,7 +45,7 @@ local buybackRows = scope:Computed(function(use)
 	local rows = {}
 	for index, item in decode(use(buyback)) do
 		local price = Ui.money(item.Price or 0)
-		table.insert(rows, { Text = Ui.itemName(item), Right = price, Tooltip = Ui.itemTooltip(item, "Buy back for " .. price), OnClick = function()
+		table.insert(rows, { Text = Ui.itemName(item), Right = price, Tooltip = Ui.itemTooltip(item, "Buy back for " .. price), TooltipBorder = Ui.itemBorder(item), OnClick = function()
 			netSend:Fire(Opcodes.CMSG_BUYBACK_ITEM, { Guid = player:GetAttribute("VendorGuid"), Index = index })
 		end })
 	end
@@ -59,12 +59,17 @@ Components.Panel(scope, {
 	Enabled = open,
 	Parent = player:WaitForChild("PlayerGui"),
 	Title = title,
+	OnDrop = function(payload)
+		if payload.Bag then
+			netSend:Fire(Opcodes.CMSG_VENDOR_SELL, { Guid = player:GetAttribute("VendorGuid"), Bag = payload.Bag })
+		end
+	end,
 	[Children] = {
 		Components.Text(scope, { Size = UDim2.new(0.5, -20, 0, 20), Position = UDim2.fromOffset(12, 8), Text = "Goods", Color = Ui.DIM }),
 		Components.Text(scope, { Size = UDim2.new(0.5, -20, 0, 20), Position = UDim2.new(0.5, 8, 0, 8), Text = "Buyback", Color = Ui.DIM }),
 		Components.List(scope, { Size = UDim2.new(0.5, -18, 1, -60), Position = UDim2.fromOffset(12, 30), Rows = stockRows }),
 		Components.List(scope, { Size = UDim2.new(0.5, -18, 1, -60), Position = UDim2.new(0.5, 8, 0, 30), Rows = buybackRows }),
-		Components.Text(scope, { Size = UDim2.new(1, -24, 0, 20), Position = UDim2.new(0, 12, 1, -26), Color = Ui.DIM, Text = "Right-click an item in your backpack to sell it." }),
+		Components.Text(scope, { Size = UDim2.new(1, -24, 0, 20), Position = UDim2.new(0, 12, 1, -26), Color = Ui.DIM, Text = "Drag an item here, or right-click it in your backpack, to sell it." }),
 		Components.Text(scope, { Size = UDim2.new(0.5, -20, 0, 20), Position = UDim2.new(0.5, 8, 1, -26), Color = Ui.GOLD, Align = Enum.TextXAlignment.Right, Text = scope:Computed(function(use)
 			return Ui.money(use(money))
 		end) }),

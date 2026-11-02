@@ -4,6 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Fusion = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Fusion"))
 local Ui = require(script.Parent:WaitForChild("Ui"))
+local Drag = require(script.Parent:WaitForChild("Drag"))
 
 local Children, OnEvent, peek = Fusion.Children, Fusion.OnEvent, Fusion.peek
 
@@ -43,7 +44,7 @@ function Components.Button(scope, props)
 		[OnEvent "MouseEnter"] = function()
 			hovered:set(true)
 			if props.Tooltip then
-				Ui.showTip(props.Tooltip)
+				Ui.showTip(props.Tooltip, props.TooltipBorder)
 			end
 		end,
 		[OnEvent "MouseLeave"] = function()
@@ -69,6 +70,7 @@ function Components.Row(scope, props)
 		Align = Enum.TextXAlignment.Left,
 		Text = "  " .. props.Text,
 		Tooltip = props.Tooltip,
+		TooltipBorder = props.TooltipBorder,
 		OnClick = props.OnClick,
 		[Children] = if props.Right then Components.Text(scope, {
 			Size = UDim2.new(0.5, -8, 1, 0),
@@ -118,7 +120,7 @@ function Components.Panel(scope, props)
 		end
 	end)
 
-	return scope:New "ScreenGui" {
+	local gui = scope:New "ScreenGui" {
 		Name = props.Name,
 		ResetOnSpawn = false,
 		DisplayOrder = 20,
@@ -163,8 +165,14 @@ function Components.Panel(scope, props)
 			},
 		},
 	}
+	if props.OnDrop then
+		local body = gui:FindFirstChild("Body", true)
+		if body then
+			Drag.target(body, props.OnDrop)
+		end
+	end
+	return gui
 end
-
 -- A Value kept in step with a player attribute.
 function Components.attribute(scope, player: Player, name: string, default)
 	local value = scope:Value(player:GetAttribute(name) or default)

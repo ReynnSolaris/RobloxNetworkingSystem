@@ -151,7 +151,7 @@ function module:Start()
 
 	Packet:On(Opcodes.CMSG_UNEQUIP, function(player, data)
 		if typeof(data) == "table" and typeof(data.Slot) == "string" then
-			Entities:Unequip(player, data.Slot)
+			Entities:Unequip(player, data.Slot, tonumber(data.To))
 		end
 	end)
 end

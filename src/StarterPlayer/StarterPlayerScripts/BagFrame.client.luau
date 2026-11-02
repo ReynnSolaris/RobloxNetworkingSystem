@@ -7,15 +7,18 @@ local Opcodes = require(ReplicatedStorage.Shared.Opcodes)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Ui = require(script.Parent:WaitForChild("Ui"))
 local Components = require(script.Parent:WaitForChild("Components"))
+local Drag = require(script.Parent:WaitForChild("Drag"))
 local player = Players.LocalPlayer
 local netSend = script.Parent:WaitForChild("NetSend") :: BindableEvent
 local vendorOpen = script.Parent:WaitForChild("VendorOpen") :: BindableEvent
+local chatInsert = script.Parent:WaitForChild("ChatInsert") :: BindableEvent
 
--- The backpack on B: a grid of bag slots. Right-click a tile to equip gear, or to
--- sell the stack while a vendor window is open. Opens with any vendor.
+-- The backpack on B: a grid of bag slots. Drag a stack onto another slot to move
+-- or swap it, onto an equipment slot to equip, onto a vendor to sell. Right-click
+-- equips, or sells while a vendor is open. Shift-click links the item in chat.
 
 local scope = Fusion.scoped(Fusion)
-local Children, OnEvent = Fusion.Children, Fusion.OnEvent
+local Children, OnEvent, peek = Fusion.Children, Fusion.OnEvent, Fusion.peek
 
 local COLUMNS, TILE, GAP = 4, 58, 6
 
@@ -25,15 +28,12 @@ local money = Components.attribute(scope, player, "Money", 0)
 local bagSlots = Components.attribute(scope, player, "BagSlots", Config.BagSlots)
 local vendorGuid = Components.attribute(scope, player, "VendorGuid", nil)
 local vendorShowing = scope:Value(false)
-local held = scope:Value(nil :: number?) -- bag slot picked up with a left click
-local chatInsert = script.Parent:WaitForChild("ChatInsert") :: BindableEvent
 
 local function decode(json: string)
 	local ok, value = pcall(HttpService.JSONDecode, HttpService, json)
 	return if ok and typeof(value) == "table" then value else {}
 end
 
--- slot number -> stack
 local bySlot = scope:Computed(function(use)
 	local map = {}
 	for _, stack in decode(use(inventory)) do
@@ -47,19 +47,23 @@ local function abbreviation(name: string): string
 	return (first and (first .. second) or name:sub(1, 2)):upper()
 end
 
+local function shiftHeld(): boolean
+	return UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+end
+
 local function tile(scope, slot: number)
 	local stack = scope:Computed(function(use)
 		return use(bySlot)[slot]
 	end)
 	local hovered = scope:Value(false)
 	local row, col = (slot - 1) // COLUMNS, (slot - 1) % COLUMNS
-	return scope:New "TextButton" {
+	local button = scope:New "TextButton" {
 		Position = UDim2.fromOffset(12 + col * (TILE + GAP), 12 + row * (TILE + GAP)),
 		Size = UDim2.fromOffset(TILE, TILE),
 		AutoButtonColor = false,
 		BorderSizePixel = 0,
 		BackgroundColor3 = scope:Computed(function(use)
-			return if use(hovered) and use(stack) then Ui.ROW_HOVER else Ui.ROW
+			return if use(hovered) then Ui.ROW_HOVER else Ui.ROW
 		end),
 		Font = Enum.Font.GothamBold,
 		TextSize = 18,
@@ -73,46 +77,36 @@ local function tile(scope, slot: number)
 		end),
 		[OnEvent "MouseEnter"] = function()
 			hovered:set(true)
-			local s = Fusion.peek(stack)
-			if s then
-				local hint = if s.Slot then "Right-click to equip" else ""
-				hint = hint .. (if hint ~= "" then "\n" else "") .. "Click to move, Shift-click to link"
-				if Fusion.peek(vendorShowing) then
-					hint = "Right-click to sell for " .. Ui.money((s.Sell or 0) * (s.Count or 1))
-				end
-				Ui.showTip(Ui.itemTooltip(s) .. (if hint ~= "" then "\n" .. hint else ""))
+			local s = peek(stack)
+			if s and not Drag.active() then
+				local hint = if peek(vendorShowing) then "Right-click to sell for " .. Ui.money((s.Sell or 0) * (s.Count or 1))
+					elseif s.Slot then "Right-click to equip" else nil
+				Ui.showTip(Ui.itemTooltip(s) .. (if hint then '\n<font color="#AAAAAA">' .. hint .. "</font>" else ""), Ui.itemBorder(s))
 			end
 		end,
 		[OnEvent "MouseLeave"] = function()
 			hovered:set(false)
 			Ui.hideTip()
 		end,
-		[OnEvent "MouseButton1Click"] = function()
-			local s = Fusion.peek(stack)
-			local shift = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
-			if shift and s then
-				chatInsert:Fire("[" .. (s.Name or "?") .. "]")
-				return
-			end
-			local from = Fusion.peek(held)
-			if from == nil then
-				if s then
-					held:set(slot)
-				end
-			elseif from == slot then
-				held:set(nil)
-			else
-				netSend:Fire(Opcodes.CMSG_SWAP_INV_ITEM, { From = from, To = slot })
-				held:set(nil)
-			end
-		end,
-		[OnEvent "MouseButton2Click"] = function()
-			local s = Fusion.peek(stack)
+		[OnEvent "MouseButton1Down"] = function()
+			local s = peek(stack)
 			if not s then
 				return
 			end
-			if Fusion.peek(vendorShowing) then
-				netSend:Fire(Opcodes.CMSG_VENDOR_SELL, { Guid = Fusion.peek(vendorGuid), Bag = slot })
+			if shiftHeld() then
+				chatInsert:Fire("[" .. (s.Name or "?") .. "]")
+				return
+			end
+			Ui.hideTip()
+			Drag.begin({ Bag = slot, Item = s }, abbreviation(s.Name or "?"), Color3.fromHex(Ui.quality(s.Quality)))
+		end,
+		[OnEvent "MouseButton2Click"] = function()
+			local s = peek(stack)
+			if not s then
+				return
+			end
+			if peek(vendorShowing) then
+				netSend:Fire(Opcodes.CMSG_VENDOR_SELL, { Guid = peek(vendorGuid), Bag = slot })
 			elseif s.Slot then
 				netSend:Fire(Opcodes.CMSG_EQUIP, { Bag = slot })
 			end
@@ -120,13 +114,8 @@ local function tile(scope, slot: number)
 		[Children] = {
 			scope:New "UICorner" { CornerRadius = UDim.new(0, 4) },
 			scope:New "UIStroke" {
-				Thickness = scope:Computed(function(use)
-					return if use(held) == slot then 3 else 2
-				end),
+				Thickness = 2,
 				Color = scope:Computed(function(use)
-					if use(held) == slot then
-						return Color3.new(1, 1, 1)
-					end
 					local s = use(stack)
 					return if s then Color3.fromHex(Ui.quality(s.Quality)) else Color3.fromRGB(45, 45, 55)
 				end),
@@ -147,6 +136,14 @@ local function tile(scope, slot: number)
 			},
 		},
 	}
+	Drag.target(button, function(payload)
+		if payload.Bag and payload.Bag ~= slot then
+			netSend:Fire(Opcodes.CMSG_SWAP_INV_ITEM, { From = payload.Bag, To = slot })
+		elseif payload.Equip then
+			netSend:Fire(Opcodes.CMSG_UNEQUIP, { Slot = payload.Equip, To = slot })
+		end
+	end)
+	return button
 end
 
 local tiles = scope:Computed(function(use)
@@ -186,8 +183,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 	if input.KeyCode == Enum.KeyCode.B then
-		open:set(not Fusion.peek(open))
-		if Fusion.peek(open) then
+		open:set(not peek(open))
+		if peek(open) then
 			netSend:Fire(Opcodes.CMSG_INVENTORY, {})
 		end
 	elseif input.KeyCode == Enum.KeyCode.Escape then
@@ -199,8 +196,6 @@ player:GetAttributeChangedSignal("InWorld"):Connect(function()
 		open:set(false)
 	end
 end)
-
--- The vendor window tells us when it closes by clearing VendorGuid.
 player:GetAttributeChangedSignal("VendorGuid"):Connect(function()
 	if player:GetAttribute("VendorGuid") == nil then
 		vendorShowing:set(false)

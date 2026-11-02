@@ -296,10 +296,12 @@ templates seed: Kobold Vermin and Young Wolf, with loot rows.
 
 The backpack has `Config.BagSlots` slots (16, like WoW's); a stack merges into its
 kind first and then takes the first free slot, and a full bag says so. **B** opens
-it as a grid of quality-bordered tiles with stack counts and tooltips. Left-click
-picks a stack up and left-click elsewhere moves or swaps it (`CMSG_SWAP_INV_ITEM`,
-partial stacks merge); Shift-click puts `[Item Name]` into the chat box; right-click
-equips gear, or sells the whole stack while a vendor window is open.
+it as a grid of quality-bordered tiles with stack counts and tooltips. Drag a stack
+onto another slot to move or swap it (`CMSG_SWAP_INV_ITEM`, partial stacks merge),
+onto an equipment slot on the character sheet to equip it, onto a vendor window to
+sell it; drag an equipped slot back into the bag to unequip. Right-click is the
+shortcut for equip and sell; Shift-click puts `[Item Name]` into the chat box.
+`Drag.luau` carries the payload and a ghost tile between windows.
 
 A creature with `npc_vendor` rows opens a vendor window when talked to, and the
 backpack with it: goods on the left with prices in copper, buyback on the right
@@ -307,7 +309,8 @@ holding the last `Config.BuybackSlots` stacks you sold this session at the price
 you got. Sell prices are a quarter of the buy price unless `sellprice` is set.
 Buying checks range, stock and money. General Goods seeds with the starter set.
 
-Type `[Linen Cloth]` in chat and the server resolves it against `item_template`;
+Whispers, invites and GM targets accept the character name as well as the account
+or display name. Type `[Linen Cloth]` in chat and the server resolves it against `item_template`;
 everyone sees it in the item's quality colour, and clicking the line shows the
 tooltip, fetched through `CMSG_ITEM_QUERY_SINGLE` and cached, like the real client.
 
@@ -316,9 +319,10 @@ The vendor window and character sheet are built with
 panels, hover rows with tooltips, lists bound to the Inventory, Equipment, Stats and
 Money attributes so they redraw themselves.
 
-Items with a `slot` are gear. Right-click them in the backpack to equip (one per
-slot, the old one goes back to the bag, `level` is enforced); **C** opens the
-character sheet with the worn slots and stats, click a slot to unequip. Stats recompute on every change: max health is the level's
+Items with a `slot` are gear (one per slot, the old one goes back to the bag,
+`level` is enforced). **C** opens the character sheet: the worn slots as tiles with
+the stats above them. Tooltips follow WoW's layout, name sized and coloured by
+quality with a matching border, requirement in red when you are too low. Stats recompute on every change: max health is the level's
 health plus gear `health`, melee adds gear `damage`, and gear `armor` comes off every
 creature hit. Equipment and the bag live on the character record.
 
