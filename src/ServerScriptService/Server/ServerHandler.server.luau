@@ -39,6 +39,7 @@ local Global = load(ServerModules.GlobalModules, {})
 resolve(Auth)
 resolve(World)
 resolve(Global)
+print("[Boot] modules loaded")
 
 local Packet = Auth.Security["Packet.h"]
 local Session = Auth.Security["Session.h"]
@@ -113,6 +114,7 @@ Taxi:Start()
 Trade:Start()
 Pets:Start()
 GameEvents:Start()
+print("[Boot] ready")
 Session:OnAuthed(function(player)
 	Characters:Enum(player)
 	Commands:SyncState(player)

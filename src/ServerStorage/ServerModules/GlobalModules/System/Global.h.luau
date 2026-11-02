@@ -19,28 +19,34 @@ function module:Publish(kind: string, data: {})
 	end
 	data.Kind = kind
 	data.Origin = game.JobId
-	local ok, err = pcall(MessagingService.PublishAsync, MessagingService, TOPIC, data)
-	if not ok then
-		warn("[Global] publish failed:", err)
-	end
-	return ok
-end
-
-function module:Start()
-	local ok, err = pcall(MessagingService.SubscribeAsync, MessagingService, TOPIC, function(message)
-		local data = message.Data
-		if typeof(data) ~= "table" or data.Origin == game.JobId then
-			return
-		end
-		local handler = handlers[data.Kind]
-		if handler then
-			task.spawn(handler, data)
+	task.spawn(function()
+		local ok, err = pcall(MessagingService.PublishAsync, MessagingService, TOPIC, data)
+		if not ok then
+			warn("[Global] publish failed:", err)
 		end
 	end)
-	if not ok then
-		online = false
-		warn("[Global] messaging unavailable, single-server mode:", err)
-	end
+	return true
+end
+
+-- Subscribing can stall in Studio, so it runs off the boot thread; publishes
+-- before it lands are simply not heard by this server.
+function module:Start()
+	task.spawn(function()
+		local ok, err = pcall(MessagingService.SubscribeAsync, MessagingService, TOPIC, function(message)
+			local data = message.Data
+			if typeof(data) ~= "table" or data.Origin == game.JobId then
+				return
+			end
+			local handler = handlers[data.Kind]
+			if handler then
+				task.spawn(handler, data)
+			end
+		end)
+		if not ok then
+			online = false
+			warn("[Global] messaging unavailable, single-server mode:", err)
+		end
+	end)
 end
 
 return Base(module)
