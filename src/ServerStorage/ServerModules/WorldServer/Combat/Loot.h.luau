@@ -3,89 +3,112 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Opcodes = require(ReplicatedStorage.Shared.Opcodes)
 local module = {}
 
--- Corpse loot, WoW style. A killed creature keeps its rolled loot on its state;
--- the killer (or their party) opens it with the Loot prompt and takes items one by
--- one or the money; an emptied corpse clears. information[player] = guid being looted.
+-- Loot windows, WoW style, over any source: a corpse, a chest, a gathering
+-- node. A source is { Guid, Name, Root, Loot = { Items = { { Entry, Count } },
+-- Money }, MayLoot = fn(player)?, OnEmpty = fn() }. The opener takes items one
+-- by one or the money; an emptied source gets OnEmpty.
 
 local LOOT_RANGE = 10
+local sources = {}
+
+function module:Register(source)
+	sources[tostring(source.Guid)] = source
+	return source
+end
+
+function module:Unregister(guid)
+	sources[tostring(guid)] = nil
+end
+
+function module:Source(guid)
+	return sources[tostring(guid)]
+end
+
+-- Rolls a loot table's rows for an entry: { id, entry, item, chance, mincount, maxcount }.
+function module:Roll(tableName: string, entry, mingold: number?, maxgold: number?)
+	local loot = { Items = {}, Money = 0 }
+	for _, row in self.includes.Database["WorldDB.h"]:Select(tableName) do
+		if tostring(row.entry) == tostring(entry) and math.random() * 100 < (row.chance or 0) then
+			table.insert(loot.Items, { Entry = row.item, Count = math.random(row.mincount or 1, math.max(row.maxcount or 1, row.mincount or 1)) })
+		end
+	end
+	loot.Money = math.random(mingold or 0, math.max(maxgold or 0, mingold or 0))
+	return loot
+end
+
+function module:IsEmpty(loot): boolean
+	if (loot.Money or 0) > 0 then
+		return false
+	end
+	for _ in loot.Items do
+		return false
+	end
+	return true
+end
 
 local function describe(self, loot)
-	local DB = self.includes.Database["WorldDB.h"]
+	local Items = self.includes.Content["Items.h"]
 	local items = {}
 	for index, entry in loot.Items do
-		local template = DB:Get("item_template", entry.Entry) or {}
-		items[index] = { Index = index, Entry = entry.Entry, Count = entry.Count, Name = template.name or "?", Quality = template.quality or 1,
-			Slot = template.slot, Class = template.class, Level = template.level, Health = template.health, Damage = template.damage, Armor = template.armor }
+		items[index] = Items:Describe(entry.Entry, { Index = index, Count = entry.Count })
 	end
 	return items
 end
 
-local function mayLoot(self, player: Player, creature): boolean
-	local killer = creature.LastAttacker
-	if not killer or killer == player then
-		return true
-	end
-	return table.find(self.includes.Social["Party.h"]:MembersOf(killer), player) ~= nil
-end
-
 function module:Open(player: Player, guid)
-	local Creatures = self.includes.Content["Creatures.h"]
-	local creature = Creatures:State(guid)
+	local source = self:Source(guid)
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-	if not creature or not creature.Dead or not creature.Loot or not root then
+	if not source or not root or not source.Root or not source.Root.Parent then
 		return
 	end
-	if (creature.Root.Position - root.Position).Magnitude > LOOT_RANGE then
+	if (source.Root.Position - root.Position).Magnitude > LOOT_RANGE then
 		return self.includes.Chat["Chat.h"]:System(player, "You are too far away.")
 	end
-	if not mayLoot(self, player, creature) then
-		return self.includes.Chat["Chat.h"]:System(player, "You don't have permission to loot that corpse.")
+	if source.MayLoot and not source.MayLoot(player) then
+		return self.includes.Chat["Chat.h"]:System(player, "You don't have permission to loot that.")
 	end
 	self.information[player] = tostring(guid)
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_LOOT_RESPONSE,
-		{ Guid = tostring(guid), Name = creature.Template.name, Items = describe(self, creature.Loot), Money = creature.Loot.Money or 0 })
+		{ Guid = tostring(guid), Name = source.Name, Items = describe(self, source.Loot), Money = source.Loot.Money or 0 })
 end
 
 local function current(self, player: Player)
 	local guid = self.information[player]
-	local creature = guid and self.includes.Content["Creatures.h"]:State(guid)
-	return guid, creature
+	return guid and self:Source(guid)
 end
 
-local function settle(self, player: Player, creature)
-	local loot = creature.Loot
-	local empty = (loot.Money or 0) == 0
-	for _ in loot.Items do
-		empty = false
-	end
-	if empty then
-		self.includes.Content["Creatures.h"]:ClearCorpse(creature.Row.guid)
+local function settle(self, player: Player, source)
+	if self:IsEmpty(source.Loot) then
+		self:Unregister(source.Guid)
 		self:Release(player)
+		if source.OnEmpty then
+			source.OnEmpty()
+		end
 	end
 end
 
 function module:TakeItem(player: Player, index: number)
-	local _, creature = current(self, player)
-	local entry = creature and creature.Loot and creature.Loot.Items[index]
+	local source = current(self, player)
+	local entry = source and source.Loot.Items[index]
 	if not entry then
 		return
 	end
 	if self.includes.Entities["EntityPlayer.h"]:AddItem(player, entry.Entry, entry.Count) then
-		creature.Loot.Items[index] = nil
+		source.Loot.Items[index] = nil
 		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_LOOT_REMOVED, { Index = index })
-		settle(self, player, creature)
+		settle(self, player, source)
 	end
 end
 
 function module:TakeMoney(player: Player)
-	local _, creature = current(self, player)
-	if not creature or not creature.Loot or (creature.Loot.Money or 0) == 0 then
+	local source = current(self, player)
+	if not source or (source.Loot.Money or 0) == 0 then
 		return
 	end
-	self.includes.Entities["EntityPlayer.h"]:AddMoney(player, creature.Loot.Money)
-	creature.Loot.Money = 0
+	self.includes.Entities["EntityPlayer.h"]:AddMoney(player, source.Loot.Money)
+	source.Loot.Money = 0
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_LOOT_REMOVED, { Money = true })
-	settle(self, player, creature)
+	settle(self, player, source)
 end
 
 function module:Release(player: Player)
@@ -122,7 +145,6 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
-	{ Path = "Auth/Social", Imports = "Party.h" },
-	{ Path = "World/Content", Imports = "Creatures.h" },
+	{ Path = "World/Content", Imports = "Items.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h" },
 })

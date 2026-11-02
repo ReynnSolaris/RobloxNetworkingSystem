@@ -300,8 +300,9 @@ end
 
 add("lookup", 1, ".lookup creature|object|item|tele <name>", function(self, caller, args)
 	local what, needle = args[1], (table.concat(args, " ", 2)):lower()
-	local tableName = ({ creature = "creature_template", object = "gameobject_template", item = "item_template", tele = "game_tele", quest = "quest_template", spell = "spell_template" })[what]
-	assert(tableName, "expected creature, object, item, quest, spell or tele")
+	local tableName = ({ creature = "creature_template", object = "gameobject_template", item = "item_template", tele = "game_tele", quest = "quest_template", spell = "spell_template",
+		faction = "faction", skill = "skill_line", recipe = "skill_recipe", talent = "talent", achievement = "achievement", taxi = "taxi_nodes" })[what]
+	assert(tableName, "expected creature, object, item, quest, spell, tele, faction, skill, recipe, talent, achievement or taxi")
 	local DB = self.includes.Database["WorldDB.h"]
 	local pk = DB.TABLES[tableName]
 	local hits = 0
@@ -362,7 +363,20 @@ add("gobject", 2, ".gobject add <entry> [yaw] [scale] | delete [guid] | move [gu
 	end
 end)
 
-add("npc", 2, ".npc add <entry> | delete [guid] | move [guid] | kill [guid] | say [guid] <text> | info [guid] | near [radius] | template add <name> [modelid] [subname] | template set <entry> <field> <value> | template list", function(self, caller, args)
+add("npc", 2, ".npc add <entry> | delete [guid] | move [guid] | kill [guid] | say [guid] <text> | info [guid] | near [radius] | wp add [guid] [wait] | wp clear [guid] | template add <name> [modelid] [subname] | template set <entry> <field> <value> | template list", function(self, caller, args)
+	if args[1] == "wp" then
+		local Creatures = self.includes.Content["Creatures.h"]
+		local model, nextArg = pick(self, "Creatures.h", caller, args, 3)
+		local guid = model:GetAttribute("Guid")
+		if args[2] == "add" then
+			local n = Creatures:AddWaypoint(guid, assert(caller.Character, "you have no character"):GetPivot().Position, tonumber(args[nextArg]))
+			return self:Reply(caller, ("Waypoint %d added to %s."):format(n, model.Name))
+		elseif args[2] == "clear" then
+			Creatures:ClearWaypoints(guid)
+			return self:Reply(caller, "Waypoints cleared.")
+		end
+		error("expected wp add or wp clear", 0)
+	end
 	local Creatures = self.includes.Content["Creatures.h"]
 	local DB = self.includes.Database["WorldDB.h"]
 	local sub = args[1]
@@ -513,7 +527,7 @@ add("learn", 2, ".learn <spell id|all> [player] | .unlearn <spell id> [player]",
 	if args[1] == "all" then
 		local class = target:GetAttribute("CharacterClass")
 		for _, row in self.includes.Database["WorldDB.h"]:Select("spell_template") do
-			if row.class == nil or row.class == class then
+			if not row.npc and (row.class == nil or row.class == class) then
 				Spells:Learn(target, row.id, true)
 			end
 		end
@@ -800,6 +814,147 @@ function module:Start()
 	end)
 end
 
+add("aura", 2, ".aura <spell id> [player] | .unaura <spell id|all> [player]", function(self, caller, args)
+	local Spells = self.includes.Spells["Spells.h"]
+	local target = targetOrSelf(args, 2, caller)
+	local spell = assert(Spells:Template(assert(tonumber(args[1]), "expected a spell id")), "no such spell")
+	assert(spell.aura, "that spell has no aura")
+	self.includes.Spells["Auras.h"]:Apply(caller, target, spell, Spells:Amount(spell, target:GetAttribute("CharacterLevel") or 1, caller))
+	self:Reply(caller, "Done.")
+end)
+
+add("unaura", 2, ".unaura <spell id|all> [player]", function(self, caller, args)
+	local target = targetOrSelf(args, 2, caller)
+	if args[1] == "all" then
+		self.includes.Spells["Auras.h"]:Clear(target)
+	else
+		self.includes.Spells["Auras.h"]:Remove(target, assert(tonumber(args[1]), "expected a spell id or all"))
+	end
+	self:Reply(caller, "Done.")
+end)
+
+add("skill", 2, ".skill learn <name> [player] | .skill set <name> <value> [player] | .skill unlearn <name> [player] | .skill list", function(self, caller, args)
+	local Skills = self.includes.Spells["Skills.h"]
+	local sub = args[1]
+	if sub == "list" then
+		for _, line in self.includes.Database["WorldDB.h"]:Select("skill_line") do
+			self:Reply(caller, ("  %s (%s)"):format(line.name, line.kind))
+		end
+		return
+	end
+	local name = assert(args[2], "expected a skill name")
+	if sub == "learn" then
+		Skills:Learn(targetOrSelf(args, 3, caller), name, true)
+	elseif sub == "unlearn" then
+		Skills:Unlearn(targetOrSelf(args, 3, caller), name)
+	elseif sub == "set" then
+		local target = targetOrSelf(args, 4, caller)
+		local line = assert(Skills:ByName(name), "no such skill")
+		local entity = self.includes.Entities["EntityPlayer.h"]:Get(target)
+		local skill = entity and entity.Active and entity.Active.Skills and entity.Active.Skills[tostring(line.id)]
+		assert(skill, "they do not know that skill")
+		skill.Value = math.clamp(assert(tonumber(args[3]), "expected a value"), 1, skill.Max)
+		Skills:Sync(target)
+	else
+		error("expected learn, set, unlearn or list", 0)
+	end
+	self:Reply(caller, "Done.")
+end)
+
+add("talent", 2, ".talent reset [player] | .talent points <n> [player]", function(self, caller, args)
+	local Talents = self.includes.Spells["Talents.h"]
+	if args[1] == "reset" then
+		local target = targetOrSelf(args, 2, caller)
+		local entity = self.includes.Entities["EntityPlayer.h"]:Get(target)
+		if entity and entity.Active then
+			entity.Active.Talents = {}
+			self.includes.Entities["EntityPlayer.h"]:ApplyStats(target)
+			Talents:Sync(target)
+		end
+	elseif args[1] == "points" then
+		local target = targetOrSelf(args, 3, caller)
+		self:Reply(caller, ("%d point(s) free"):format(Talents:Points(target)))
+		return
+	else
+		error("expected reset or points", 0)
+	end
+	self:Reply(caller, "Done.")
+end)
+
+add("rep", 2, ".rep <faction id> <amount> [player] | .rep list [player]", function(self, caller, args)
+	local Reputation = self.includes.Social["Reputation.h"]
+	if args[1] == "list" then
+		for _, row in Reputation:List(targetOrSelf(args, 2, caller)) do
+			self:Reply(caller, ("  %s: %s (%d) %s"):format(tostring(row.Id), row.Name, row.Value, row.Standing))
+		end
+		return
+	end
+	Reputation:Modify(targetOrSelf(args, 3, caller), assert(tonumber(args[1]), "expected a faction id"), assert(tonumber(args[2]), "expected an amount"))
+	self:Reply(caller, "Done.")
+end)
+
+add("achievement", 2, ".achievement add <id> [player] | .achievement list", function(self, caller, args)
+	local Achievements = self.includes.Social["Achievements.h"]
+	if args[1] == "list" then
+		for _, row in self.includes.Database["WorldDB.h"]:Select("achievement") do
+			self:Reply(caller, ("  %s: %s"):format(tostring(row.id), row.name))
+		end
+		return
+	elseif args[1] == "add" then
+		local row = assert(self.includes.Database["WorldDB.h"]:Get("achievement", tonumber(args[2]) or 0), "no such achievement")
+		Achievements:Award(targetOrSelf(args, 3, caller), row)
+	else
+		error("expected add or list", 0)
+	end
+	self:Reply(caller, "Done.")
+end)
+
+add("taxi", 2, ".taxi node add <name> [cost] | .taxi path <from id> <to id> [cost] | .taxi list | .taxi learn all [player]", function(self, caller, args)
+	local Taxi = self.includes.Content["Taxi.h"]
+	if args[1] == "node" and args[2] == "add" then
+		local name = assert(args[3], "expected a name")
+		local node = Taxi:AddNode(name, assert(caller.Character, "you have no character"):GetPivot().Position, tonumber(args[4]))
+		self:Reply(caller, ("Node %s %s added here."):format(tostring(node.id), name))
+	elseif args[1] == "path" then
+		Taxi:Connect(assert(tonumber(args[2]), "expected a node id"), assert(tonumber(args[3]), "expected a node id"), tonumber(args[4]))
+		self:Reply(caller, "Path added both ways.")
+	elseif args[1] == "list" then
+		for _, node in self.includes.Database["WorldDB.h"]:Select("taxi_nodes") do
+			self:Reply(caller, ("  %s: %s (%.0f %.0f %.0f)"):format(tostring(node.id), node.name, node.x, node.y, node.z))
+		end
+	elseif args[1] == "learn" then
+		local target = targetOrSelf(args, 3, caller)
+		for _, node in self.includes.Database["WorldDB.h"]:Select("taxi_nodes") do
+			Taxi:Discover(target, node)
+		end
+		self:Reply(caller, "Done.")
+	else
+		error("expected node add, path, list or learn", 0)
+	end
+end)
+
+add("mount", 2, ".mount [player] | .dismount [player]", function(self, caller, args)
+	local target = targetOrSelf(args, 1, caller)
+	local spell = assert(self.includes.Spells["Spells.h"]:ByName("Summon Brown Horse"), "no mount spell")
+	self.includes.Spells["Auras.h"]:Apply(target, target, spell, 0)
+	self:Reply(caller, "Done.")
+end)
+
+add("dismount", 2, ".dismount [player]", function(self, caller, args)
+	self.includes.Spells["Auras.h"]:RemoveKind(targetOrSelf(args, 1, caller), "mount")
+	self:Reply(caller, "Done.")
+end)
+
+add("honor", 2, ".honor add <amount> [player]", function(self, caller, args)
+	assert(args[1] == "add", "expected add")
+	local target = targetOrSelf(args, 3, caller)
+	local entity = self.includes.Entities["EntityPlayer.h"]:Get(target)
+	local char = assert(entity and entity.Active, "no character")
+	char.Honor = (char.Honor or 0) + assert(tonumber(args[2]), "expected an amount")
+	target:SetAttribute("Honor", char.Honor)
+	self:Reply(caller, "Done.")
+end)
+
 function module:Reply(player: Player, text: string)
 	self.includes.Chat["Chat.h"]:System(player, text)
 end
@@ -860,8 +1015,9 @@ return Base(module, {
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
 	{ Path = "World/Combat", Imports = "Death.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
-	{ Path = "World/Spells", Imports = "Spells.h" },
-	{ Path = "World/Content", Imports = "Teleports.h|GameObjects.h|Creatures.h" },
+	{ Path = "World/Spells", Imports = "Spells.h|Auras.h|Skills.h|Talents.h" },
+	{ Path = "Auth/Social", Imports = "Reputation.h|Achievements.h" },
+	{ Path = "World/Content", Imports = "Teleports.h|GameObjects.h|Creatures.h|Taxi.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 	{ Path = "Global/Database", Imports = "Database.h" },
 	{ Path = "Global/System", Imports = "Global.h" },

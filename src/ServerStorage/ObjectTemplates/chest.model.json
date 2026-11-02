@@ -1,0 +1,39 @@
+{
+  "className": "Model",
+  "attributes": { "Type": "chest", "MinGold": 5, "MaxGold": 25 },
+  "children": [
+    {
+      "name": "Body",
+      "className": "Part",
+      "properties": {
+        "Anchored": true,
+        "Size": [3, 1.6, 2],
+        "Color": [0.42, 0.26, 0.14],
+        "Material": "Wood",
+        "Position": [0, 0.8, 0]
+      }
+    },
+    {
+      "name": "Lid",
+      "className": "Part",
+      "properties": {
+        "Anchored": true,
+        "Size": [3.1, 0.6, 2.1],
+        "Color": [0.55, 0.36, 0.2],
+        "Material": "WoodPlanks",
+        "Position": [0, 1.9, 0]
+      }
+    },
+    {
+      "name": "Clasp",
+      "className": "Part",
+      "properties": {
+        "Anchored": true,
+        "Size": [0.5, 0.5, 0.2],
+        "Color": [0.85, 0.7, 0.25],
+        "Material": "Metal",
+        "Position": [0, 1.4, 1.05]
+      }
+    }
+  ]
+}

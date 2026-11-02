@@ -158,8 +158,60 @@ function module:Played(player: Player)
 	end
 end
 
+-- Inspect: another player's gear, stats and talent spread.
+function module:Inspect(player: Player, name: string?)
+	local Entities = self.includes.Entities["EntityPlayer.h"]
+	local target = Entities:FindByName(name)
+	local entity = target and Entities:Get(target)
+	local c = entity and entity.Active
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	local troot = target and target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+	if not c or not root or not troot or (troot.Position - root.Position).Magnitude > 30 then
+		return self.includes.Chat["Chat.h"]:System(player, "No player named " .. tostring(name) .. " nearby.")
+	end
+	local Items = self.includes.Content["Items.h"]
+	local slots = {}
+	for slot, entry in (c.Equipment or {}) do
+		slots[slot] = Items:Describe(entry)
+	end
+	local tabs = {}
+	for id, rank in (c.Talents or {}) do
+		local row = self.includes.Database["WorldDB.h"]:Get("talent", id)
+		if row then
+			tabs[row.tab] = (tabs[row.tab] or 0) + rank
+		end
+	end
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INSPECT_RESULT, { Name = c.Name, Class = c.Class, Race = c.Race, Level = c.Level, Guild = target:GetAttribute("Guild"),
+		Equipment = slots, Stats = Entities:Stats(target), Talents = tabs, Honor = c.Honor or 0, HonorKills = c.HonorKills or 0 })
+end
+
+-- /roll: a number between 1 and max, told to the party or those in SAY range.
+function module:Roll(player: Player, max: number?)
+	max = math.clamp(math.floor(max or 100), 2, 1000000)
+	local result = math.random(1, max)
+	local name = player:GetAttribute("CharacterName") or player.Name
+	local text = ("%s rolls %d (1-%d)"):format(name, result, max)
+	local Functions = self.includes.Chat["ChatFunctions.h"]
+	local Registry = self.includes.Chat["ChatRegistry.h"]
+	local party = Functions:Recipients(Registry:Get("PARTY"), player)
+	local recipients = if #party > 0 then party else Functions:Recipients(Registry:Get("SAY"), player)
+	local told = { [player] = true }
+	for _, r in recipients do
+		told[r] = true
+	end
+	for r in told do
+		self.includes.Chat["Chat.h"]:System(r, text)
+	end
+end
+
 function module:Start()
 	local Packet = self.includes.Security["Packet.h"]
+	Packet:On(Opcodes.CMSG_INSPECT, function(player, data)
+		if typeof(data) == "table" then self:Inspect(player, data.Name) end
+	end)
+	Packet:On(Opcodes.CMSG_RANDOM_ROLL, function(player, data)
+		self:Roll(player, typeof(data) == "table" and tonumber(data.Max) or nil)
+	end)
 	Packet:On(Opcodes.CMSG_CONTACT_LIST, function(player)
 		self:List(player)
 	end)
@@ -189,7 +241,8 @@ end
 return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
-	{ Path = "Auth/Chat", Imports = "Chat.h" },
+	{ Path = "Auth/Chat", Imports = "Chat.h|ChatFunctions.h|ChatRegistry.h" },
 	{ Path = "World/Zones", Imports = "Zones.h" },
-	{ Path = "World/Database", Imports = "WorldDatabase.h" },
+	{ Path = "World/Content", Imports = "Items.h" },
+	{ Path = "World/Database", Imports = "WorldDatabase.h|WorldDB.h" },
 })

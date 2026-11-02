@@ -31,6 +31,8 @@ function module:Select(player: Player, slot: number)
 	char.Xp = char.Xp or 0
 	player:SetAttribute("CharacterName", char.Name)
 	player:SetAttribute("CharacterClass", char.Class)
+	player:SetAttribute("CharacterFaction", char.Faction or "Alliance")
+	player:SetAttribute("CharacterRace", char.Race or "Human")
 	player:SetAttribute("Money", char.Money or 0)
 	self:SyncLevel(player)
 	return true
@@ -45,10 +47,12 @@ function module:SyncLevel(player: Player)
 	end
 end
 
--- Level plus equipment. Max health keeps its fraction when it changes.
+-- Class base stats by level, plus equipment, auras and talents, into the
+-- derived numbers combat reads. Max health keeps its fraction when it changes.
+local EMPTY = { Health = 100, Mana = 0, Damage = 0, Armor = 0, Crit = 5, Dodge = 5, SpellPower = 0, Strength = 0, Agility = 0, Stamina = 0, Intellect = 0, Spirit = 0 }
 function module:Stats(player: Player)
 	local entity = self.information[player]
-	return entity and entity.Stats or { Health = 100, Damage = 0, Armor = 0 }
+	return entity and entity.Stats or EMPTY
 end
 
 function module:ApplyStats(player: Player)
@@ -58,15 +62,43 @@ function module:ApplyStats(player: Player)
 		return
 	end
 	local DB = self.includes.Database["WorldDB.h"]
-	local stats = { Health = Config.Xp.HealthForLevel(char.Level or 1), Damage = 0, Armor = 0 }
+	local S = Config.Stats
+	local level = char.Level or 1
+	local base, grow = S.Base[char.Class] or S.Base.Warrior, S.PerLevel[char.Class] or S.PerLevel.Warrior
+	local stats = { Health = Config.Xp.HealthForLevel(level), Mana = 0, Damage = 0, Armor = 0, SpellPower = 0, Crit = 5, Dodge = 5, SchoolMult = {} }
+	for i, name in S.Names do
+		stats[name] = math.floor(base[i] + grow[i] * (level - 1))
+	end
 	for _, entry in (char.Equipment or {}) do
 		local item = DB:Get("item_template", entry)
 		if item then
 			stats.Health += item.health or 0
 			stats.Damage += item.damage or 0
 			stats.Armor += item.armor or 0
+			stats.SpellPower += item.spellpower or 0
+			for _, name in S.Names do
+				stats[name] += item[name:lower()] or 0
+			end
 		end
 	end
+	local mods = self.includes.Spells["Auras.h"]:Mods(player)
+	for _, name in S.Names do
+		stats[name] += mods[name] or 0
+	end
+	stats.Health += (mods.Health or 0) + stats.Stamina * S.HealthPerStamina
+	stats.Mana += (mods.Mana or 0) + stats.Intellect * S.ManaPerIntellect
+	stats.Damage += (mods.Damage or 0) + stats.Strength * S.DamagePerStrength
+	stats.Armor += (mods.Armor or 0) + stats.Agility * S.ArmorPerAgility
+	stats.SpellPower += stats.Intellect * S.SpellPowerPerIntellect
+	stats.Crit += stats.Agility * S.CritPerAgility
+	stats.Dodge += stats.Agility * S.DodgePerAgility
+	self.includes.Spells["Talents.h"]:ApplyMods(player, stats)
+	for key, value in stats do
+		if typeof(value) == "number" then
+			stats[key] = math.floor(value * 10 + 0.5) / 10
+		end
+	end
+	stats.Health = math.floor(stats.Health)
 	entity.Stats = stats
 	local humanoid = humanoidOf(entity)
 	if humanoid then
@@ -88,6 +120,7 @@ function module:SetLevel(player: Player, level: number)
 	self:ApplyStats(player)
 	self:SyncLevel(player)
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_LEVELUP, { Level = char.Level })
+	self.includes.Spells["Talents.h"]:OnLevel(player)
 end
 
 -- Adds experience, levelling as many times as it takes. reason is shown to the player.
@@ -172,6 +205,8 @@ function module:GrantXp(player: Player, amount: number, reason: string?, fromKil
 		self:ApplyStats(player)
 		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_LEVELUP, { Level = char.Level })
 		self.includes.System["Effects.h"]:Play("LevelUp", player, 40)
+		self.includes.Spells["Talents.h"]:OnLevel(player)
+		self.includes.Social["Achievements.h"]:OnLevel(player, char.Level)
 	end
 	if char.Level >= Config.Xp.MaxLevel then
 		char.Xp = 0
@@ -191,6 +226,7 @@ function module:Discover(player: Player, zoneName: string)
 	end
 	char.Explored[zoneName] = os.time()
 	self:GrantXp(player, Config.Xp.Explore * char.Level, "Discovered " .. zoneName)
+	self.includes.Social["Achievements.h"]:OnExplore(player, zoneName)
 end
 
 -- The bag: a list of stacks { slot, entry, count }, one per occupied slot out of
@@ -312,25 +348,15 @@ local function bank(char)
 	return char.Bank
 end
 
-local function describe(DB, stack, key: string)
-	local template = DB:Get("item_template", stack.entry) or {}
-	local spell = template.spell and DB:Get("spell_template", template.spell)
-	local out = { Entry = stack.entry, Name = template.name or "?", Quality = template.quality or 1, Count = stack.count, Stack = template.stack,
-		Slot = template.slot, Class = template.class, Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Level = template.level,
-		Health = template.health, Damage = template.damage, Armor = template.armor, Use = spell and spell.description }
-	out[key] = stack.slot
-	return out
-end
-
 function module:SendBank(player: Player, open: boolean?)
 	local char = self.information[player] and self.information[player].Active
 	if not char then
 		return
 	end
-	local DB = self.includes.Database["WorldDB.h"]
+	local Items = self.includes.Content["Items.h"]
 	local items = {}
 	for _, stack in bank(char) do
-		table.insert(items, describe(DB, stack, "Bank"))
+		table.insert(items, Items:Describe(stack.entry, { Bank = stack.slot, Count = stack.count }))
 	end
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_SHOW_BANK, { Items = items, Slots = Config.BankSlots, Open = open == true })
 end
@@ -497,12 +523,10 @@ function module:SendEquipment(player: Player)
 	if not char then
 		return
 	end
-	local DB = self.includes.Database["WorldDB.h"]
+	local Items = self.includes.Content["Items.h"]
 	local slots = {}
 	for slot, entry in (char.Equipment or {}) do
-		local item = DB:Get("item_template", entry) or {}
-		slots[slot] = { Entry = entry, Name = item.name or "?", Quality = item.quality or 1, Slot = slot, Class = item.class,
-			Level = item.level, Health = item.health, Damage = item.damage, Armor = item.armor }
+		slots[slot] = Items:Describe(entry)
 	end
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_EQUIPMENT, { Slots = slots, Stats = entity.Stats })
 end
@@ -516,19 +540,19 @@ function module:AddMoney(player: Player, copper: number)
 	char.Money = math.max(0, (char.Money or 0) + copper)
 	player:SetAttribute("Money", char.Money)
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_MONEY, { Amount = copper, Total = char.Money })
+	if copper > 0 then
+		char.MoneyLooted = (char.MoneyLooted or 0) + copper
+		self.includes.Social["Achievements.h"]:OnMoney(player, char.MoneyLooted)
+	end
 end
 
 -- announce: print the list in chat (the /inv request); otherwise it is a silent refresh.
 function module:SendInventory(player: Player, announce: boolean?)
 	local char = self.information[player] and self.information[player].Active
-	local DB = self.includes.Database["WorldDB.h"]
+	local Items = self.includes.Content["Items.h"]
 	local items = {}
 	for _, stack in (char and bag(char) or {}) do
-		local template = DB:Get("item_template", stack.entry) or {}
-		local spell = template.spell and DB:Get("spell_template", template.spell)
-		table.insert(items, { Bag = stack.slot, Entry = stack.entry, Name = template.name or "?", Quality = template.quality or 1, Count = stack.count,
-			Slot = template.slot, Class = template.class, Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Level = template.level,
-			Health = template.health, Damage = template.damage, Armor = template.armor, Use = spell and spell.description })
+		table.insert(items, Items:Describe(stack.entry, { Bag = stack.slot, Count = stack.count }))
 	end
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INVENTORY, { Items = items, Money = char and char.Money or 0, Bags = Config.BagSlots, Announce = announce == true })
 end
@@ -579,6 +603,7 @@ function module:Spawn(player: Player, at: CFrame?, ghost: boolean?)
 	local humanoid = character:WaitForChild("Humanoid") :: Humanoid
 	humanoid.DisplayName = saved.Name
 	module.Dress(character, saved)
+	self.includes.Spells["Auras.h"]:Clear(player)
 	self:ApplyStats(player)
 	humanoid.Health = humanoid.MaxHealth
 	self.includes.Spells["Spells.h"]:Reset(player)
@@ -642,31 +667,73 @@ function module:Teleport(player: Player, at: CFrame)
 	end
 end
 
--- Timed multiplier on WalkSpeed ("speed") or JumpPower ("jump"); < 1 is a debuff.
-local BUFFS = { speed = { "WalkSpeed", 16 }, jump = { "JumpPower", 50 } }
+-- Timed multiplier on movement ("speed") or jumping ("jump") as an aura; < 1 is a debuff.
+local BUFFS = { speed = { Id = -1, Name = "Swiftness", Icon = "SW" }, jump = { Id = -2, Name = "Spring", Icon = "SP" } }
 module.BUFFS = BUFFS
 
 function module:Buff(player: Player, effect: string, mult: number, seconds: number): boolean
 	local spec = BUFFS[effect]
-	local entity = self.information[player]
-	local humanoid = humanoidOf(entity)
-	if not spec or not humanoid then
+	if not spec or not humanoidOf(self.information[player]) then
 		return false
 	end
-	local property, base = spec[1], spec[2]
-	entity.Buffs = entity.Buffs or {}
-	entity.Buffs[effect] = (entity.Buffs[effect] or 0) + 1
-	local token = entity.Buffs[effect]
-	humanoid[property] = base * mult
-	task.delay(seconds, function()
-		if self.information[player] == entity and entity.Buffs[effect] == token then
-			local h = humanoidOf(entity)
-			if h then
-				h[property] = base
-			end
-		end
-	end)
+	self.includes.Spells["Auras.h"]:Apply(nil, player, { id = spec.Id, name = spec.Name, icon = spec.Icon, school = "arcane",
+		description = ("%s %s by %d%%."):format(if effect == "speed" then "Movement speed" else "Jump height", if mult >= 1 then "increased" else "reduced", math.abs(mult - 1) * 100),
+		aura = { kind = effect, mult = mult, duration = seconds } })
 	return true
+end
+
+-- A mount is drawn as a horse-shaped body welded under the character; the
+-- speed comes from the aura.
+function module:Mount(player: Player, on: boolean)
+	local entity = self.information[player]
+	local character = entity and entity.Character
+	if not character then
+		return
+	end
+	local existing = character:FindFirstChild("Mount")
+	if existing then
+		existing:Destroy()
+	end
+	player:SetAttribute("Mounted", if on then true else nil)
+	if not on then
+		return
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	local mount = Instance.new("Model")
+	mount.Name = "Mount"
+	local function part(name, size, offset, color, shape)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color
+		p.Material = Enum.Material.SmoothPlastic
+		p.CanCollide = false
+		p.Massless = true
+		if shape then
+			p.Shape = shape
+		end
+		p.CFrame = root.CFrame * offset
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0, weld.Part1 = root, p
+		weld.Parent = p
+		p.Parent = mount
+		return p
+	end
+	local brown, dark = Color3.fromRGB(96, 62, 36), Color3.fromRGB(40, 28, 18)
+	part("Body", Vector3.new(2.2, 2, 5), CFrame.new(0, -2.6, 0), brown)
+	part("Neck", Vector3.new(1.2, 2.4, 1.2), CFrame.new(0, -1.4, -2.8) * CFrame.Angles(math.rad(-30), 0, 0), brown)
+	part("Head", Vector3.new(1.1, 1.1, 2), CFrame.new(0, -0.4, -3.9), brown)
+	part("Mane", Vector3.new(0.4, 1.6, 1.6), CFrame.new(0, -0.8, -2.6), dark)
+	part("Tail", Vector3.new(0.5, 2, 0.5), CFrame.new(0, -3, 2.8) * CFrame.Angles(math.rad(25), 0, 0), dark)
+	for _, x in { -0.75, 0.75 } do
+		for _, z in { -1.8, 1.8 } do
+			part("Leg", Vector3.new(0.6, 2.6, 0.6), CFrame.new(x, -4.8, z), dark)
+		end
+	end
+	mount.Parent = character
 end
 
 function module:GiveHat(player: Player, assetId: number): boolean
@@ -707,6 +774,7 @@ function module:Despawn(player: Player)
 		return
 	end
 	self:Save(player)
+	self.includes.Spells["Auras.h"]:Clear(player)
 	if entity.Character then
 		entity.Character:Destroy()
 		entity.Character = nil
@@ -729,8 +797,9 @@ return Base(module, {
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
 	{ Path = "World/Combat", Imports = "Death.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
-	{ Path = "World/Spells", Imports = "Spells.h" },
+	{ Path = "World/Spells", Imports = "Spells.h|Auras.h|Talents.h" },
 	{ Path = "World/Zones", Imports = "Zones.h" },
-	{ Path = "World/Content", Imports = "Creatures.h" },
+	{ Path = "World/Content", Imports = "Creatures.h|Items.h" },
+	{ Path = "Auth/Social", Imports = "Achievements.h" },
 	{ Path = "Global/System", Imports = "Effects.h" },
 })

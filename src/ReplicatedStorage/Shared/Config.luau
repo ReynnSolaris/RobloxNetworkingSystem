@@ -57,6 +57,9 @@ return table.freeze({
 			return 45 + creatureLevel * 5
 		end,
 		CorpseSeconds = 60, -- a lootable corpse waits this long; an emptied one clears sooner
+		LeaveCombatSeconds = 6,
+		AssistRange = 12, -- creatures of the same kind this close join a fight
+		WanderSeconds = 6,
 		DefaultRespawn = 30,
 		ReclaimRange = 25, -- studs from your corpse marker to resurrect
 		GhostSpeed = 24,
@@ -69,6 +72,8 @@ return table.freeze({
 		GlobalCooldown = 1.5,
 		ManaRegen = 0.02,
 		InterruptDistance = 1.5,
+		AuraTick = 1, -- seconds between periodic aura ticks being checked
+		MaxAuras = 16,
 		ManaForLevel = function(level: number): number
 			return 60 + (level - 1) * 12
 		end,
@@ -79,6 +84,30 @@ return table.freeze({
 	Social = { MaxFriends = 50, MaxIgnore = 50 },
 	Guild = { CreateCost = 1000, MaxMembers = 100, InviteSeconds = 60 },
 	BankSlots = 24,
+
+	-- Primary stats, WoW style. Each class starts with Base and gains PerLevel;
+	-- Stamina gives 10 health, Intellect 15 mana and spell power, Strength melee
+	-- damage, Agility crit and dodge, Spirit mana regeneration.
+	Stats = {
+		Names = { "Strength", "Agility", "Stamina", "Intellect", "Spirit" },
+		Base = {
+			Warrior = { 23, 20, 22, 10, 14 }, Paladin = { 22, 16, 22, 15, 17 }, Hunter = { 16, 23, 20, 15, 16 }, Rogue = { 18, 24, 19, 11, 14 },
+			Priest = { 13, 15, 18, 24, 23 }, ["Death Knight"] = { 24, 19, 23, 12, 14 }, Shaman = { 19, 16, 21, 20, 20 }, Mage = { 12, 15, 18, 25, 22 },
+			Warlock = { 14, 16, 19, 23, 22 }, Druid = { 17, 17, 20, 21, 21 },
+		},
+		PerLevel = {
+			Warrior = { 2.5, 1.2, 2.2, 0.5, 0.8 }, Paladin = { 2.2, 1, 2.2, 1.2, 1.3 }, Hunter = { 1, 2.5, 1.8, 1, 1 }, Rogue = { 1.5, 2.6, 1.6, 0.6, 0.8 },
+			Priest = { 0.6, 0.8, 1.2, 2.5, 2.4 }, ["Death Knight"] = { 2.6, 1.1, 2.4, 0.5, 0.8 }, Shaman = { 1.6, 1, 1.8, 1.8, 1.8 }, Mage = { 0.5, 0.8, 1.2, 2.6, 2.3 },
+			Warlock = { 0.8, 1, 1.4, 2.4, 2.2 }, Druid = { 1.4, 1.4, 1.6, 2, 2 },
+		},
+		HealthPerStamina = 10,
+		ManaPerIntellect = 15,
+		DamagePerStrength = 0.5,
+		SpellPowerPerIntellect = 0.5,
+		CritPerAgility = 0.05, -- percent
+		DodgePerAgility = 0.05,
+		ArmorPerAgility = 0.1,
+	},
 
 	Xp = {
 		MaxLevel = 80,
@@ -144,6 +173,25 @@ return table.freeze({
 			Description = "Cunning and regenerative, the Darkspear trolls keep their ancient ways and their loyalty to the Horde." },
 	},
 	Duel = { Range = 30, FleeRange = 60, Countdown = 3, RequestSeconds = 30 },
+	Talents = { FirstLevel = 10, PointsPerLevel = 1, TierPoints = 5, ResetCost = 10000 },
+	Skills = { MaxPrimary = 2, LearnCost = 1000, RankCost = { 5000, 50000 }, Ranks = { { Name = "Apprentice", Max = 75 }, { Name = "Journeyman", Max = 150 }, { Name = "Expert", Max = 225 } } },
+	Auction = { Deposit = 0.05, Cut = 0.05, Hours = { 12, 24, 48 }, MaxListings = 50 },
+	Taxi = { Speed = 60, Height = 40 },
+	Trade = { Slots = 6, Range = 12 },
+	-- Reputation standings, WoW thresholds, with the vendor discount each earns.
+	Reputation = {
+		Min = -42000, Max = 42999,
+		Standings = {
+			{ Name = "Hated", Min = -42000, Max = -6001, Color = "#CC2222" },
+			{ Name = "Hostile", Min = -6000, Max = -3001, Color = "#FF0000" },
+			{ Name = "Unfriendly", Min = -3000, Max = -1, Color = "#EE6622" },
+			{ Name = "Neutral", Min = 0, Max = 2999, Color = "#FFFF00" },
+			{ Name = "Friendly", Min = 3000, Max = 8999, Color = "#00FF00", Discount = 0.05 },
+			{ Name = "Honored", Min = 9000, Max = 20999, Color = "#00FF88", Discount = 0.1 },
+			{ Name = "Revered", Min = 21000, Max = 41999, Color = "#00FFCC", Discount = 0.15 },
+			{ Name = "Exalted", Min = 42000, Max = 42999, Color = "#00FFFF", Discount = 0.2 },
+		},
+	},
 	-- Rested: resting near an innkeeper or in a zone with Inn = true banks a share
 	-- of the level's XP every tick; kill XP is doubled from that pool.
 	Rested = { Range = 15, TickSeconds = 5, PerTick = 0.01, Cap = 1.5 },

@@ -1,0 +1,31 @@
+{
+  "className": "Model",
+  "attributes": { "Type": "node", "Skill": "Herbalism", "ReqSkill": 1 },
+  "children": [
+    {
+      "name": "Stem",
+      "className": "Part",
+      "properties": {
+        "Anchored": true,
+        "CanCollide": false,
+        "Size": [0.3, 1.6, 0.3],
+        "Color": [0.3, 0.6, 0.25],
+        "Material": "Grass",
+        "Position": [0, 0.8, 0]
+      }
+    },
+    {
+      "name": "Bloom",
+      "className": "Part",
+      "properties": {
+        "Anchored": true,
+        "CanCollide": false,
+        "Shape": "Ball",
+        "Size": [1, 1, 1],
+        "Color": [0.95, 0.95, 0.9],
+        "Material": "Neon",
+        "Position": [0, 1.8, 0]
+      }
+    }
+  ]
+}

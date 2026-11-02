@@ -22,8 +22,30 @@ function SpellUi.color(spell): Color3
 	return Color3.fromHex(SpellUi.SCHOOL[spell and spell.School or "physical"] or "#FFFFFF")
 end
 
+function SpellUi.duration(seconds: number): string
+	if seconds >= 3600 then
+		return ("%d hour%s"):format(seconds // 3600, if seconds >= 7200 then "s" else "")
+	elseif seconds >= 60 then
+		return ("%d min"):format(seconds // 60)
+	end
+	return ("%d sec"):format(seconds)
+end
+
+-- Tooltip for an aura on a unit frame.
+function SpellUi.auraTooltip(aura, left: number): string
+	local lines = { ('<font size="16" color="%s"><b>%s</b></font>'):format(if aura.Harmful then "#FF5A5A" else "#FFFFFF", aura.Name or "?") }
+	if aura.Description then
+		table.insert(lines, ('<font color="#FFD100">%s</font>'):format(aura.Description))
+	end
+	table.insert(lines, ('<font color="#FFFFFF">%s remaining</font>'):format(SpellUi.duration(math.ceil(left))))
+	if not aura.Harmful then
+		table.insert(lines, '<font color="#AAAAAA">Right-click to cancel</font>')
+	end
+	return table.concat(lines, "\n")
+end
+
 function SpellUi.tooltip(spell, extra: string?): string
-	local lines = { ('<font size="17" color="#FFFFFF"><b>%s</b></font>'):format(spell.Name or "?") }
+	local lines = { ('<font size="17" color="#FFFFFF"><b>%s</b></font>%s'):format(spell.Name or "?", if spell.Rank then ('   <font color="#AAAAAA">Rank %d</font>'):format(spell.Rank) else "") }
 	local cost = if (spell.Cost or 0) > 0 then ("%d Mana"):format(spell.Cost) else nil
 	local range = if (spell.Range or 0) > 0 then ("%d yd range"):format(spell.Range) else nil
 	if cost or range then
@@ -35,10 +57,19 @@ function SpellUi.tooltip(spell, extra: string?): string
 		table.insert(lines, ('<font color="#AAAAAA">%s</font>'):format(spell.Class))
 	end
 	local text = spell.Description or ""
+	local aura = spell.Aura
 	if spell.Effect == "damage" then
 		text ..= (" Deals about %d %s damage."):format(spell.Amount or 0, spell.School or "")
 	elseif spell.Effect == "heal" then
 		text ..= (" Heals for about %d."):format(spell.Amount or 0)
+	elseif aura and aura.Kind == "periodic" then
+		text ..= (" %s %d %severy %d sec for %d sec."):format(if aura.Harmful then "Deals" else "Heals", spell.Amount or 0, if aura.Harmful then (spell.School or "") .. " damage " else "", aura.Interval or 3, aura.Duration or 0)
+	elseif aura and aura.Kind == "stat" then
+		text ..= (" +%d %s for %s."):format(spell.Amount or 0, aura.Stat or "", SpellUi.duration(aura.Duration or 0))
+	elseif aura and aura.Kind == "stun" then
+		text ..= (" Lasts %d sec."):format(aura.Duration or 0)
+	elseif aura and (aura.Kind == "speed" or aura.Kind == "mount") then
+		text ..= (" %d%% movement speed for %s."):format(math.round(((aura.Mult or 1) - 1) * 100), SpellUi.duration(aura.Duration or 0))
 	end
 	table.insert(lines, ('<font color="#FFD100">%s</font>'):format(text))
 	if extra then

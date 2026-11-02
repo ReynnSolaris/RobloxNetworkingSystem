@@ -64,6 +64,15 @@ local Mail = World.Mail["Mail.h"]
 local Social = Auth.Social["Social.h"]
 local Guild = Auth.Social["Guild.h"]
 local Duel = World.Combat["Duel.h"]
+local Auras = World.Spells["Auras.h"]
+local Pvp = World.Combat["Pvp.h"]
+local Reputation = Auth.Social["Reputation.h"]
+local Talents = World.Spells["Talents.h"]
+local Skills = World.Spells["Skills.h"]
+local Achievements = Auth.Social["Achievements.h"]
+local Auction = World.Content["Auction.h"]
+local Taxi = World.Content["Taxi.h"]
+local Trade = World.Content["Trade.h"]
 local Bus = Global.System["Global.h"]
 local Database = Global.Database["Database.h"]
 
@@ -78,9 +87,9 @@ Party:Start()
 Anticheat:Start()
 Characters:Start()
 WorldDB:Start()
+Items:Start()
 GameObjects:Start()
 Creatures:Start()
-Items:Start()
 Combat:Start()
 Vendors:Start()
 Loot:Start()
@@ -91,6 +100,15 @@ Mail:Start()
 Social:Start()
 Guild:Start()
 Duel:Start()
+Auras:Start()
+Pvp:Start()
+Reputation:Start()
+Talents:Start()
+Skills:Start()
+Achievements:Start()
+Auction:Start()
+Taxi:Start()
+Trade:Start()
 Session:OnAuthed(function(player)
 	Characters:Enum(player)
 	Commands:SyncState(player)

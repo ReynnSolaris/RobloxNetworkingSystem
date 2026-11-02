@@ -76,9 +76,7 @@ local function describe(self, mail)
 	local DB = self.includes.Database["WorldDB.h"]
 	local items = {}
 	for _, stack in (mail.Items or {}) do
-		local template = DB:Get("item_template", stack.Entry) or {}
-		table.insert(items, { Entry = stack.Entry, Count = stack.Count, Name = template.name or "?", Quality = template.quality or 1,
-			Slot = template.slot, Class = template.class, Level = template.level, Health = template.health, Damage = template.damage, Armor = template.armor })
+		table.insert(items, self.includes.Content["Items.h"]:Describe(stack.Entry, { Count = stack.Count }))
 	end
 	return { Id = mail.Id, Sender = mail.Sender, Subject = mail.Subject, Body = mail.Body, Money = mail.Money or 0, Items = items, Sent = mail.Sent, Read = mail.Read == true }
 end
@@ -272,6 +270,7 @@ function module:Start()
 end
 
 return Base(module, {
+	{ Path = "World/Content", Imports = "Items.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h|ChatFunctions.h" },

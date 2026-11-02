@@ -96,6 +96,9 @@ function module:End(winner: Player, loser: Player, reason: string)
 	end
 	update(self, winner, nil)
 	update(self, loser, nil)
+	if reason ~= "flee" then
+		self.includes.Social["Achievements.h"]:OnDuel(winner)
+	end
 	local text = if reason == "flee" then ("%s has fled from a duel with %s."):format(nameOf(loser), nameOf(winner))
 		else ("%s has defeated %s in a duel."):format(nameOf(winner), nameOf(loser))
 	local Functions = self.includes.Chat["ChatFunctions.h"]
@@ -113,25 +116,29 @@ function module:End(winner: Player, loser: Player, reason: string)
 end
 
 -- Damage inside a duel never kills: the loser stays at 1 health.
-function module:Hit(attacker: Player, victim: Player, damage: number, source: string)
+function module:Hit(attacker: Player, victim: Player, damage: number, source: string): number
 	local humanoid = victim.Character and victim.Character:FindFirstChildOfClass("Humanoid")
 	if not humanoid or self:Opponent(attacker) ~= victim then
-		return
+		return 0
 	end
 	local Combat = self.includes.Combat["Combat.h"]
 	local armor = self.includes.Entities["EntityPlayer.h"]:Stats(victim).Armor
 	damage = math.max(1, damage - armor)
+	Combat:Enter(attacker)
+	Combat:Enter(victim)
 	if humanoid.Health - damage <= 1 then
 		damage = math.max(0, humanoid.Health - 1)
 		humanoid.Health = 1
 		Combat:Log(attacker, ("%s hits %s for %d."):format(source, nameOf(victim), damage), Config.Chat.Colors.HIT)
 		Combat:Log(victim, ("%s's %s hits you for %d."):format(nameOf(attacker), source:gsub("^Your ", ""), damage), Config.Chat.Colors.HURT)
-		return self:End(attacker, victim, "win")
+		self:End(attacker, victim, "win")
+		return damage
 	end
 	humanoid:TakeDamage(damage)
 	self.includes.System["Effects.h"]:Play("Hit", victim, 6)
 	Combat:Log(attacker, ("%s hits %s for %d."):format(source, nameOf(victim), damage), Config.Chat.Colors.HIT)
 	Combat:Log(victim, ("%s's %s hits you for %d."):format(nameOf(attacker), source:gsub("^Your ", ""), damage), Config.Chat.Colors.HURT)
+	return damage
 end
 
 -- Dying to something else, logging out or walking away loses the duel.
@@ -176,6 +183,7 @@ function module:Start()
 end
 
 return Base(module, {
+	{ Path = "Auth/Social", Imports = "Achievements.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h|ChatFunctions.h|ChatRegistry.h" },

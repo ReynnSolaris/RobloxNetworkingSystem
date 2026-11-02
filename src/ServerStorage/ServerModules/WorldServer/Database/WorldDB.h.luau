@@ -13,6 +13,7 @@ local TABLES = {
 	game_tele = "id",
 	item_template = "entry",
 	creature_loot_template = "id",
+	gameobject_loot_template = "id",
 	npc_vendor = "id",
 	game_graveyard = "id",
 	quest_template = "id",
@@ -21,6 +22,14 @@ local TABLES = {
 	spell_template = "id",
 	npc_trainer = "id",
 	playercreateinfo_spell = "id",
+	faction = "id",
+	skill_line = "id",
+	skill_recipe = "id",
+	talent = "id",
+	auctionhouse = "id",
+	taxi_nodes = "id",
+	taxi_path = "id",
+	achievement = "id",
 }
 module.TABLES = TABLES
 

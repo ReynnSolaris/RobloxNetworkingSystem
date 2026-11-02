@@ -47,7 +47,9 @@ function Ui.itemTooltip(item, price: string?): string
 	local function white(text: string)
 		table.insert(lines, '<font color="#FFFFFF">' .. text .. "</font>")
 	end
-	if item.Slot then
+	if item.Bind == "pickup" then
+		white("Binds when picked up")
+	elseif item.Slot then
 		white("Binds when equipped")
 		white(("%s%s"):format(SLOT_NAMES[item.Slot] or item.Slot, if item.Class then ('<font color="#AAAAAA">   %s</font>'):format(CLASS_NAMES[item.Class] or item.Class) else ""))
 	elseif item.Class and item.Class ~= "misc" then
@@ -56,6 +58,10 @@ function Ui.itemTooltip(item, price: string?): string
 	if (item.Armor or 0) > 0 then white(("%d Armor"):format(item.Armor)) end
 	if (item.Damage or 0) > 0 then table.insert(lines, ('<font color="#1EFF00">+%d Melee Damage</font>'):format(item.Damage)) end
 	if (item.Health or 0) > 0 then table.insert(lines, ('<font color="#1EFF00">+%d Health</font>'):format(item.Health)) end
+	for _, stat in { "Strength", "Agility", "Stamina", "Intellect", "Spirit" } do
+		if (item[stat] or 0) > 0 then white(("+%d %s"):format(item[stat], stat)) end
+	end
+	if (item.SpellPower or 0) > 0 then table.insert(lines, ('<font color="#1EFF00">Equip: Increases spell power by %d.</font>'):format(item.SpellPower)) end
 	if (item.Level or 1) > 1 then
 		local mine = player:GetAttribute("CharacterLevel") or 1
 		table.insert(lines, ('<font color="%s">Requires Level %d</font>'):format(if mine >= item.Level then "#FFFFFF" else "#FF2020", item.Level))
@@ -197,10 +203,11 @@ task.spawn(function()
 						color = c.Color
 					end
 				end
-				show = ('<font size="16" color="%s"><b>%s</b></font>%s\n<font color="#FFFFFF">Level %d %s</font>'):format(color,
+				show = ('<font size="16" color="%s"><b>%s</b></font>%s\n<font color="#FFFFFF">Level %d %s %s</font>%s'):format(color,
 					other:GetAttribute("CharacterName") or other.DisplayName,
 					if other:GetAttribute("Guild") then ('\n<font color="#40FB40">&lt;%s&gt;</font>'):format(other:GetAttribute("Guild")) else "",
-					other:GetAttribute("CharacterLevel") or 1, class or "")
+					other:GetAttribute("CharacterLevel") or 1, other:GetAttribute("CharacterRace") or "", class or "",
+					if other:GetAttribute("PvpFlag") then '\n<font color="#FF4040">PvP</font>' else "")
 			end
 		end
 		if show then

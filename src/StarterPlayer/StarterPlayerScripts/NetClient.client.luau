@@ -389,7 +389,7 @@ handlers[Opcodes.SMSG_ACTION_BUTTONS] = function(d)
 end
 
 handlers[Opcodes.SMSG_LEARNED_SPELL] = function(d)
-	notice(tint(Colors.SYSTEM, esc("You have learned a new spell: " .. (d.Name or "?"))))
+	notice(tint(Colors.SYSTEM, esc("You have learned a new spell: " .. (d.Name or "?") .. (if d.Rank then (" (Rank %d)"):format(d.Rank) else ""))))
 end
 
 handlers[Opcodes.SMSG_SPELL_START] = function(d)
@@ -492,6 +492,61 @@ handlers[Opcodes.SMSG_SHOW_BANK] = function(d)
 	if d.Open then
 		bankOpen:Fire()
 	end
+end
+
+-- Professions, achievements, auctions, taxi, trade and inspect open on events.
+local function event(name: string): BindableEvent
+	local e = Instance.new("BindableEvent")
+	e.Name = name
+	e.Parent = script.Parent
+	return e
+end
+local skillTrainerOpen, achievementEarned = event("SkillTrainerOpen"), event("AchievementEarned")
+local auctionOpen, auctionList = event("AuctionOpen"), event("AuctionList")
+local taxiOpen, tradeStatus, inspectResult = event("TaxiOpen"), event("TradeStatus"), event("InspectResult")
+
+player:GetAttributeChangedSignal("AuctionOpen"):Connect(function()
+	if player:GetAttribute("AuctionOpen") then
+		auctionOpen:Fire()
+	end
+end)
+
+handlers[Opcodes.SMSG_SKILL_TRAINER] = function(d)
+	skillTrainerOpen:Fire(d)
+end
+
+handlers[Opcodes.SMSG_ACHIEVEMENT_EARNED] = function(d)
+	notice(tint(Colors.SYSTEM, esc(("Achievement earned: %s (%d points)"):format(d.Name or "?", d.Points or 10))))
+	achievementEarned:Fire(d)
+end
+
+handlers[Opcodes.SMSG_AUCTION_LIST_RESULT] = function(d)
+	auctionList:Fire(d)
+end
+
+handlers[Opcodes.SMSG_AUCTION_COMMAND_RESULT] = function(d)
+	if d.Ok then
+		send(Opcodes.CMSG_AUCTION_LIST_ITEMS, { Mode = "owner" })
+	end
+end
+
+handlers[Opcodes.SMSG_SHOWTAXINODES] = function(d)
+	taxiOpen:Fire(d)
+end
+
+handlers[Opcodes.SMSG_TAXI_DONE] = function(d)
+	system(("You have arrived at %s."):format(tostring(d.Name)))
+end
+
+handlers[Opcodes.SMSG_TRADE_STATUS] = function(d)
+	if d.Status == "request" then
+		system(("%s wants to trade with you. /trade accept or /trade decline"):format(tostring(d.Partner)))
+	end
+	tradeStatus:Fire(d)
+end
+
+handlers[Opcodes.SMSG_INSPECT_RESULT] = function(d)
+	inspectResult:Fire(d)
 end
 
 handlers[Opcodes.SMSG_QUESTGIVER_QUEST_COMPLETE] = function(d)
@@ -611,6 +666,20 @@ local function parse(text: string)
 		return { Kind = "DUEL", Action = "request", Target = word or player:GetAttribute("TargetName") }
 	elseif prefix == "yield" or prefix == "forfeit" then
 		return { Kind = "DUEL", Action = "cancel" }
+	elseif prefix == "trade" then
+		local word = rest:match("^(%S+)")
+		if word == "accept" then
+			return { Kind = "TRADE", Opcode = Opcodes.CMSG_BEGIN_TRADE }
+		elseif word == "decline" or word == "cancel" then
+			return { Kind = "TRADE", Opcode = Opcodes.CMSG_CANCEL_TRADE }
+		end
+		return { Kind = "TRADE", Opcode = Opcodes.CMSG_INITIATE_TRADE, Target = word or player:GetAttribute("TargetName") }
+	elseif prefix == "roll" or prefix == "random" or prefix == "rand" then
+		return { Kind = "ROLL", Max = tonumber(rest:match("^(%d+)")) }
+	elseif prefix == "inspect" then
+		return { Kind = "INSPECT", Target = rest:match("^(%S+)") or player:GetAttribute("TargetName") }
+	elseif prefix == "dismount" then
+		return { Kind = "DISMOUNT" }
 	elseif prefix == "who" then
 		return { Kind = "WHO", Filter = rest }
 	elseif prefix == "played" then
@@ -661,6 +730,19 @@ local function dispatch(p)
 		send(opcode, { Name = p.Target })
 	elseif p.Kind == "DUEL" then
 		send(Opcodes.CMSG_DUEL, { Action = p.Action, Target = p.Target })
+	elseif p.Kind == "TRADE" then
+		send(p.Opcode, { Target = p.Target })
+	elseif p.Kind == "ROLL" then
+		send(Opcodes.CMSG_RANDOM_ROLL, { Max = p.Max })
+	elseif p.Kind == "INSPECT" then
+		send(Opcodes.CMSG_INSPECT, { Name = p.Target })
+	elseif p.Kind == "DISMOUNT" then
+		local ok, auras = pcall(HttpService.JSONDecode, HttpService, player:GetAttribute("Auras") or "[]")
+		for _, aura in (if ok and typeof(auras) == "table" then auras else {}) do
+			if aura.Kind == "mount" then
+				send(Opcodes.CMSG_CANCEL_AURA, { Id = aura.Id })
+			end
+		end
 	elseif p.Kind == "WHO" then
 		send(Opcodes.CMSG_WHO, { Filter = p.Filter })
 	elseif p.Kind == "PLAYED" then

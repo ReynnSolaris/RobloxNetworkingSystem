@@ -3,6 +3,7 @@ local DataStoreService = game:GetService("DataStoreService")
 local module = {}
 
 local RETRIES = 3
+local REFRESH_SECONDS = 30
 local online = true
 
 -- Retries with backoff. After a hard failure the whole service goes memory-only
@@ -42,7 +43,7 @@ function module:Open(name: string)
 	if not ok then
 		online = false
 	end
-	local cache, dirty, writing = {}, {}, {}
+	local cache, dirty, writing, fetched = {}, {}, {}, {}
 	local store = {}
 
 	function store.Get(_, key: string, default: any)
@@ -50,6 +51,7 @@ function module:Open(name: string)
 			local got, value = attempt(function()
 				return dataStore:GetAsync(key)
 			end)
+			fetched[key] = os.clock()
 			if got and value ~= nil then
 				cache[key] = value
 			end
@@ -95,6 +97,7 @@ function module:Open(name: string)
 			if ok then
 				cache[key] = result
 				dirty[key] = nil
+				fetched[key] = os.clock()
 				return result
 			end
 		end
@@ -102,10 +105,11 @@ function module:Open(name: string)
 		return cache[key]
 	end
 
-	-- Drop the cached copy so the next Get reads the live value. In memory-only
-	-- mode the cache is the only copy, so it stays.
+	-- Drop the cached copy so the next Get reads the live value, at most once
+	-- every REFRESH_SECONDS per key (cross-server writes arrive through
+	-- messaging in between). In memory-only mode the cache is the only copy.
 	function store.Refresh(_, key: string)
-		if online and not dirty[key] then
+		if online and not dirty[key] and os.clock() - (fetched[key] or 0) > REFRESH_SECONDS then
 			cache[key] = nil
 		end
 	end

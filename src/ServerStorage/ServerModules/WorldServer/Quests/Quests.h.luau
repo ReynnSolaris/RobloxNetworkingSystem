@@ -168,9 +168,7 @@ local function describe(self, id, status: string)
 	local DB = self:DB()
 	local rewards = {}
 	for _, reward in (template.reward_items or {}) do
-		local item = DB:Get("item_template", reward.entry) or {}
-		table.insert(rewards, { Entry = reward.entry, Count = reward.count, Name = item.name or "?", Quality = item.quality or 1,
-			Slot = item.slot, Class = item.class, Level = item.level, Health = item.health, Damage = item.damage, Armor = item.armor })
+		table.insert(rewards, self.includes.Content["Items.h"]:Describe(reward.entry, { Count = reward.count }))
 	end
 	return { Id = template.id, Title = template.title, Details = template.details, Objectives = template.objectives, Level = template.level,
 		RewardXp = template.reward_xp or 0, RewardMoney = template.reward_money or 0, RewardItems = rewards, Status = status }
@@ -198,6 +196,18 @@ function module:Gossip(player: Player, guid)
 	if template.banker then
 		table.insert(options, { Id = "bank", Text = "I would like to check my deposit box." })
 	end
+	if template.trainer_skill then
+		table.insert(options, { Id = "profession", Text = "I would like to learn a profession." })
+	end
+	if self.includes.Spells["Spells.h"]:IsTrainer(entry) and (player:GetAttribute("CharacterLevel") or 1) >= Config.Talents.FirstLevel then
+		table.insert(options, { Id = "untalent", Text = ("I wish to unlearn my talents. (%s)"):format(self.includes.Spells["Talents.h"]:ResetCost(player) // 10000 .. "g") })
+	end
+	if template.flightmaster then
+		table.insert(options, { Id = "taxi", Text = "I would like to fly somewhere." })
+	end
+	if template.auctioneer then
+		table.insert(options, { Id = "auction", Text = "Let me browse the auctions." })
+	end
 	if not self:IsQuestgiver(entry) and #options <= 1 then
 		if options[1] then
 			return self:Select(player, guid, options[1].Id)
@@ -220,6 +230,14 @@ function module:Select(player: Player, guid, option)
 		self.includes.Content["Vendors.h"]:Open(player, guid, entry)
 	elseif option == "bank" and template.banker then
 		self.includes.Entities["EntityPlayer.h"]:SendBank(player, true)
+	elseif option == "profession" and template.trainer_skill then
+		self.includes.Spells["Skills.h"]:TrainerList(player, guid)
+	elseif option == "untalent" then
+		self.includes.Spells["Talents.h"]:Reset(player)
+	elseif option == "taxi" and template.flightmaster then
+		self.includes.Content["Taxi.h"]:Show(player, guid)
+	elseif option == "auction" and template.auctioneer then
+		self.includes.Content["Auction.h"]:Open(player, guid)
 	elseif option == "bind" and template.innkeeper then
 		local zone = self.includes.Zones["Zones.h"]:At(creature.Root.Position)
 		self.includes.Entities["EntityPlayer.h"]:SetHome(player, creature.Root.Position, zone and zone.Name or template.name)
@@ -307,6 +325,10 @@ function module:Complete(player: Player, guid, id)
 	end
 	c.Quests[tostring(id)] = nil
 	c.Done[tostring(id)] = true
+	self.includes.Social["Achievements.h"]:OnQuest(player)
+	if template.reward_rep then
+		self.includes.Social["Reputation.h"]:Modify(player, template.reward_rep.faction, template.reward_rep.amount or 250)
+	end
 	commit(self, player)
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTGIVER_QUEST_COMPLETE, { Id = template.id, Title = template.title, Xp = template.reward_xp or 0 })
 	if (template.reward_xp or 0) > 0 then
@@ -446,9 +468,9 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
-	{ Path = "Auth/Social", Imports = "Party.h" },
-	{ Path = "World/Content", Imports = "Creatures.h|Vendors.h" },
-	{ Path = "World/Spells", Imports = "Spells.h" },
+	{ Path = "Auth/Social", Imports = "Party.h|Achievements.h|Reputation.h" },
+	{ Path = "World/Content", Imports = "Creatures.h|Vendors.h|Items.h|Taxi.h|Auction.h" },
+	{ Path = "World/Spells", Imports = "Spells.h|Talents.h|Skills.h" },
 	{ Path = "World/Zones", Imports = "Zones.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 })

@@ -125,6 +125,11 @@ function module:Login(player: Player, data)
 	self.includes.Social["Social.h"]:OnLogin(player)
 	self.includes.Social["Guild.h"]:OnLogin(player)
 	self.includes.Mail["Mail.h"]:OnLogin(player)
+	self.includes.Combat["Pvp.h"]:OnLogin(player)
+	self.includes.Social["Reputation.h"]:OnLogin(player)
+	self.includes.Spells["Talents.h"]:OnLogin(player)
+	self.includes.Spells["Skills.h"]:OnLogin(player)
+	self.includes.Social["Achievements.h"]:OnLogin(player)
 end
 
 function module:Logout(player: Player)
@@ -134,6 +139,7 @@ function module:Logout(player: Player)
 		return
 	end
 	self.includes.Combat["Duel.h"]:Forfeit(player)
+	self.includes.Content["Trade.h"]:Cancel(player, "Trade cancelled.")
 	self.includes.Combat["Death.h"]:Forget(player)
 	self.includes.Social["Social.h"]:OnLogout(player)
 	self.includes.Social["Guild.h"]:OnLogout(player)
@@ -182,9 +188,10 @@ return Base(module, {
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "World/Database", Imports = "WorldDatabase.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
-	{ Path = "World/Combat", Imports = "Death.h|Duel.h" },
+	{ Path = "World/Combat", Imports = "Death.h|Duel.h|Pvp.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
-	{ Path = "World/Spells", Imports = "Spells.h" },
+	{ Path = "World/Spells", Imports = "Spells.h|Talents.h|Skills.h" },
 	{ Path = "World/Mail", Imports = "Mail.h" },
-	{ Path = "Auth/Social", Imports = "Social.h|Guild.h" },
+	{ Path = "World/Content", Imports = "Trade.h" },
+	{ Path = "Auth/Social", Imports = "Social.h|Guild.h|Reputation.h|Achievements.h" },
 })

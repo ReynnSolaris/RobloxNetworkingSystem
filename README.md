@@ -31,12 +31,15 @@ src/ServerStorage/ServerModules/
   WorldServer/Characters/          Characters (enum, create, delete, login, logout)
   WorldServer/Zones/               Zones (which zone each player stands in)
   WorldServer/Movement/            Anticheat (movement validation)
-  WorldServer/Content/             Creatures (spawns, AI, loot), GameObjects, Items, Vendors, Teleports
-  WorldServer/Combat/              Combat (player melee, combat log), Loot (corpse loot), Death (release, ghosts, corpses), Duel
-  WorldServer/Quests/              Quests (templates, questgivers, objectives, rewards)
-  WorldServer/Spells/              Spells (templates, casting, mana, cooldowns, trainers, item use)
+  WorldServer/Content/             Creatures (spawns, AI, spells, waypoints, loot), GameObjects (chests, doors, nodes, mailboxes),
+                                   Items (templates, Describe), Vendors, Teleports, Auction (auction house), Taxi (flight paths), Trade
+  WorldServer/Combat/              Combat (units, damage, healing, rolls, melee), Loot (loot sources), Death (release, ghosts, corpses),
+                                   Duel, Pvp (world PvP, honor)
+  WorldServer/Quests/              Quests (templates, questgivers, gossip, objectives, rewards)
+  WorldServer/Spells/              Spells (templates, casting, mana, cooldowns, trainers, item use, creature casts, ranks),
+                                   Auras (DoTs, HoTs, stat buffs, slows, stuns, mounts), Talents, Skills (professions, crafting, gathering)
   WorldServer/Mail/                Mail (letters with money and items, mailboxes)
-  AuthServer/Social/               Party, Social (friends, ignore, who, played), Guild (ranks, MOTD, roster, invites)
+  AuthServer/Social/               Party, Social (friends, ignore, who, played, inspect, roll), Guild, Reputation, Achievements
 src/ServerStorage/ObjectTemplates/                 models .gobject can place
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus), Effects (particles)
@@ -46,6 +49,9 @@ src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), 
                                                    QuestGiverFrame, QuestLogFrame (log on L, ! and ? markers),
                                                    ActionBar (1-9 0 - =, cast bar), SpellBook (P), TrainerFrame, SpellUi,
                                                    MailFrame (mailbox prompt), FriendsFrame (O: friends, ignore, guild), BankFrame,
+                                                   BuffFrame (auras and the target's cast), TalentFrame (N), SkillFrame (K, professions
+                                                   and the profession trainer), ReputationFrame (U), AchievementFrame (Y, toast),
+                                                   AuctionFrame, TaxiFrame, TradeFrame, InspectFrame,
                                                    Preview (ViewportFrame character previews),
                                                    ZoneBanner, PartyFrame, Drag (drag and drop),
                                                    Ui (theme, tooltip), Components (Fusion panels, lists, buttons)
@@ -99,11 +105,19 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | CMSG_GUILD / SMSG_GUILD_ROSTER / SMSG_GUILD_INVITE / SMSG_GUILD_EVENT | both | `{ Action, Target?, Text? }`; roster with ranks and online state; invite; green guild lines |
 | SMSG_SHOW_BANK / CMSG_BANK_DEPOSIT / CMSG_BANK_WITHDRAW / CMSG_BANK_SWAP | both | bank stacks; `{ Bag, Bank? }`, `{ Bank, Bag? }`, `{ From, To }` |
 | CMSG_DUEL / SMSG_DUEL_REQUESTED / SMSG_DUEL_UPDATE | both | `{ Action = request|accept|decline|cancel, Target? }`; challenge; `{ Opponent? }` |
+| CMSG_CANCEL_AURA / CMSG_GAMEOBJ_USE | client | `{ Id }` drops a buff; `{ Guid }` uses a chest, door, node or mailbox |
+| CMSG_LEARN_TALENT | client | `{ Id }`; the tree rides the `Talents` attribute |
+| CMSG_CRAFT / CMSG_LEARN_SKILL / SMSG_SKILL_TRAINER | both | `{ Recipe, Count }`; `{ Guid, Skill, Action? }`; the profession trainer's list |
+| SMSG_ACHIEVEMENT_EARNED | server | `{ Id, Name, Description, Points }` |
+| CMSG_AUCTION_LIST_ITEMS / SMSG_AUCTION_LIST_RESULT / CMSG_AUCTION_SELL_ITEM / CMSG_AUCTION_PLACE_BID / CMSG_AUCTION_REMOVE_ITEM / SMSG_AUCTION_COMMAND_RESULT | both | `{ Mode = browse|owner|bidder, Filter }`; `{ Bag, Bid, Buyout, Hours }`; `{ Id, Amount }`; `{ Id }` |
+| SMSG_SHOWTAXINODES / CMSG_ACTIVATETAXI / SMSG_TAXI_DONE | both | `{ Guid, Here, Nodes }`; `{ Guid, Node }`; arrival |
+| CMSG_INITIATE_TRADE / CMSG_BEGIN_TRADE / CMSG_CANCEL_TRADE / CMSG_SET_TRADE_ITEM / CMSG_SET_TRADE_GOLD / CMSG_ACCEPT_TRADE / SMSG_TRADE_STATUS | both | `{ Target }`; `{ Slot, Bag? }`; `{ Amount }`; `{ Status, Partner, Mine, Theirs }` |
+| CMSG_INSPECT / SMSG_INSPECT_RESULT / CMSG_RANDOM_ROLL | both | `{ Name }` in, gear and stats out; `{ Max }` rolls to the party |
 | SMSG_QUESTGIVER_STATUS_MULTIPLE | server | `{ Statuses = { [guid] = available|complete|incomplete|none } }` for the markers |
 | SMSG_VENDOR_LIST | server | `{ Guid, Items }` opens the vendor window |
 | CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
 | CMSG_EQUIP / CMSG_UNEQUIP | client | `{ Entry }` / `{ Slot }` |
-| SMSG_EQUIPMENT | server | `{ Slots, Stats = { Health, Damage, Armor } }` |
+| SMSG_EQUIPMENT | server | `{ Slots, Stats = { Health, Mana, Damage, Armor, SpellPower, Crit, Dodge, Strength, Agility, Stamina, Intellect, Spirit } }` |
 | CMSG_BUYBACK_ITEM / SMSG_BUYBACK_LIST | both | `{ Guid, Index }` in, `{ Items }` out |
 | CMSG_ITEM_QUERY_SINGLE / SMSG_ITEM_QUERY_SINGLE_RESPONSE | both | `{ Entry }` in, the template's display fields out |
 | SMSG_SPAWN | server | `{ Position, Health, MaxHealth }` |
@@ -181,6 +195,12 @@ GAMEMASTER  .buff <all|player> <speed|jump> <multiplier> <seconds>
             .gobject template add <name> <modelid> [size] | template list
             .quest add|complete|remove <id> [player] | .quest template list
             .learn <spell id|all> [player] | .unlearn <spell id> [player]
+            .aura <spell id> [player] | .unaura <spell id|all> [player] | .mount [player] | .dismount [player]
+            .skill learn|unlearn <name> [player] | .skill set <name> <value> [player] | .skill list
+            .talent reset [player] | .talent points [player] | .rep <faction id> <amount> [player] | .rep list
+            .achievement add <id> [player] | .achievement list | .honor add <amount> [player]
+            .taxi node add <name> [cost] | .taxi path <from> <to> [cost] | .taxi list | .taxi learn all [player]
+            .npc wp add [guid] [wait] | .npc wp clear [guid]
             .npc add <entry> | delete [guid] | move [guid] | kill [guid] | say [guid] <text> | info [guid] | near
             .loot template add <creatureEntry> <itemEntry> <chance> [min] [max] | template list [entry]
             .npc template add <name> [modelid] [subname] | template set <entry> <field> <value> | template list
@@ -259,23 +279,30 @@ placing something on one server sees it appear on all of them. Tables and keys:
 
 | Table | Key | Columns |
 |---|---|---|
-| creature_template | entry | name, subname, modelid, scale, gossip, faction, minlevel, maxlevel, health, dmgmin, dmgmax, aggro, speed, mingold, maxgold |
-| creature | guid | id (entry), x, y, z, o, spawntimesecs, by |
-| creature_loot_template | id | entry (creature), item, chance, mincount, maxcount |
-| gameobject_template | entry | name, modelid, size |
-| gameobject | guid | id (entry), x, y, z, o, scale, by |
+| creature_template | entry | name, subname, modelid, scale, gossip, faction, minlevel, maxlevel, health, dmgmin, dmgmax, aggro, speed, mingold, maxgold, spells, wander, faction_id, rep_kill, rep_ally, innkeeper, banker, trainer_skill, flightmaster, auctioneer |
+| creature | guid | id (entry), x, y, z, o, spawntimesecs, waypoints, by |
+| creature_loot_template / gameobject_loot_template | id | entry, item, chance, mincount, maxcount |
+| gameobject_template | entry | name, modelid, size, type (mailbox, chest, door, node, auctioneer), skill, reqskill, mingold, maxgold |
+| gameobject | guid | id (entry), x, y, z, o, scale, spawntimesecs, by |
 | game_tele | id | name, x, y, z, o |
 | game_graveyard | id | name, x, y, z, o |
 | quest_template | id | title, details, objectives, minlevel, level, reward_xp, reward_money, reward_items, req_creature, req_item |
 | creature_queststarter / creature_questender | id | entry (creature), quest |
-| spell_template | id | name, description, class, school, effect, base, per_level, cost, cast_time, cooldown, range, target, buff, mult, duration, icon |
+| spell_template | id | name, rank, description, class, school, effect (damage, heal, aura, hearth), base, per_level, cost, cast_time, cooldown, range, target (enemy, friend, self), aura = { kind, stat, mult, interval, duration, harmful }, icon, npc |
 | playercreateinfo_spell | id | class, spell |
 | npc_trainer | id | entry (creature), spell, cost, reqlevel |
+| faction | id | name, team, description, base = { Alliance, Horde } |
+| talent | id | class, tab, tier, col, name, description, max_rank, mod = { kind, stat or school, value } |
+| skill_line | id | name, kind (primary, secondary), description |
+| skill_recipe | id | skill, name, result, count, reagents, reqskill |
+| achievement | id | name, description, category, points, criteria = { type, value, name } |
+| auctionhouse | id | item, count, owner, ownerId, bid, buyout, bidder, bidderId, expires, deposit |
+| taxi_nodes / taxi_path | id | name, x, y, z, cost / from, to, cost, points |
 
 Outside the world tables, the World store also keeps `names` (character name to
 account, for mail and friends), `mail:<name>` (a character's letters),
 `guild:<id>` (a guild with its members and ranks) and `guildnames`.
-| item_template | entry | name, quality 0-5, stack, class, slot, health, damage, armor, buyprice, sellprice, level |
+| item_template | entry | name, quality 0-5, stack, class, slot, health, damage, armor, strength, agility, stamina, intellect, spirit, spellpower, buyprice, sellprice, level, use, consumable, flavor, bind |
 | npc_vendor | id | entry (creature), item |
 
 Templates are the assets, spawns reference them by entry, like TC. A creature's
@@ -479,6 +506,69 @@ the player frame and rested XP banking at `Config.Rested.PerTick` of the level
 every tick, up to one and a half levels. Kill XP is doubled from that pool, shown
 as "(+N exp Rested bonus)".
 
+## Stats, auras, talents
+
+Each class has base primary stats and per-level growth in `Config.Stats`, WoW
+style: Stamina is health, Intellect mana and spell power, Strength melee damage,
+Agility crit, dodge and armor, Spirit mana regeneration. Equipment adds stats,
+auras and talents modify them, and `EntityPlayer:ApplyStats` folds it all into
+the numbers combat reads. Attacks roll miss, dodge, crit or hit.
+
+Every spell and ability goes through `Combat:Damage` and `Combat:Heal`, which
+take any unit (a player or a creature state), so DoTs, creature spells, duels and
+world PvP all log and aggro the same way. A spell with an `aura` block applies a
+timed effect: periodic damage or healing, a stat bonus, a slow, a stun, a mount.
+Each class has a DoT or HoT, a stat buff or a slow, and most a stun. Auras ride
+the unit's `Auras` attribute; the buff frame draws yours under the player frame
+and the target's under the target frame, with a right-click to cancel. Creatures
+cast too: `creature_template.spells` names the spells their brains use, and they
+patrol `creature.waypoints` (`.npc wp add`), wander `wander` studs around home,
+and call nearby creatures of their kind for help when attacked.
+
+Talents open on N from level 10: three trees a class, five tiers of talents
+that raise a stat by percent, a school's damage, or crit and dodge. Points come
+one a level; a tier opens with five points in the tree below. The class trainer
+unlearns them for a gold, doubling each time.
+
+## Professions, reputation, achievements
+
+Professions (K) are skill lines: Mining, Herbalism, Blacksmithing, Alchemy and the
+secondary Cooking and First Aid, two primaries at most. A profession trainer
+(`trainer_skill`) teaches them and raises the cap from Apprentice 75 to Journeyman
+150 and Expert 225. Recipes unlock by skill; crafting consumes reagents and skills
+up orange, yellow, green, grey. Veins and herbs are gameobjects of type `node`
+with a `Skill` and `ReqSkill`; gathering rolls `gameobject_loot_template`. Chests
+work the same without a skill and doors swing on their hinge; all of them
+respawn after `spawntimesecs`.
+
+Reputation (U) follows TC's faction table and standings, Hated to Exalted. A
+creature's `faction_id` loses standing when killed and `rep_ally` gains it, quests
+can give `reward_rep`, and vendors of a faction discount by standing.
+Achievements (Y) check level, kills, quests, zones discovered, money looted,
+duels, honorable kills, skills and standing; earning one toasts and tells the
+guild and anyone nearby.
+
+## Auction house, flight paths, trade, PvP
+
+An auctioneer creature or gameobject opens the auction house: browse with
+search, bid or buy out, see your bids and auctions, and sell by dragging a bag
+item in with a starting bid, buyout and 12, 24 or 48 hours. Deposits, outbids,
+wins and expiries all settle through the mail, with the house's cut.
+
+Flight masters (`flightmaster`) sit at `taxi_nodes`; talking to one learns its
+node, and `taxi_path` rows connect nodes (`.taxi node add`, `.taxi path`). Flying
+anchors the character and tweens it along the path, high up, for the fare.
+Mounts are items whose spell applies a `mount` aura: a horse is drawn under the
+character, movement is faster, and any damage dismounts.
+
+`/trade <name>` opens a six slot trade window on both sides once accepted; both
+must accept after any change. `/inspect` shows another player's gear, stats and
+talent spread; `/roll` rolls to the party or those nearby.
+
+In a zone with `Pvp = true`, players of the other faction are attackable, which
+flags you (red PvP on the player frame) for five minutes. A kill of someone within
+five levels is an honorable kill worth honor, both kept on the character sheet.
+
 ## Tooltips
 
 One tooltip serves everything. It does not follow the mouse: beside the element
@@ -486,7 +576,8 @@ it describes, or in the bottom right corner for creatures and players in the
 world (name in faction or class colour, subname, level, guild). Items use the WoW
 order: name in quality colour, binding, slot and type, armor, green stats, level
 requirement in red when too low, Use line, max stack, sell price in coin colours.
-Spells show cost and range, cast time and cooldown, class and description.
+Spells show cost and range, cast time and cooldown, rank, class, description and
+what the aura does. Items list primary stats and spell power.
 
 ## Saving
 

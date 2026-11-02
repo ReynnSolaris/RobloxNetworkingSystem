@@ -19,6 +19,8 @@ local target = scope:Value(nil :: Model?)
 local attacking = scope:Value(false)
 local health, maxHealth = scope:Value(0), scope:Value(1)
 local duelOpponent = Components.attribute(scope, player, "DuelOpponent", nil)
+local myFaction = Components.attribute(scope, player, "CharacterFaction", "Alliance")
+local zoneKind = Components.attribute(scope, player, "ZoneKind", nil)
 local function playerOf(model: Model?): Player?
 	local other = model and Players:GetPlayerFromCharacter(model)
 	return if other and other ~= player then other else nil
@@ -27,7 +29,11 @@ local hostile = scope:Computed(function(use)
 	local model = use(target)
 	local other = playerOf(model)
 	if other then
-		return use(duelOpponent) ~= nil and use(duelOpponent) == (other:GetAttribute("CharacterName") or other.Name)
+		if use(duelOpponent) ~= nil and use(duelOpponent) == (other:GetAttribute("CharacterName") or other.Name) then
+			return true
+		end
+		local enemy = other:GetAttribute("CharacterFaction") ~= nil and other:GetAttribute("CharacterFaction") ~= use(myFaction)
+		return enemy and (use(zoneKind) == "Contested Territory" or other:GetAttribute("PvpFlag") == true)
 	end
 	return model ~= nil and model:GetAttribute("Faction") == "hostile"
 end)
@@ -80,7 +86,8 @@ scope:New "ScreenGui" {
 			local model = use(target)
 			local other = playerOf(model)
 			if other then
-				return ("Level %d %s%s"):format(other:GetAttribute("CharacterLevel") or 1, other:GetAttribute("CharacterClass") or "", if use(hostile) then "  (Duel)" else "")
+				local duel = use(duelOpponent) ~= nil and use(duelOpponent) == (other:GetAttribute("CharacterName") or other.Name)
+				return ("Level %d %s %s%s"):format(other:GetAttribute("CharacterLevel") or 1, other:GetAttribute("CharacterRace") or "", other:GetAttribute("CharacterClass") or "", if duel then "  (Duel)" elseif use(hostile) then "  (PvP)" else "")
 			end
 			return if model then ("Level %s %s"):format(tostring(model:GetAttribute("Level") or "?"), if use(hostile) then "Hostile" else "Friendly") else ""
 		end),

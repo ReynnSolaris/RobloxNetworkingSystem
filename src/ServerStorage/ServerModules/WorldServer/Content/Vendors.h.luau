@@ -14,15 +14,17 @@ function module:DB()
 	return self.includes.Database["WorldDB.h"]
 end
 
-function module:Stock(entry)
+-- Prices fall with the player's standing toward the vendor's faction.
+function module:Stock(entry, player: Player?)
 	local DB = self:DB()
+	local Items = self.includes.Content["Items.h"]
+	local discount = if player then self.includes.Social["Reputation.h"]:Discount(player, DB:Get("creature_template", entry)) else 0
 	local items = {}
 	for _, row in DB:Select("npc_vendor") do
 		if tostring(row.entry) == tostring(entry) then
 			local item = DB:Get("item_template", row.item)
 			if item then
-				table.insert(items, { Entry = item.entry, Name = item.name, Quality = item.quality or 1, Price = item.buyprice or 0,
-					Slot = item.slot, Class = item.class, Level = item.level, Health = item.health, Damage = item.damage, Armor = item.armor })
+				table.insert(items, Items:Describe(item, { Price = math.floor((item.buyprice or 0) * (1 - discount)) }))
 			end
 		end
 	end
@@ -37,7 +39,7 @@ local function inRange(self, player: Player, guid): boolean
 end
 
 function module:Open(player: Player, guid, entry)
-	local stock = self:Stock(entry)
+	local stock = self:Stock(entry, player)
 	if #stock > 0 then
 		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_VENDOR_LIST, { Guid = tostring(guid), Items = stock })
 		if self.SendBuyback then
@@ -73,7 +75,7 @@ function module:Start()
 		local state = self.includes.Content["Creatures.h"]:State(data.Guid)
 		local entry, count = tonumber(data.Entry), math.clamp(tonumber(data.Count) or 1, 1, 20)
 		local item
-		for _, stock in self:Stock(state.Row.id) do
+		for _, stock in self:Stock(state.Row.id, player) do
 			if stock.Entry == entry then
 				item = stock
 			end
@@ -93,9 +95,7 @@ function module:Start()
 	local function sendBuyback(player: Player)
 		local list = {}
 		for _, item in (self.information[player] or {}) do
-			local template = DB:Get("item_template", item.entry) or {}
-			table.insert(list, { Entry = item.entry, Count = item.count, Price = item.price, Name = template.name, Quality = template.quality or 1,
-				Slot = template.slot, Class = template.class, Level = template.level, Health = template.health, Damage = template.damage, Armor = template.armor })
+			table.insert(list, self.includes.Content["Items.h"]:Describe(item.entry, { Count = item.count, Price = item.price }))
 		end
 		Packet:Send(player, Opcodes.SMSG_BUYBACK_LIST, { Items = list })
 	end
@@ -158,7 +158,8 @@ end
 
 return Base(module, {
 	{ Path = "World/Database", Imports = "WorldDB.h" },
-	{ Path = "World/Content", Imports = "Creatures.h" },
+	{ Path = "World/Content", Imports = "Creatures.h|Items.h" },
+	{ Path = "Auth/Social", Imports = "Reputation.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },

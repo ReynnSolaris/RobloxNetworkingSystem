@@ -26,6 +26,9 @@ local money = Components.attribute(scope, player, "Money", 0)
 local level = Components.attribute(scope, player, "CharacterLevel", 1)
 local charName = Components.attribute(scope, player, "CharacterName", player.DisplayName)
 local charClass = Components.attribute(scope, player, "CharacterClass", "")
+local charRace = Components.attribute(scope, player, "CharacterRace", "")
+local honor = Components.attribute(scope, player, "Honor", 0)
+local honorKills = Components.attribute(scope, player, "HonorKills", 0)
 
 local function decode(json: string, default)
 	local ok, value = pcall(HttpService.JSONDecode, HttpService, json)
@@ -139,15 +142,19 @@ Components.Panel(scope, {
 	Enabled = open,
 	Parent = player:WaitForChild("PlayerGui"),
 	Title = scope:Computed(function(use)
-		return ("%s, Level %d %s"):format(use(charName), use(level), use(charClass))
+		return ("%s, Level %d %s %s"):format(use(charName), use(level), use(charRace), use(charClass))
 	end),
 	[Children] = {
-		Components.Text(scope, { Size = UDim2.new(1, -24, 0, 40), Position = UDim2.fromOffset(12, 8), TextSize = 13, Color = Ui.DIM, Text = scope:Computed(function(use)
+		Components.Text(scope, { Size = UDim2.new(1, -24, 0, 44), Position = UDim2.fromOffset(12, 6), TextSize = 12, Color = Ui.DIM, Wrapped = true, Text = scope:Computed(function(use)
 			local s = decode(use(stats), {})
-			return ("Health %d    Melee +%d    Armor %d"):format(s.Health or 0, s.Damage or 0, s.Armor or 0)
+			return ("Str %d  Agi %d  Sta %d  Int %d  Spi %d\nHealth %d   Melee +%d   Spell +%d   Armor %d   Crit %.1f%%   Dodge %.1f%%"):format(
+				s.Strength or 0, s.Agility or 0, s.Stamina or 0, s.Intellect or 0, s.Spirit or 0, s.Health or 0, s.Damage or 0, s.SpellPower or 0, s.Armor or 0, s.Crit or 0, s.Dodge or 0)
 		end) }),
 		tiles,
-		Components.Text(scope, { Size = UDim2.new(1, -24, 0, 20), Position = UDim2.new(0, 12, 1, -26), Color = Ui.GOLD, Align = Enum.TextXAlignment.Right, Text = scope:Computed(function(use)
+		Components.Text(scope, { Size = UDim2.new(0.5, -12, 0, 20), Position = UDim2.new(0, 12, 1, -26), TextSize = 12, Color = Ui.DIM, Text = scope:Computed(function(use)
+			return ("Honor %d   HK %d"):format(use(honor) or 0, use(honorKills) or 0)
+		end) }),
+		Components.Text(scope, { Size = UDim2.new(0.5, -12, 0, 20), Position = UDim2.new(0.5, 0, 1, -26), Color = Ui.GOLD, Align = Enum.TextXAlignment.Right, Text = scope:Computed(function(use)
 			return Ui.money(use(money))
 		end) }),
 	},
