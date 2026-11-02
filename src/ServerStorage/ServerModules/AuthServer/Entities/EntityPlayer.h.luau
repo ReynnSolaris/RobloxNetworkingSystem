@@ -934,6 +934,42 @@ local function attachBody(character: Model, name: string, parts, root: BasePart)
 	return model
 end
 
+-- A rigged template (one with an AnimationController or Humanoid, from a
+-- Blender FBX import) is cloned whole and welded by its root to the rider.
+-- Its attributes AnimIdle, AnimWalk, AnimFly and AnimSpecial name the clips
+-- the clients play; it skips the procedural legs.
+local function rigged(folderName: string, templateName: string): Model?
+	local folder = ServerStorage:FindFirstChild(folderName)
+	local template = folder and folder:FindFirstChild(templateName)
+	if template and (template:FindFirstChildOfClass("AnimationController") or template:FindFirstChildOfClass("Humanoid")) then
+		return template
+	end
+	return nil
+end
+
+local function attachRigged(character: Model, name: string, template: Model, root: BasePart): Model
+	local model = template:Clone()
+	model.Name = name
+	local body = model.PrimaryPart or model:FindFirstChild("Root") or model:FindFirstChildWhichIsA("BasePart")
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.Anchored = false
+			part.CanCollide = false
+			part.Massless = true
+		end
+	end
+	model:PivotTo(root.CFrame)
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0, weld.Part1 = root, body
+	weld.Parent = body
+	model:SetAttribute("Rigged", true)
+	if not model:FindFirstChildOfClass("AnimationController") and not model:FindFirstChildOfClass("Humanoid") then
+		Instance.new("AnimationController", model)
+	end
+	model.Parent = character
+	return model
+end
+
 -- Reads a template Model into the part list attachBody takes.
 local function templateParts(folderName: string, templateName: string)
 	local folder = ServerStorage:FindFirstChild(folderName)
@@ -1099,6 +1135,13 @@ function module:Mount(player: Player, on: boolean, fly: boolean?, modelName: str
 	if not root then
 		return
 	end
+	local rig = modelName and rigged("MountTemplates", modelName)
+	if rig then
+		attachRigged(character, "Mount", rig, root)
+		local box, size = rig:GetBoundingBox()
+		module.Lift(character, { { offset = CFrame.new(0, box.Position.Y - rig:GetPivot().Position.Y, 0), size = size } })
+		return
+	end
 	local parts = (modelName and templateParts("MountTemplates", modelName)) or (if fly then BODIES.gryphon() else BODIES.horse())
 	attachBody(character, "Mount", parts, root)
 	module.Lift(character, parts)
@@ -1155,6 +1198,14 @@ function module:Shapeshift(player: Player, form: string?)
 	self.includes.System["Effects.h"]:Play("Nature", player, 18)
 	if form == "shadow" then
 		self.includes.System["Effects.h"]:Attach("Shadow", root)
+		return
+	end
+	local rig = rigged("FormTemplates", form)
+	if rig then
+		hideBody(character, true)
+		attachRigged(character, "Form", rig, root)
+		local box, size = rig:GetBoundingBox()
+		module.Lift(character, { { offset = CFrame.new(0, box.Position.Y - rig:GetPivot().Position.Y, 0), size = size } })
 		return
 	end
 	local parts = templateParts("FormTemplates", form) or (BODIES[form] and BODIES[form]()) or BODIES.cat()

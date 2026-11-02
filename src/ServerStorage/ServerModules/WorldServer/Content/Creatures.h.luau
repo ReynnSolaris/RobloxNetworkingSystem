@@ -20,15 +20,18 @@ local module = {}
 -- creature, count }. Loot comes from creature_loot_template.
 
 local SEED = {
-	{ name = "Innkeeper", subname = "Innkeeper", modelid = "default", scale = 1, gossip = "Welcome, traveler. Rest your feet a while.", faction = "friendly", innkeeper = true },
-	{ name = "Town Guard", subname = "Guard", modelid = "default", scale = 1.05, gossip = "Move along, citizen.", faction = "Alliance", guard = true, rank = "elite", minlevel = 10, maxlevel = 10, health = 300, dmgmin = 12, dmgmax = 18, aggro = 20, speed = 16 },
+	{ name = "Innkeeper", subname = "Innkeeper", modelid = "default", scale = 1, gossip = "Welcome, traveler. Rest your feet a while.", faction = "friendly", innkeeper = true,
+		texts = { "Fresh bread, warm beds!", "Mind the wolves on the road east.", "Another round for the table by the fire?" } },
+	{ name = "Town Guard", subname = "Guard", modelid = "default", scale = 1.05, gossip = "Move along, citizen.", faction = "Alliance", guard = true, rank = "elite", minlevel = 10, maxlevel = 10, health = 300, dmgmin = 12, dmgmax = 18, aggro = 20, speed = 16,
+		texts = { "Keep your weapons sheathed in town.", "The kobolds grow bolder every week.", "Light be with you, citizen." } },
 	{ name = "Orgrimmar Grunt", subname = "Guard", modelid = "default", scale = 1.1, gossip = "Lok'tar, friend.", faction = "Horde", guard = true, rank = "elite", minlevel = 10, maxlevel = 10, health = 300, dmgmin = 12, dmgmax = 18, aggro = 20, speed = 16 },
 	{ name = "Riding Trainer", subname = "Riding Trainer", modelid = "default", scale = 1, gossip = "Every great journey starts in the saddle.", faction = "friendly" },
 	{ name = "Spirit Healer", subname = "", modelid = "default", scale = 1.2, gossip = "Rest now, and rise.", faction = "friendly", spirithealer = true, ghostonly = true },
 	{ name = "Banker", subname = "Banker", modelid = "default", scale = 1, gossip = "Your deposits are safe with us.", faction = "friendly", banker = true },
 	{ name = "Class Trainer", subname = "Trainer", modelid = "default", scale = 1, gossip = "What would you like to learn?", faction = "friendly" },
 	{ name = "General Goods", subname = "Vendor", modelid = "default", scale = 1, gossip = "Fine wares, fair prices.", faction = "friendly", repair = true },
-	{ name = "Kobold Vermin", modelid = "default", scale = 0.85, faction = "hostile", minlevel = 1, maxlevel = 2, health = 40, dmgmin = 2, dmgmax = 4, aggro = 15, speed = 12, mingold = 1, maxgold = 5, wander = 8, spells = { "Throw Torch" } },
+	{ name = "Kobold Vermin", modelid = "default", scale = 0.85, faction = "hostile", minlevel = 1, maxlevel = 2, health = 40, dmgmin = 2, dmgmax = 4, aggro = 15, speed = 12, mingold = 1, maxgold = 5, wander = 8, spells = { "Throw Torch" },
+		texts = { "You no take candle!", "Me no like you!", "Candle mine!" } },
 	{ name = "Young Wolf", modelid = "default", scale = 0.9, faction = "hostile", minlevel = 2, maxlevel = 3, health = 55, dmgmin = 3, dmgmax = 5, aggro = 18, speed = 14, mingold = 0, maxgold = 3, wander = 12, spells = { "Bite" }, beast = true },
 	{ name = "Kobold Geomancer", modelid = "default", scale = 0.85, faction = "hostile", minlevel = 3, maxlevel = 4, health = 60, dmgmin = 2, dmgmax = 4, aggro = 20, speed = 12, mingold = 3, maxgold = 9, spells = { "Fire Blast" } },
 	{ name = "Goldtooth", subname = "Kobold Chieftain", modelid = "default", scale = 1.1, faction = "hostile", rank = "boss", minlevel = 5, maxlevel = 5, health = 120, dmgmin = 4, dmgmax = 7, aggro = 20, speed = 13, mingold = 50, maxgold = 120, spells = { "Throw Torch" },
@@ -796,7 +799,7 @@ function module:Start()
 			byName[template.name] = DB:Insert("creature_template", table.clone(template))
 		else
 			local fields = {}
-			for _, key in { "innkeeper", "banker", "spells", "wander", "beast", "rank", "script", "repair", "battlemaster", "guard", "spirithealer", "ghostonly", "minlevel", "maxlevel", "health", "dmgmin", "dmgmax", "aggro" } do
+			for _, key in { "innkeeper", "banker", "spells", "wander", "beast", "rank", "script", "repair", "battlemaster", "guard", "spirithealer", "ghostonly", "minlevel", "maxlevel", "health", "dmgmin", "dmgmax", "aggro", "texts" } do
 				if template[key] ~= nil and existing[key] == nil then
 					fields[key] = template[key]
 				end
@@ -837,6 +840,24 @@ function module:Start()
 			for _, state in self.information do
 				if state.Moves then
 					self:Think(state)
+				end
+			end
+		end
+	end)
+	-- creature_text: idle chatter when someone is near, every minute or two
+	task.spawn(function()
+		while true do
+			task.wait(15)
+			for _, state in self.information do
+				local texts = state.Template.texts
+				if texts and #texts > 0 and not state.Dead and not state.Target and math.random() < 0.2 then
+					for _, player in Players:GetPlayers() do
+						local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+						if root and (root.Position - state.Root.Position).Magnitude <= Config.Chat.SayRange then
+							self:Say(state.Model, texts[math.random(#texts)])
+							break
+						end
+					end
 				end
 			end
 		end

@@ -242,6 +242,11 @@ end
 
 function module:Start()
 	local Packet = self.includes.Security["Packet.h"]
+	Packet:On(Opcodes.CMSG_MOUNT_SPECIAL, function(player)
+		if self:Has(player, "mount") or self:Has(player, "form") then
+			player:SetAttribute("MountSpecial", os.clock())
+		end
+	end)
 	Packet:On(Opcodes.CMSG_CANCEL_AURA, function(player, data)
 		local aura = typeof(data) == "table" and self:Find(player, tonumber(data.Id))
 		if aura and not aura.Harmful then

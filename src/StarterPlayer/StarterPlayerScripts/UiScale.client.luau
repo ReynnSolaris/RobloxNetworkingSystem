@@ -14,8 +14,11 @@ end
 
 local scales: { UIScale } = {}
 
+-- the drag ghost and the tooltip position themselves in screen pixels
+local UNSCALED = { DragGhost = true, Tooltip = true }
+
 local function attach(gui: Instance)
-	if not gui:IsA("ScreenGui") or gui:FindFirstChild("UiScale") then
+	if not gui:IsA("ScreenGui") or gui:FindFirstChild("UiScale") or UNSCALED[gui.Name] then
 		return
 	end
 	local scale = Instance.new("UIScale")

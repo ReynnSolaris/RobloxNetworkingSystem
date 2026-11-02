@@ -192,6 +192,7 @@ local Opcodes = {
 
 	CMSG_SAVE_SETTINGS = 390,
 	SMSG_SETTINGS = 391,
+	CMSG_MOUNT_SPECIAL = 392,
 }
 
 local names = {}

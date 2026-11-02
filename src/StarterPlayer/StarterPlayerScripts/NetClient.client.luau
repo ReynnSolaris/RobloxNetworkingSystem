@@ -729,6 +729,8 @@ local function parse(text: string)
 		return { Kind = "INSPECT", Target = rest:match("^(%S+)") or player:GetAttribute("TargetName") }
 	elseif prefix == "dismount" then
 		return { Kind = "DISMOUNT" }
+	elseif prefix == "mountspecial" then
+		return { Kind = "MOUNTSPECIAL" }
 	elseif prefix == "petattack" or prefix == "petfollow" or prefix == "petpassive" or prefix == "petaggressive" or prefix == "petdefensive" or prefix == "petdismiss" then
 		return { Kind = "PET", Action = prefix:sub(4) }
 	elseif prefix == "need" or prefix == "greed" or prefix == "pass" then
@@ -810,6 +812,8 @@ local function dispatch(p)
 		if p.Id then
 			send(Opcodes.CMSG_LOOT_ROLL, { Id = p.Id, Vote = p.Vote })
 		end
+	elseif p.Kind == "MOUNTSPECIAL" then
+		send(Opcodes.CMSG_MOUNT_SPECIAL, {})
 	elseif p.Kind == "DISMOUNT" then
 		local ok, auras = pcall(HttpService.JSONDecode, HttpService, player:GetAttribute("Auras") or "[]")
 		for _, aura in (if ok and typeof(auras) == "table" then auras else {}) do

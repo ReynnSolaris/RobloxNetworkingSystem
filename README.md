@@ -722,6 +722,17 @@ ability learned lands on that form's bar, and only real actions auto-fill a
 bar: no passives, procs, forms or stances. Window positions and the spellbook
 tab are saved per account (CMSG_SAVE_SETTINGS, back as SMSG_SETTINGS on login).
 
+Mounts have idle breathing, a gait bob, a flight tilt into the velocity, and
+`/mountspecial` rears them up. A rigged template from Blender works too:
+import the FBX (armature and clips) with Studio's 3D Importer, keep the
+AnimationController or Humanoid on the Model, drop it in MountTemplates or
+FormTemplates named like the spell's `aura.model` or form, and set its
+attributes AnimIdle, AnimWalk, AnimFly and AnimSpecial to the uploaded
+animation ids (upload each clip from the Animation Editor). The server welds
+the rig's root to the rider and the clients play the clip for the state
+instead of the procedural legs. Creatures with `texts` chatter from them at
+random when someone is near, TC's creature_text.
+
 ## Factions, guards, equip rules, spirit healers, GM tools
 
 Hostility is TC's: `creature_template.faction` is `hostile` (everyone), an

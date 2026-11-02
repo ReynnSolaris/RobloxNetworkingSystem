@@ -142,6 +142,51 @@ local bodyOffset: { [Motor6D]: number } = {}
 local castParams = RaycastParams.new()
 castParams.FilterType = Enum.RaycastFilterType.Exclude
 
+-- Rigged bodies (imported rigs) play their own clips by state.
+local rigTracks: { [Model]: { [string]: AnimationTrack } } = {}
+local rigState: { [Model]: string } = {}
+local function rigPlay(body: Model, state: string)
+	if rigState[body] == state then
+		return
+	end
+	local controller = body:FindFirstChildOfClass("AnimationController") or body:FindFirstChildOfClass("Humanoid")
+	if not controller then
+		return
+	end
+	local animator = controller:FindFirstChildOfClass("Animator") or Instance.new("Animator", controller)
+	rigTracks[body] = rigTracks[body] or {}
+	local tracks = rigTracks[body]
+	local id = body:GetAttribute("Anim" .. state)
+	if typeof(id) == "number" then
+		id = "rbxassetid://" .. id
+	end
+	for name, track in tracks do
+		if name ~= state and track.IsPlaying then
+			track:Stop(0.25)
+		end
+	end
+	if not id then
+		rigState[body] = state
+		return
+	end
+	if not tracks[state] then
+		local animation = Instance.new("Animation")
+		animation.AnimationId = id
+		local ok, track = pcall(animator.LoadAnimation, animator, animation)
+		if not ok then
+			return
+		end
+		track.Looped = state ~= "Special"
+		track.Priority = Enum.AnimationPriority.Movement
+		tracks[state] = track
+	end
+	tracks[state]:Play(0.25)
+	rigState[body] = state
+	body.Destroying:Once(function()
+		rigTracks[body], rigState[body] = nil, nil
+	end)
+end
+
 local function hingeOf(motor: Motor6D): CFrame
 	return motor.Part0.CFrame * motor.C0
 end
@@ -166,6 +211,12 @@ RunService.RenderStepped:Connect(function()
 		local speed = planar.Magnitude
 		local moveDir = if speed > 0.5 then planar.Unit else root.CFrame.LookVector
 		local flying = other:GetAttribute("FlightState") == "air"
+		local special = (other:GetAttribute("MountSpecial") or -10)
+		local specialAge = t - special
+		if body:GetAttribute("Rigged") then
+			rigPlay(body, if specialAge < 1.6 then "Special" elseif flying then "Fly" elseif speed > 1 then "Walk" else "Idle")
+			continue
+		end
 		local legs, bodyMotor = {}, nil
 		for _, motor in body:GetDescendants() do
 			if motor:IsA("Motor6D") and motor.Name == "MountMotor" and motor.Part0 and motor.Part1 then
@@ -204,8 +255,18 @@ RunService.RenderStepped:Connect(function()
 			local current = bodyOffset[bodyMotor] or 0
 			local smoothed = current + (target - current) * 0.2
 			bodyOffset[bodyMotor] = smoothed
-			local bob = if speed > 1 and not flying then math.abs(math.sin(t * math.clamp(speed * 0.35, 4, 14))) * 0.12 else 0
-			bodyMotor.Transform = CFrame.new(0, smoothed + bob, 0)
+			-- moving: bob with the gait; idle: breathe; flying: tilt into the velocity; special: rear up
+			local bob = if speed > 1 and not flying then math.abs(math.sin(t * math.clamp(speed * 0.35, 4, 14))) * 0.12 else math.sin(t * 1.6) * 0.04
+			local pitch = 0
+			if flying then
+				local forward = root.CFrame:VectorToObjectSpace(velocity)
+				pitch = math.clamp(-forward.Z * 0.01, -0.35, 0.35) - math.clamp(forward.Y * 0.012, -0.3, 0.3)
+			elseif specialAge < 1.6 then
+				local k = math.sin(math.min(specialAge / 1.6, 1) * math.pi)
+				pitch = -0.6 * k
+				bob += 0.8 * k
+			end
+			bodyMotor.Transform = CFrame.new(0, smoothed + bob, 0) * CFrame.Angles(pitch, 0, 0)
 		end
 		local gait = math.clamp(speed * 0.35, 0, 14)
 		for i, motor in legs do
@@ -214,8 +275,12 @@ RunService.RenderStepped:Connect(function()
 			local hinge = hingeOf(motor)
 			local hip = hinge.Position
 			local target
+			local front = root.CFrame:PointToObjectSpace(hip).Z < 0
 			if flying then
 				target = hip + (-root.CFrame.UpVector * 0.7 + root.CFrame.LookVector * 0.7).Unit * length
+			elseif specialAge < 1.6 and front then
+				local k = math.sin(math.min(specialAge / 1.6, 1) * math.pi)
+				target = hip + (-root.CFrame.UpVector * (1 - 0.8 * k) + root.CFrame.LookVector * 0.9 * k).Unit * length
 			else
 				local swing = if speed > 0.5 then math.sin(t * gait + phase) else 0
 				local lift = if speed > 0.5 then math.max(0, math.cos(t * gait + phase)) * 0.45 else 0
