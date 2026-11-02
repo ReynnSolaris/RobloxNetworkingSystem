@@ -58,15 +58,13 @@ UserInputService.InputBegan:Connect(function(keyInput, processed)
 	if processed or not gui.Enabled or input:IsFocused() then
 		return
 	end
-	if keyInput.KeyCode == Enum.KeyCode.Slash then
+	if keyInput.KeyCode == Enum.KeyCode.Slash or keyInput.KeyCode == Enum.KeyCode.Return then
 		task.defer(function()
 			input:CaptureFocus()
 			task.wait()
-			input.Text = "/" .. input.Text:gsub("^/+", "")
+			input.Text = input.Text:gsub("^/+$", "")
 			input.CursorPosition = #input.Text + 1
 		end)
-	elseif keyInput.KeyCode == Enum.KeyCode.Return then
-		task.defer(input.CaptureFocus, input)
 	end
 end)
 
@@ -163,14 +161,14 @@ local function showLinks(linksJson: string)
 	for _, link in links do
 		local info = itemInfo:Invoke(link.Entry)
 		if info then
-			Ui.showTip(Ui.itemTooltip(info, if info.Price then Ui.money(info.Price) else nil))
+			Ui.showTip(Ui.itemTooltip(info, if info.Price then Ui.money(info.Price) else nil), Ui.itemBorder(info))
 		else
 			local connection
 			connection = player:GetAttributeChangedSignal("ItemQueryTick"):Connect(function()
 				local later = itemInfo:Invoke(link.Entry)
 				if later then
 					connection:Disconnect()
-					Ui.showTip(Ui.itemTooltip(later, if later.Price then Ui.money(later.Price) else nil))
+					Ui.showTip(Ui.itemTooltip(later, if later.Price then Ui.money(later.Price) else nil), Ui.itemBorder(later))
 				end
 			end)
 		end
@@ -188,10 +186,21 @@ local function append(tab: string, text: string, linksJson: string?)
 	local label = Instance.new(if linksJson then "TextButton" else "TextLabel")
 	if linksJson then
 		label.AutoButtonColor = false
-		label.Activated:Connect(function()
+		label.MouseEnter:Connect(function()
 			showLinks(linksJson)
 		end)
 		label.MouseLeave:Connect(Ui.hideTip)
+		label.Activated:Connect(function()
+			if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift) then
+				local ok, links = pcall(HttpService.JSONDecode, HttpService, linksJson)
+				if ok then
+					for _, link in links do
+						chatInsert:Fire("[" .. link.Name .. "]")
+						break
+					end
+				end
+			end
+		end)
 	end
 	label.LayoutOrder = order
 	label.Size = UDim2.new(1, -8, 0, 0)

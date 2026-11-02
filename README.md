@@ -32,12 +32,14 @@ src/ServerStorage/ServerModules/
   WorldServer/Zones/               Zones (which zone each player stands in)
   WorldServer/Movement/            Anticheat (movement validation)
   WorldServer/Content/             Creatures (spawns, AI, loot), GameObjects, Items, Vendors, Teleports
-  WorldServer/Combat/              Combat (player melee, combat log)
+  WorldServer/Combat/              Combat (player melee, combat log), Loot (corpse loot), Death (release, ghosts, corpses)
 src/ServerStorage/ObjectTemplates/                 models .gobject can place
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
-  GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus)
+  GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus), Effects (particles)
+src/ReplicatedStorage/Assets/Particles/            ParticleEmitters on Roblox's built-in textures
 src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, PlayerFrame, TargetFrame,
-                                                   ChatFrame, VendorFrame, BagFrame, CharacterSheet, ZoneBanner, PartyFrame,
+                                                   ChatFrame, VendorFrame, BagFrame, CharacterSheet, LootFrame, DeathFrame,
+                                                   ZoneBanner, PartyFrame, Drag (drag and drop),
                                                    Ui (theme, tooltip), Components (Fusion panels, lists, buttons)
 src/Workspace/Zones/                               demo zone parts
 ```
@@ -68,6 +70,11 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | CMSG_SET_TARGET | client | `{ Guid }` or `{}` to clear |
 | CMSG_ATTACK | client | `{ On }` toggles auto-attack on the target |
 | SMSG_COMBAT_LOG | server | `{ Text, Color }` |
+| SMSG_PLAY_EFFECT | server | `{ Name, Count, Player | Guid | Position }` particle from Assets/Particles |
+| CMSG_LOOT / SMSG_LOOT_RESPONSE | both | `{ Guid }` in, `{ Guid, Name, Items, Money }` out |
+| CMSG_AUTOSTORE_LOOT_ITEM / CMSG_LOOT_MONEY / CMSG_LOOT_RELEASE | client | take an item by index, the coins, or close |
+| SMSG_LOOT_REMOVED / SMSG_LOOT_RELEASE_RESPONSE | server | `{ Index }` or `{ Money }`; window closed |
+| SMSG_DEATH / CMSG_REPOP_REQUEST / CMSG_RECLAIM_CORPSE | both | you died; release spirit; resurrect at your corpse |
 | SMSG_VENDOR_LIST | server | `{ Guid, Items }` opens the vendor window |
 | CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
 | CMSG_EQUIP / CMSG_UNEQUIP | client | `{ Entry }` / `{ Slot }` |
@@ -231,6 +238,7 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | gameobject_template | entry | name, modelid, size |
 | gameobject | guid | id (entry), x, y, z, o, scale, by |
 | game_tele | id | name, x, y, z, o |
+| game_graveyard | id | name, x, y, z, o |
 | item_template | entry | name, quality 0-5, stack, class, slot, health, damage, armor, buyprice, sellprice, level |
 | npc_vendor | id | entry (creature), item |
 
@@ -286,11 +294,25 @@ regenerate there. Click a creature to target it (the frame right of yours reads 
 replicated Humanoid), press T or click again to auto-attack; the server swings on
 its own timer with `Config.Combat.Damage(level)` and logs every hit to the Log tab.
 
-On death the killer gets `Config.Combat.KillXp` (nothing for grey creatures),
-each `creature_loot_template` row for the entry rolls its chance and pushes its
-item, and copper between `mingold` and `maxgold` drops. The corpse clears after a
-few seconds and the spawn comes back after `spawntimesecs` (default 30). Two hostile
-templates seed: Kobold Vermin and Young Wolf, with loot rows.
+On death the killer gets `Config.Combat.KillXp` (nothing for grey creatures) and
+the corpse rolls its `creature_loot_template` rows and copper onto itself. A corpse
+with loot sparkles and carries a Loot prompt; the killer or their party opens the
+loot window and takes items one by one, the coins, or Loot All. An emptied corpse
+clears in a couple of seconds, a full one after `Config.Combat.CorpseSeconds`; the
+spawn returns after `spawntimesecs` (default 30). Two hostile templates seed:
+Kobold Vermin and Young Wolf, with loot rows.
+
+When a player dies the server offers Release Spirit. Releasing spawns the character
+as a ghost (translucent, faster, cannot attack or be attacked) at the nearest
+`game_graveyard` row and leaves a corpse marker where they fell; the Resurrect
+prompt on the marker, within `ReclaimRange`, brings them back at half health.
+`.revive` resurrects anywhere. `.graveyard add <name>` saves where you stand.
+
+`Effects.h` plays particles from `ReplicatedStorage/Assets/Particles` for everyone
+(`SMSG_PLAY_EFFECT`) or attaches one to a part: hits, level-ups, heals, deaths,
+resurrection, and the loot sparkle. The emitters use Roblox's built-in particle
+textures, so there is nothing to download; drop more `.model.json` emitters in the
+folder and call them by name.
 
 ## Vendors and gear
 

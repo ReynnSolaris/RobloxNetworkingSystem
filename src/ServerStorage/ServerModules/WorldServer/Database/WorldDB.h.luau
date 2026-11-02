@@ -14,6 +14,7 @@ local TABLES = {
 	item_template = "entry",
 	creature_loot_template = "id",
 	npc_vendor = "id",
+	game_graveyard = "id",
 }
 module.TABLES = TABLES
 

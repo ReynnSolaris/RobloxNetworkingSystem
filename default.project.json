@@ -9,6 +9,9 @@
       },
       "Packages": {
         "$path": "Packages"
+      },
+      "Assets": {
+        "$path": "src/ReplicatedStorage/Assets"
       }
     },
     "Workspace": {

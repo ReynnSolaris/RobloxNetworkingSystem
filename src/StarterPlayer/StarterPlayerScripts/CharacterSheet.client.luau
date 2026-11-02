@@ -78,10 +78,18 @@ local function slotTile(scope, index: number, slotName: string)
 		end,
 		[OnEvent "MouseButton1Down"] = function()
 			local i = peek(item)
-			if i then
-				Ui.hideTip()
-				Drag.begin({ Equip = slotName, Item = i }, abbreviation(i.Name or "?"), Color3.fromHex(Ui.quality(i.Quality)))
+			if not i then
+				return
 			end
+			if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift) then
+				local insert = script.Parent:FindFirstChild("ChatInsert")
+				if insert then
+					insert:Fire("[" .. (i.Name or "?") .. "]")
+				end
+				return
+			end
+			Ui.hideTip()
+			Drag.begin({ Equip = slotName, Item = i }, abbreviation(i.Name or "?"), Color3.fromHex(Ui.quality(i.Quality)))
 		end,
 		[OnEvent "MouseButton2Click"] = function()
 			if peek(item) then

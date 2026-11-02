@@ -22,7 +22,8 @@ function module:Swing(player: Player, state)
 	end
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-	if not root or not humanoid or humanoid.Health <= 0 then
+	local entity = self.includes.Entities["EntityPlayer.h"]:Get(player)
+	if not root or not humanoid or humanoid.Health <= 0 or (entity and entity.Ghost) then
 		state.Attacking = false
 		return
 	end
@@ -37,6 +38,7 @@ function module:Swing(player: Player, state)
 	local bonus = self.includes.Entities["EntityPlayer.h"]:Stats(player).Damage
 	local damage = math.max(1, math.round((Config.Combat.Damage(level) + bonus) * (0.8 + math.random() * 0.4)))
 	creature.Humanoid:TakeDamage(damage)
+	self.includes.System["Effects.h"]:Play("Hit", state.Target, 6)
 	Creatures:Aggro(state.Target, player)
 	self:Log(player, ("Your attack hits %s for %d."):format(creature.Template.name, damage), Config.Chat.Colors.HIT)
 end
@@ -79,4 +81,5 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "World/Content", Imports = "Creatures.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
+	{ Path = "Global/System", Imports = "Effects.h" },
 })

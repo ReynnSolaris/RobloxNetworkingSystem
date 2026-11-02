@@ -96,7 +96,9 @@ function module:Login(player: Player, data)
 		return self:Result(player, false, "No such character.")
 	end
 	self.includes.Entities["EntityPlayer.h"]:Select(player, slot)
-	self.includes.Entities["EntityPlayer.h"]:Spawn(player)
+	if not self.includes.Combat["Death.h"]:Restore(player) then
+		self.includes.Entities["EntityPlayer.h"]:Spawn(player)
+	end
 	self.includes.Chat["Chat.h"]:System(player, ("Welcome to %s, %s."):format(Config.RealmName, record.Characters[slot].Name))
 end
 
@@ -106,6 +108,7 @@ function module:Logout(player: Player)
 	if not session or session.State ~= Session.STATE.IN_WORLD then
 		return
 	end
+	self.includes.Combat["Death.h"]:Forget(player)
 	self.includes.Entities["EntityPlayer.h"]:Despawn(player)
 	session.State = Session.STATE.AUTHED
 	self:Enum(player)
@@ -141,4 +144,5 @@ return Base(module, {
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "World/Database", Imports = "WorldDatabase.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
+	{ Path = "World/Combat", Imports = "Death.h" },
 })

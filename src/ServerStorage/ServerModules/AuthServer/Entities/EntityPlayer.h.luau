@@ -103,6 +103,7 @@ function module:GrantXp(player: Player, amount: number, reason: string?)
 		char.Level += 1
 		self:ApplyStats(player)
 		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_LEVELUP, { Level = char.Level })
+		self.includes.System["Effects.h"]:Play("LevelUp", player, 40)
 	end
 	if char.Level >= Config.Xp.MaxLevel then
 		char.Xp = 0
@@ -393,12 +394,14 @@ function module:FindByName(name: string?): Player?
 end
 
 -- Spawns the active character at `at`, else at its saved position, else at Config.Spawn.
-function module:Spawn(player: Player, at: CFrame?)
+-- ghost spawns the translucent, fast, untouchable form used between death and reclaim.
+function module:Spawn(player: Player, at: CFrame?, ghost: boolean?)
 	local entity = self.information[player]
 	local saved = entity and entity.Active
 	if not saved then
 		return
 	end
+	entity.Ghost = ghost == true
 	local Packet = self.includes.Security["Packet.h"]
 	at = at or (saved.Position and CFrame.new(table.unpack(saved.Position))) or Config.Spawn
 
@@ -412,9 +415,19 @@ function module:Spawn(player: Player, at: CFrame?)
 	humanoid.DisplayName = saved.Name
 	self:ApplyStats(player)
 	humanoid.Health = humanoid.MaxHealth
-	if saved.Health then
+	if saved.Health and not ghost then
 		humanoid.Health = math.clamp(saved.Health, 1, humanoid.MaxHealth)
 		saved.Health = nil
+	end
+	if ghost then
+		humanoid.WalkSpeed = Config.Combat.GhostSpeed
+		for _, part in character:GetDescendants() do
+			if part:IsA("BasePart") then
+				part.Transparency = math.max(part.Transparency, 0.6)
+			elseif part:IsA("Decal") then
+				part.Transparency = 0.6
+			end
+		end
 	end
 
 	humanoid.HealthChanged:Connect(function(health)
@@ -422,12 +435,10 @@ function module:Spawn(player: Player, at: CFrame?)
 	end)
 	humanoid.Died:Once(function()
 		Packet:Send(player, Opcodes.SMSG_DESPAWN, {})
-		task.delay(Config.RespawnDelay, function()
-			local e = self.information[player]
-			if e and e.Active == saved and e.Character == character then
-				self:Spawn(player, Config.Spawn)
-			end
-		end)
+		local e = self.information[player]
+		if e and e.Active == saved and e.Character == character and not ghost then
+			self.includes.Combat["Death.h"]:OnDeath(player, character:GetPivot())
+		end
 	end)
 
 	local session = self.includes.Security["Session.h"]:Get(player)
@@ -452,6 +463,7 @@ function module:Heal(player: Player)
 	local humanoid = humanoidOf(self.information[player])
 	if humanoid then
 		humanoid.Health = humanoid.MaxHealth
+		self.includes.System["Effects.h"]:Play("Heal", player, 20)
 	end
 end
 
@@ -509,7 +521,7 @@ end
 function module:Save(player: Player)
 	local entity = self.information[player]
 	local humanoid = humanoidOf(entity)
-	if entity and entity.Active and humanoid and humanoid.Health > 0 then
+	if entity and entity.Active and humanoid and humanoid.Health > 0 and not entity.Ghost then
 		local position = entity.Character:GetPivot().Position
 		entity.Active.Position = { position.X, position.Y, position.Z }
 		entity.Active.Health = humanoid.Health
@@ -544,4 +556,6 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h|Session.h" },
 	{ Path = "World/Database", Imports = "WorldDatabase.h|WorldDB.h" },
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
+	{ Path = "World/Combat", Imports = "Death.h" },
+	{ Path = "Global/System", Imports = "Effects.h" },
 })

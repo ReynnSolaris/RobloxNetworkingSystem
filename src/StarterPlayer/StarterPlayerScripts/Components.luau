@@ -3,8 +3,27 @@
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Fusion = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Fusion"))
+local UserInputService2 = game:GetService("UserInputService")
 local Ui = require(script.Parent:WaitForChild("Ui"))
 local Drag = require(script.Parent:WaitForChild("Drag"))
+
+local function shiftHeld(): boolean
+	return UserInputService2:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService2:IsKeyDown(Enum.KeyCode.RightShift)
+end
+
+-- Anything with a Link prop inserts it into chat on shift-click.
+local function linkOrClick(props)
+	return function()
+		if props.Link and shiftHeld() then
+			local insert = script.Parent:FindFirstChild("ChatInsert")
+			if insert then
+				insert:Fire(props.Link)
+			end
+		elseif props.OnClick then
+			props.OnClick()
+		end
+	end
+end
 
 local Children, OnEvent, peek = Fusion.Children, Fusion.OnEvent, Fusion.peek
 
@@ -51,7 +70,7 @@ function Components.Button(scope, props)
 			hovered:set(false)
 			Ui.hideTip()
 		end,
-		[OnEvent "Activated"] = props.OnClick,
+		[OnEvent "Activated"] = linkOrClick(props),
 		[Children] = {
 			scope:New "UICorner" { CornerRadius = UDim.new(0, 4) },
 			scope:New "UIStroke" { Color = Ui.BORDER },
@@ -71,6 +90,7 @@ function Components.Row(scope, props)
 		Text = "  " .. props.Text,
 		Tooltip = props.Tooltip,
 		TooltipBorder = props.TooltipBorder,
+		Link = props.Link,
 		OnClick = props.OnClick,
 		[Children] = if props.Right then Components.Text(scope, {
 			Size = UDim2.new(0.5, -8, 1, 0),

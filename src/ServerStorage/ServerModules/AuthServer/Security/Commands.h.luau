@@ -463,7 +463,27 @@ end)
 
 add("revive", 2, ".revive [player]", function(self, caller, args)
 	local other = targetOrSelf(args, 1, caller)
-	self.includes.Entities["EntityPlayer.h"]:Spawn(other, other.Character and other.Character:GetPivot())
+	local Death = self.includes.Combat["Death.h"]
+	if Death:IsDead(other) then
+		Death:Resurrect(other, other.Character and other.Character:GetPivot())
+	else
+		self.includes.Entities["EntityPlayer.h"]:Spawn(other, other.Character and other.Character:GetPivot())
+	end
+end)
+
+add("graveyard", 2, ".graveyard add <name> | .graveyard list", function(self, caller, args)
+	local DB = self.includes.Database["WorldDB.h"]
+	if args[1] == "add" then
+		local row = DB.ToRow(assert(caller.Character, "you have no character"):GetPivot())
+		row.name = table.concat(args, " ", 2)
+		assert(#row.name > 0, "expected a name")
+		row = DB:Insert("game_graveyard", row)
+		self:Reply(caller, ("game_graveyard id %d: %s"):format(row.id, row.name))
+	else
+		for _, row in DB:Select("game_graveyard") do
+			self:Reply(caller, ("  %d: %s (%.0f, %.0f, %.0f)"):format(row.id, row.name, row.x, row.y, row.z))
+		end
+	end
 end)
 
 add("levelup", 2, ".levelup [player] [levels]", function(self, caller, args)
@@ -777,6 +797,7 @@ return Base(module, {
 	{ Path = "Auth/Support", Imports = "Tickets.h" },
 	{ Path = "World/Zones", Imports = "Zones.h" },
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
+	{ Path = "World/Combat", Imports = "Death.h" },
 	{ Path = "World/Content", Imports = "Teleports.h|GameObjects.h|Creatures.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h" },
 	{ Path = "Global/Database", Imports = "Database.h" },

@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
+local Debris = game:GetService("Debris")
 local TextChatService = game:GetService("TextChatService")
 local Opcodes = require(ReplicatedStorage.Shared.Opcodes)
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -162,6 +163,7 @@ handlers[Opcodes.SMSG_SPAWN] = function(d)
 	player:SetAttribute("Health", d.Health)
 	player:SetAttribute("MaxHealth", d.MaxHealth)
 	player:SetAttribute("InWorld", true)
+	player:SetAttribute("Dead", nil)
 	setState("world")
 end
 
@@ -251,6 +253,78 @@ handlers[Opcodes.SMSG_VENDOR_LIST] = function(d)
 	player:SetAttribute("Vendor", HttpService:JSONEncode(d.Items or {}))
 	player:SetAttribute("VendorGuid", tostring(d.Guid))
 	vendorOpen:Fire(tostring(d.Guid))
+end
+
+-- One-shot particle effects from ReplicatedStorage/Assets/Particles on a player,
+-- a creature (by guid) or a position.
+local function effectTarget(d): BasePart?
+	if d.Player then
+		local other = Players:FindFirstChild(d.Player)
+		return other and other.Character and other.Character:FindFirstChild("HumanoidRootPart")
+	elseif d.Guid then
+		local creatures = workspace:FindFirstChild("Creatures")
+		for _, child in (creatures and creatures:GetChildren() or {}) do
+			if child:GetAttribute("Guid") == d.Guid then
+				return child:FindFirstChild("HumanoidRootPart")
+			end
+		end
+	elseif d.Position then
+		local part = Instance.new("Part")
+		part.Anchored, part.CanCollide, part.Transparency = true, false, 1
+		part.Size = Vector3.new(1, 1, 1)
+		part.Position = Vector3.new(table.unpack(d.Position))
+		part.Parent = workspace
+		Debris:AddItem(part, 4)
+		return part
+	end
+	return nil
+end
+
+handlers[Opcodes.SMSG_PLAY_EFFECT] = function(d)
+	local folder = ReplicatedStorage:FindFirstChild("Assets") and ReplicatedStorage.Assets:FindFirstChild("Particles")
+	local source = folder and folder:FindFirstChild(tostring(d.Name))
+	local target = effectTarget(d)
+	if source and target then
+		local emitter = source:Clone()
+		emitter.Enabled = false
+		emitter.Parent = target
+		emitter:Emit(d.Count or 12)
+		Debris:AddItem(emitter, 4)
+	end
+end
+
+-- Loot window state lives on attributes; LootOpen fires when a corpse is opened.
+local lootOpen = Instance.new("BindableEvent")
+lootOpen.Name = "LootOpen"
+lootOpen.Parent = script.Parent
+local lootItems = {}
+
+local function pushLoot()
+	player:SetAttribute("Loot", HttpService:JSONEncode(lootItems))
+end
+
+handlers[Opcodes.SMSG_LOOT_RESPONSE] = function(d)
+	lootItems = { Guid = d.Guid, Name = d.Name, Items = d.Items or {}, Money = d.Money or 0 }
+	pushLoot()
+	lootOpen:Fire()
+end
+
+handlers[Opcodes.SMSG_LOOT_REMOVED] = function(d)
+	if d.Money then
+		lootItems.Money = 0
+	elseif d.Index and lootItems.Items then
+		lootItems.Items[d.Index] = nil
+	end
+	pushLoot()
+end
+
+handlers[Opcodes.SMSG_LOOT_RELEASE_RESPONSE] = function()
+	lootItems = {}
+	player:SetAttribute("Loot", nil)
+end
+
+handlers[Opcodes.SMSG_DEATH] = function()
+	player:SetAttribute("Dead", true)
 end
 
 handlers[Opcodes.SMSG_BUYBACK_LIST] = function(d)

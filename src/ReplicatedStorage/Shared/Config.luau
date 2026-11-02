@@ -53,8 +53,10 @@ return table.freeze({
 			end
 			return 45 + creatureLevel * 5
 		end,
-		CorpseSeconds = 6,
+		CorpseSeconds = 60, -- a lootable corpse waits this long; an emptied one clears sooner
 		DefaultRespawn = 30,
+		ReclaimRange = 25, -- studs from your corpse marker to resurrect
+		GhostSpeed = 24,
 	},
 
 	Xp = {

@@ -1,6 +1,7 @@
 -- Drag and drop between windows. begin() lifts a payload with a ghost tile that
 -- follows the mouse; targets register a GuiObject and get the payload on drop.
 local Players = game:GetService("Players")
+local GuiService = game:GetService("GuiService")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
@@ -13,6 +14,7 @@ local targets: { { Gui: GuiObject, OnDrop: (any) -> () } } = {}
 local gui = Instance.new("ScreenGui")
 gui.Name = "DragGhost"
 gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true -- mouse coordinates include the top bar inset
 gui.DisplayOrder = 60
 local ghost = Instance.new("TextLabel")
 ghost.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -55,11 +57,16 @@ function Drag.target(target: GuiObject, onDrop: (any) -> ())
 	end)
 end
 
-local function under(position: Vector2): GuiObject?
+local function under(mouse: Vector2): GuiObject?
+	-- Mouse coordinates include the top bar inset; AbsolutePosition does not
+	-- unless the ScreenGui ignores the inset.
+	local inset = GuiService:GetGuiInset()
 	-- last registered wins, so tiles beat the windows they sit in
 	for i = #targets, 1, -1 do
 		local g = targets[i].Gui
 		if g.Visible and g:IsDescendantOf(player.PlayerGui) then
+			local screen = g:FindFirstAncestorOfClass("ScreenGui")
+			local position = if screen and screen.IgnoreGuiInset then mouse else mouse - inset
 			local p, s = g.AbsolutePosition, g.AbsoluteSize
 			if position.X >= p.X and position.X <= p.X + s.X and position.Y >= p.Y and position.Y <= p.Y + s.Y then
 				local ancestorsVisible = true
@@ -70,7 +77,6 @@ local function under(position: Vector2): GuiObject?
 					end
 					a = a.Parent
 				end
-				local screen = g:FindFirstAncestorOfClass("ScreenGui")
 				if ancestorsVisible and screen and screen.Enabled then
 					return targets[i]
 				end
