@@ -132,33 +132,107 @@ if creatures then
 	end
 end
 
--- Mount motors: wings flap in the air and glide on the ground, legs swing with
--- the mount's speed. Motor6D transforms are local, so each client animates
--- every mount it can see the same way.
-local baseC0: { [Motor6D]: CFrame } = {}
+-- Mount and form bodies. Motor6D.Transform is local and applied after physics,
+-- so every client animates every body it sees without fighting the welds.
+-- Legs are planted with IK: a ray from each hip finds the ground, the foot
+-- target steps forward and back with the stride while moving and lifts
+-- between steps, and the leg points from hip to foot. The body motor floats up
+-- or down so the legs reach the ground on slopes. Wings flap in the air.
+local bodyOffset: { [Motor6D]: number } = {}
+local castParams = RaycastParams.new()
+castParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function hingeOf(motor: Motor6D): CFrame
+	return motor.Part0.CFrame * motor.C0
+end
+
+-- the Transform that puts the hinge at `target` (world)
+local function transformTo(motor: Motor6D, target: CFrame): CFrame
+	return (motor.Part0.CFrame * motor.C0):Inverse() * target
+end
+
 RunService.RenderStepped:Connect(function()
 	local t = os.clock()
 	for _, other in Players:GetPlayers() do
 		local character = other.Character
 		local body = character and (character:FindFirstChild("Mount") or character:FindFirstChild("Form"))
-		if not body then
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not body or not root then
 			continue
 		end
-		local root = character:FindFirstChild("HumanoidRootPart")
-		local speed = if root then Vector3.new(root.AssemblyLinearVelocity.X, 0, root.AssemblyLinearVelocity.Z).Magnitude else 0
+		castParams.FilterDescendantsInstances = { character }
+		local velocity = root.AssemblyLinearVelocity
+		local planar = Vector3.new(velocity.X, 0, velocity.Z)
+		local speed = planar.Magnitude
+		local moveDir = if speed > 0.5 then planar.Unit else root.CFrame.LookVector
 		local flying = other:GetAttribute("FlightState") == "air"
+		local legs, bodyMotor = {}, nil
 		for _, motor in body:GetDescendants() do
-			if motor:IsA("Motor6D") and motor.Name == "MountMotor" then
-				baseC0[motor] = baseC0[motor] or motor.C0
-				local kind, side, phase = motor:GetAttribute("Kind"), motor:GetAttribute("Side") or 1, motor:GetAttribute("Phase") or 0
-				if kind == "wing" then
+			if motor:IsA("Motor6D") and motor.Name == "MountMotor" and motor.Part0 and motor.Part1 then
+				local kind = motor:GetAttribute("Kind")
+				if kind == "leg" then
+					table.insert(legs, motor)
+				elseif kind == "body" then
+					bodyMotor = motor
+				elseif kind == "wing" then
+					local side = motor:GetAttribute("Side") or 1
 					local flap = if flying then math.sin(t * 7) * 0.55 elseif speed > 1 then math.sin(t * 3) * 0.15 else -0.25
-					motor.C0 = baseC0[motor] * CFrame.Angles(0, 0, side * flap)
-				elseif kind == "leg" then
-					local swing = if flying then 0.3 else math.sin(t * math.clamp(speed * 0.35, 0, 14) + phase) * math.clamp(speed / 16, 0, 1) * 0.7
-					motor.C0 = baseC0[motor] * CFrame.Angles(swing, 0, 0)
+					motor.Transform = CFrame.Angles(0, 0, side * flap)
 				end
 			end
+		end
+		-- how far the ground is below each hip, with the body where it was built
+		local lengths, grounds = {}, {}
+		local need = nil
+		for i, motor in legs do
+			local length = motor:GetAttribute("Length") or 2.6
+			local hinge = hingeOf(motor)
+			-- undo any body float so the measurement is stable
+			local hipWorld = hinge.Position - Vector3.new(0, bodyMotor and (bodyOffset[bodyMotor] or 0) or 0, 0)
+			local hit = workspace:Raycast(hipWorld + Vector3.new(0, 1, 0), Vector3.new(0, -(length * 2 + 1), 0), castParams)
+			lengths[i] = length
+			grounds[i] = hit and hit.Position.Y or nil
+			if hit then
+				-- positive: this leg would sink by this much; negative: it hangs
+				local sink = length - (hipWorld.Y - hit.Position.Y)
+				need = if need then math.max(need, sink) else sink
+			end
+		end
+		-- the body floats so the leg on the highest ground stands straight
+		if bodyMotor then
+			local target = if flying or not need then 0 else math.clamp(need, -1.5, 1.5)
+			local current = bodyOffset[bodyMotor] or 0
+			local smoothed = current + (target - current) * 0.2
+			bodyOffset[bodyMotor] = smoothed
+			local bob = if speed > 1 and not flying then math.abs(math.sin(t * math.clamp(speed * 0.35, 4, 14))) * 0.12 else 0
+			bodyMotor.Transform = CFrame.new(0, smoothed + bob, 0)
+		end
+		local gait = math.clamp(speed * 0.35, 0, 14)
+		for i, motor in legs do
+			local length = lengths[i]
+			local phase = motor:GetAttribute("Phase") or 0
+			local hinge = hingeOf(motor)
+			local hip = hinge.Position
+			local target
+			if flying then
+				target = hip + (-root.CFrame.UpVector * 0.7 + root.CFrame.LookVector * 0.7).Unit * length
+			else
+				local swing = if speed > 0.5 then math.sin(t * gait + phase) else 0
+				local lift = if speed > 0.5 then math.max(0, math.cos(t * gait + phase)) * 0.45 else 0
+				local stride = moveDir * swing * math.clamp(speed / 16, 0, 1) * 0.9
+				local foot = hip + stride
+				local ground = grounds[i]
+				local hit = workspace:Raycast(foot + Vector3.new(0, 1, 0), Vector3.new(0, -(length * 2 + 1), 0), castParams)
+				local y = if hit then hit.Position.Y elseif ground then ground else hip.Y - length
+				-- a leg never reaches past its length; in the air it hangs
+				y = math.max(y, hip.Y - length * 1.05)
+				target = Vector3.new(foot.X, y + lift, foot.Z)
+			end
+			local reach = (target - hip).Magnitude
+			if reach < 0.1 then
+				target = hip - Vector3.new(0, length, 0)
+			end
+			motor.Transform = transformTo(motor, CFrame.lookAt(hip, target) * CFrame.Angles(math.pi / 2, 0, 0))
 		end
 	end
 end)

@@ -684,7 +684,10 @@ around the origin as the rider's HumanoidRootPart. Part attributes: `Parent`
 (the part to hang on, default Body), `Motor` ("leg" or "wing") with `Side`,
 `Phase` and `Pivot` (hinge offset) for the parts clients animate. Name the
 template in the mount spell's `aura.model`; the Pony template and Pony Reins
-show the whole chain. Legs swing with speed, wings glide and flap.
+show the whole chain. Legs are planted with IK on every client: a ray from each hip finds the
+ground, feet step with the stride and lift between steps, the body motor
+floats up and down so the legs fit the slope, and the rider's hip height is
+raised by the body's depth so nothing stands in the ground.
 
 Casting respects the form, TC's stance masks: a spell lists the `forms` it
 may be cast in ("none" is the caster form), everything else is "You can't do

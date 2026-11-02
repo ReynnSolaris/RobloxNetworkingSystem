@@ -919,6 +919,7 @@ local function attachBody(character: Model, name: string, parts, root: BasePart)
 			m:SetAttribute("Kind", spec.motor.kind)
 			m:SetAttribute("Side", spec.motor.side or 1)
 			m:SetAttribute("Phase", spec.motor.phase or 0)
+			m:SetAttribute("Length", spec.size.Y)
 			m.Parent = p
 		else
 			local weld = Instance.new("WeldConstraint")
@@ -975,7 +976,7 @@ local BODIES = {}
 function BODIES.horse()
 	local brown, dark, leather = Color3.fromRGB(96, 62, 36), Color3.fromRGB(40, 28, 18), Color3.fromRGB(70, 45, 28)
 	local parts = {
-		{ name = "Body", size = Vector3.new(2.2, 2, 5), offset = CFrame.new(0, -2.6, 0), color = brown },
+		{ name = "Body", size = Vector3.new(2.2, 2, 5), offset = CFrame.new(0, -2.6, 0), color = brown, motor = { kind = "body", pivot = CFrame.new(0, -2.6, 0) } },
 		{ name = "Saddle", size = Vector3.new(2.4, 0.5, 2), offset = CFrame.new(0, -1.5, 0), color = leather },
 		{ name = "Neck", size = Vector3.new(1.2, 2.4, 1.2), offset = CFrame.new(0, -1.4, -2.8) * CFrame.Angles(math.rad(-30), 0, 0), color = brown },
 		{ name = "Head", size = Vector3.new(1.1, 1.1, 2), offset = CFrame.new(0, -0.4, -3.9), color = brown },
@@ -988,7 +989,7 @@ end
 function BODIES.gryphon()
 	local feather, gold, leather = Color3.fromRGB(230, 232, 240), Color3.fromRGB(214, 170, 70), Color3.fromRGB(70, 45, 28)
 	local parts = {
-		{ name = "Body", size = Vector3.new(2.4, 2, 5.5), offset = CFrame.new(0, -2.6, 0.3), color = feather },
+		{ name = "Body", size = Vector3.new(2.4, 2, 5.5), offset = CFrame.new(0, -2.6, 0.3), color = feather, motor = { kind = "body", pivot = CFrame.new(0, -2.6, 0.3) } },
 		{ name = "Saddle", size = Vector3.new(2.6, 0.5, 2.2), offset = CFrame.new(0, -1.5, 0), color = leather },
 		{ name = "Neck", size = Vector3.new(1.4, 2.2, 1.4), offset = CFrame.new(0, -1.3, -2.8) * CFrame.Angles(math.rad(-25), 0, 0), color = feather },
 		{ name = "Head", size = Vector3.new(1.3, 1.2, 1.8), offset = CFrame.new(0, -0.3, -3.9), color = feather },
@@ -1006,7 +1007,7 @@ end
 -- shapeshift forms stand where the body was
 local function quadruped(color, dark, size, headSize, tail)
 	local parts = {
-		{ name = "Body", size = size, offset = CFrame.new(0, -1.2, 0), color = color },
+		{ name = "Body", size = size, offset = CFrame.new(0, -1.2, 0), color = color, motor = { kind = "body", pivot = CFrame.new(0, -1.2, 0) } },
 		{ name = "Head", size = headSize, offset = CFrame.new(0, -0.6, -size.Z / 2 - headSize.Z / 2 + 0.3), color = color },
 		{ name = "Snout", size = Vector3.new(headSize.X * 0.5, headSize.Y * 0.5, 0.8), offset = CFrame.new(0, -0.8, -size.Z / 2 - headSize.Z + 0.1), color = dark },
 		{ name = "EarL", size = Vector3.new(0.4, 0.5, 0.2), offset = CFrame.new(-headSize.X / 3, headSize.Y / 2 - 0.6, -size.Z / 2 - headSize.Z / 2 + 0.3), color = dark },
@@ -1089,6 +1090,9 @@ function module:Mount(player: Player, on: boolean, fly: boolean?, modelName: str
 	player:SetAttribute("Mounted", if on then true else nil)
 	player:SetAttribute("MountFlying", if on and fly then true else nil)
 	if not on then
+		if not character:FindFirstChild("Form") then
+			module.Lift(character, nil)
+		end
 		return
 	end
 	local root = character:FindFirstChild("HumanoidRootPart")
@@ -1097,6 +1101,33 @@ function module:Mount(player: Player, on: boolean, fly: boolean?, modelName: str
 	end
 	local parts = (modelName and templateParts("MountTemplates", modelName)) or (if fly then BODIES.gryphon() else BODIES.horse())
 	attachBody(character, "Mount", parts, root)
+	module.Lift(character, parts)
+end
+
+-- Raises the humanoid so the deepest part of an attached body stands on the
+-- ground instead of in it; Lift(character) alone restores the old height.
+function module.Lift(character: Model, parts)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+	local original = humanoid:GetAttribute("StandHipHeight")
+	if not parts then
+		if original then
+			humanoid.HipHeight = original
+			humanoid:SetAttribute("StandHipHeight", nil)
+		end
+		return
+	end
+	local depth = 0
+	for _, spec in parts do
+		depth = math.min(depth, spec.offset.Position.Y - spec.size.Y / 2)
+	end
+	local base = original or humanoid.HipHeight
+	humanoid:SetAttribute("StandHipHeight", base)
+	-- the root is HipHeight plus half its own height above the ground
+	local rootHalf = (character:FindFirstChild("HumanoidRootPart") :: BasePart?) and character.HumanoidRootPart.Size.Y / 2 or 1
+	humanoid.HipHeight = math.max(base, -depth - rootHalf + 0.15)
 end
 
 -- Shapeshift: the body is hidden and a form body stands in its place; nil
@@ -1116,6 +1147,9 @@ function module:Shapeshift(player: Player, form: string?)
 	hideBody(character, false)
 	player:SetAttribute("Form", form)
 	if not form then
+		if not character:FindFirstChild("Mount") then
+			module.Lift(character, nil)
+		end
 		return
 	end
 	self.includes.System["Effects.h"]:Play("Nature", player, 18)
@@ -1126,6 +1160,7 @@ function module:Shapeshift(player: Player, form: string?)
 	local parts = templateParts("FormTemplates", form) or (BODIES[form] and BODIES[form]()) or BODIES.cat()
 	hideBody(character, true)
 	attachBody(character, "Form", parts, root)
+	module.Lift(character, parts)
 end
 
 -- Stealth: translucent to everyone and marked for the creature brains.
