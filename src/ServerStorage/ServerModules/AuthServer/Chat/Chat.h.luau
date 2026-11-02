@@ -85,7 +85,7 @@ function module:Start()
 			return self:System(player, "No player named " .. tostring(data.Target))
 		end
 		if channel.Party and #recipients == 0 then
-			return self:System(player, "You are not in a party.")
+			return self:System(player, if channel.Raid then "You are not in a raid." else "You are not in a party.")
 		end
 		if channel.Guild and #recipients == 0 then
 			return self:System(player, "You are not in a guild.")

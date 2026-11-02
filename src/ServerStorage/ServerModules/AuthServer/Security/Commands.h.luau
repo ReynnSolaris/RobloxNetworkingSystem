@@ -971,6 +971,30 @@ add("pet", 2, ".pet <creature entry> [player] | .pet dismiss [player]", function
 	self:Reply(caller, "Done.")
 end)
 
+add("bg", 2, ".bg create <name> [minlevel] | .bg spawn <id> Alliance|Horde | .bg flag <id> Alliance|Horde | .bg list | .bg leave [player]", function(self, caller, args)
+	local Battleground = self.includes.Combat["Battleground.h"]
+	local sub = args[1]
+	if sub == "create" then
+		local row = Battleground:Create(assert(args[2], "expected a name"), tonumber(args[3]))
+		self:Reply(caller, ("Battleground %s created with id %s. Set both spawns and both flags."):format(row.name, tostring(row.id)))
+	elseif sub == "spawn" or sub == "flag" then
+		local faction = args[3]
+		assert(faction == "Alliance" or faction == "Horde", "expected Alliance or Horde")
+		Battleground:SetPoint(assert(tonumber(args[2]), "expected a battleground id"), sub, faction, assert(caller.Character, "you have no character"):GetPivot())
+		self:Reply(caller, ("%s %s set here."):format(faction, sub))
+	elseif sub == "list" then
+		for _, row in self.includes.Database["WorldDB.h"]:Select("battleground_template") do
+			local ready = row.spawn and row.flag and row.spawn.Alliance and row.spawn.Horde and row.flag.Alliance and row.flag.Horde
+			self:Reply(caller, ("  %s: %s (level %d) %s"):format(tostring(row.id), row.name, row.minlevel or 1, if ready then "ready" else "incomplete"))
+		end
+	elseif sub == "leave" then
+		Battleground:Leave(targetOrSelf(args, 2, caller))
+		self:Reply(caller, "Done.")
+	else
+		error("expected create, spawn, flag, list or leave", 0)
+	end
+end)
+
 add("honor", 2, ".honor add <amount> [player]", function(self, caller, args)
 	assert(args[1] == "add", "expected add")
 	local target = targetOrSelf(args, 3, caller)
@@ -1039,7 +1063,7 @@ return Base(module, {
 	{ Path = "Auth/Support", Imports = "Tickets.h" },
 	{ Path = "World/Zones", Imports = "Zones.h|GameEvents.h" },
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
-	{ Path = "World/Combat", Imports = "Death.h" },
+	{ Path = "World/Combat", Imports = "Death.h|Battleground.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h|Auras.h|Skills.h|Talents.h" },
 	{ Path = "Auth/Social", Imports = "Reputation.h|Achievements.h" },

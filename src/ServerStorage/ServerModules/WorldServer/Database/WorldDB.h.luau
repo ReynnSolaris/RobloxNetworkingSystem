@@ -31,6 +31,7 @@ local TABLES = {
 	taxi_path = "id",
 	achievement = "id",
 	game_event = "id",
+	battleground_template = "id",
 }
 module.TABLES = TABLES
 

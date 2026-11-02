@@ -16,6 +16,9 @@ local function gather(self, channel, sender: Player, targetName: string?): { Pla
 		return if target then { target } else {}
 	end
 	if channel.Party then
+		if channel.Raid and not self.includes.Social["Party.h"]:IsRaid(sender) then
+			return {}
+		end
 		return self.includes.Social["Party.h"]:MembersOf(sender)
 	end
 	if channel.Guild then

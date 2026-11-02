@@ -119,6 +119,8 @@ local function formatChat(d): string
 		return tint(color, ("[World] [%s]: %s"):format(name, text))
 	elseif d.Channel == "PARTY" then
 		return tint(color, ("[Party] [%s]: %s"):format(name, text))
+	elseif d.Channel == "RAID" then
+		return tint(color, ("[Raid] [%s]: %s"):format(name, text))
 	elseif d.Channel == "GUILD" then
 		return tint(color, ("[Guild] [%s]: %s"):format(name, text))
 	end
@@ -166,6 +168,7 @@ handlers[Opcodes.SMSG_SPAWN] = function(d)
 	player:SetAttribute("MaxHealth", d.MaxHealth)
 	player:SetAttribute("InWorld", true)
 	player:SetAttribute("Dead", nil)
+	player:SetAttribute("DeadInBattleground", nil)
 	setState("world")
 end
 
@@ -336,8 +339,9 @@ handlers[Opcodes.SMSG_LOOT_RELEASE_RESPONSE] = function()
 	player:SetAttribute("Loot", nil)
 end
 
-handlers[Opcodes.SMSG_DEATH] = function()
+handlers[Opcodes.SMSG_DEATH] = function(d)
 	player:SetAttribute("Dead", true)
+	player:SetAttribute("DeadInBattleground", if d.Battleground then (d.Seconds or 10) .. " " .. os.clock() else nil)
 end
 
 -- Quests: the log and questgiver statuses live on attributes; the questgiver
@@ -528,6 +532,13 @@ handlers[Opcodes.SMSG_GUILD_BANK_LIST] = function(d)
 	end
 end
 
+handlers[Opcodes.SMSG_BATTLEFIELD_STATUS] = function(d)
+	player:SetAttribute("BattlegroundStatus", HttpService:JSONEncode(d))
+	if d.Status == "ended" and d.Winner then
+		notice(tint(Colors.BATTLEGROUND, esc(("The %s wins %s!"):format(d.Winner, d.Name or "the battle"))))
+	end
+end
+
 handlers[Opcodes.SMSG_RESURRECT_REQUEST] = function(d)
 	player:SetAttribute("ResurrectFrom", d.From or "Someone")
 	system(("%s wants to resurrect you."):format(tostring(d.From)))
@@ -611,6 +622,8 @@ handlers[Opcodes.SMSG_PARTY_UPDATE] = function(d)
 	local members = d.Members or {}
 	player:SetAttribute("PartyMembers", if #members > 0 then table.concat(members, ",") else nil)
 	player:SetAttribute("PartyLeader", if #members > 0 then d.Leader else nil)
+	player:SetAttribute("PartyRaid", if #members > 0 and d.Raid then true else nil)
+	player:SetAttribute("PartyGroups", if #members > 0 then HttpService:JSONEncode(d.Groups or {}) else nil)
 end
 
 handlers[Opcodes.SMSG_PARTY_INVITE] = function(d)
@@ -724,6 +737,15 @@ local function parse(text: string)
 		return { Kind = "PARTY", Action = prefix }
 	elseif prefix == "p" or prefix == "party" then
 		return { Kind = "CHAT", Channel = "PARTY", Body = rest }
+	elseif prefix == "ra" or prefix == "rsay" then
+		return { Kind = "CHAT", Channel = "RAID", Body = rest }
+	elseif prefix == "raid" or prefix == "convert" then
+		return { Kind = "RAID" }
+	elseif prefix == "setgroup" then
+		local target, group = rest:match("^(%S+)%s+(%d+)")
+		return { Kind = "SETGROUP", Target = target, Group = tonumber(group) }
+	elseif prefix == "bgleave" or prefix == "leavebg" then
+		return { Kind = "BGLEAVE" }
 	elseif prefix == "y" or prefix == "yell" then
 		return { Kind = "CHAT", Channel = "YELL", Body = rest }
 	elseif prefix == "world" or prefix == "1" then
@@ -770,6 +792,12 @@ local function dispatch(p)
 		send(Opcodes.CMSG_INSPECT, { Name = p.Target })
 	elseif p.Kind == "PET" then
 		send(Opcodes.CMSG_PET_ACTION, { Action = p.Action })
+	elseif p.Kind == "RAID" then
+		send(Opcodes.CMSG_CONVERT_RAID, {})
+	elseif p.Kind == "SETGROUP" then
+		send(Opcodes.CMSG_SET_SUBGROUP, { Target = p.Target, Group = p.Group })
+	elseif p.Kind == "BGLEAVE" then
+		send(Opcodes.CMSG_LEAVE_BATTLEFIELD, {})
 	elseif p.Kind == "ROLLVOTE" then
 		if p.Id then
 			send(Opcodes.CMSG_LOOT_ROLL, { Id = p.Id, Vote = p.Vote })

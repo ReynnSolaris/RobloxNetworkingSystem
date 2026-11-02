@@ -16,6 +16,11 @@ local Children = Fusion.Children
 local dead = Components.attribute(scope, player, "Dead", false)
 local ghost = Components.attribute(scope, player, "Ghost", false)
 local resurrectFrom = Components.attribute(scope, player, "ResurrectFrom", nil)
+local bgDeath = Components.attribute(scope, player, "DeadInBattleground", nil)
+local now = scope:Value(os.clock())
+game:GetService("RunService").Heartbeat:Connect(function()
+	now:set(os.clock())
+end)
 
 local showDead = scope:Computed(function(use)
 	return use(dead) == true and use(ghost) ~= true
@@ -42,9 +47,21 @@ scope:New "ScreenGui" {
 				scope:New "UICorner" { CornerRadius = UDim.new(0, 8) },
 				scope:New "UIStroke" { Color = Color3.fromRGB(150, 40, 40) },
 				Components.Text(scope, { Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 10), Text = "You have died.", Font = Enum.Font.Garamond, TextSize = 30, Color = Color3.fromRGB(230, 90, 90), Align = Enum.TextXAlignment.Center }),
-				Components.Button(scope, { Size = UDim2.fromOffset(180, 34), Position = UDim2.new(0.5, -90, 1, -46), Text = "Release Spirit", OnClick = function()
+				Components.Button(scope, { Size = UDim2.fromOffset(180, 34), Position = UDim2.new(0.5, -90, 1, -46), Text = "Release Spirit", Visible = scope:Computed(function(use)
+					return use(bgDeath) == nil
+				end), OnClick = function()
 					netSend:Fire(Opcodes.CMSG_REPOP_REQUEST, {})
 				end }),
+				Components.Text(scope, { Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 1, -42), Align = Enum.TextXAlignment.Center, Color = Ui.GOLD, Visible = scope:Computed(function(use)
+					return use(bgDeath) ~= nil
+				end), Text = scope:Computed(function(use)
+					local raw = use(bgDeath)
+					local seconds, at = (raw or ""):match("^(%d+) ([%d%.]+)$")
+					if not seconds then
+						return ""
+					end
+					return ("Resurrecting at your base in %d..."):format(math.max(0, math.ceil(tonumber(seconds) - (use(now) - tonumber(at)))))
+				end) }),
 			},
 		},
 		scope:New "Frame" {

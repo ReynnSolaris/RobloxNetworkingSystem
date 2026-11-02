@@ -120,6 +120,8 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | SMSG_WEATHER / SMSG_GAME_EVENT | server | `{ Kind, Intensity }`; `{ Active, Started? }` |
 | CMSG_GUILD_BANK / SMSG_GUILD_BANK_LIST | both | `{ Action = open|deposit|withdraw|depositmoney|withdrawmoney, Bag?, Slot?, Amount? }`; the vault |
 | SMSG_RESURRECT_REQUEST / CMSG_RESURRECT_RESPONSE | both | `{ From }`; `{ Accept }` |
+| CMSG_BATTLEMASTER_JOIN / CMSG_LEAVE_BATTLEFIELD / SMSG_BATTLEFIELD_STATUS | both | `{ Id }`; leave or cancel; `{ Status = queued|active|ended|none, Scores, Flags, Winner }` |
+| CMSG_CONVERT_RAID / CMSG_SET_SUBGROUP | client | party to raid; `{ Target, Group }` |
 | SMSG_QUESTGIVER_STATUS_MULTIPLE | server | `{ Statuses = { [guid] = available|complete|incomplete|none } }` for the markers |
 | SMSG_VENDOR_LIST | server | `{ Guid, Items }` opens the vendor window |
 | CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
@@ -209,6 +211,7 @@ GAMEMASTER  .buff <all|player> <speed|jump> <multiplier> <seconds>
             .taxi node add <name> [cost] | .taxi path <from> <to> [cost] | .taxi list | .taxi learn all [player]
             .npc wp add [guid] [wait] | .npc wp clear [guid]
             .event list | .event info <id> | .pet <creature entry> [player] | .pet dismiss [player]
+            .bg create <name> [minlevel] | .bg spawn <id> Alliance|Horde | .bg flag <id> Alliance|Horde | .bg list | .bg leave [player]
             .npc add <entry> | delete [guid] | move [guid] | kill [guid] | say [guid] <text> | info [guid] | near
             .loot template add <creatureEntry> <itemEntry> <chance> [min] [max] | template list [entry]
             .npc template add <name> [modelid] [subname] | template set <entry> <field> <value> | template list
@@ -307,6 +310,7 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | auctionhouse | id | item, count, owner, ownerId, bid, buyout, bidder, bidderId, expires, deposit |
 | taxi_nodes / taxi_path | id | name, x, y, z, cost / from, to, cost, points |
 | game_event | id | name, description, start, length (min), occurrence (min), xp_mult |
+| battleground_template | id | name, minlevel, spawn = { Alliance, Horde }, flag = { Alliance, Horde } |
 
 Outside the world tables, the World store also keeps `names` (character name to
 account, for mail and friends), `mail:<name>` (a character's letters),
@@ -581,6 +585,20 @@ talent spread; `/roll` rolls to the party or those nearby.
 In a zone with `Pvp = true`, players of the other faction are attackable, which
 flags you (red PvP on the player frame) for five minutes. A kill of someone within
 five levels is an honorable kill worth honor, both kept on the character sheet.
+
+## Raids and battlegrounds
+
+`/raid` converts a party into a raid of up to `Config.Party.RaidSize` in eight
+subgroups (`/setgroup <name> <n>`), with `/ra` for raid chat and a compact raid
+frame. A battlemaster creature (`battlemaster`) lists the battlegrounds a GM has
+set up with `.bg create`, `.bg spawn` and `.bg flag` for each faction: queue,
+and once `MinPerSide` of each faction wait, the match starts. Everyone ports to
+their base, a flag pole stands at each flag point, taking the enemy flag carries
+it on your back (and dismounts you), returning your own dropped flag or
+carrying theirs to your base while yours is home scores, and a dropped flag
+returns by itself after a while. First to `ScoreToWin` ends it, honor is paid,
+and everyone ports back. Inside a match the other faction is always attackable
+and dying respawns you at your base after a countdown instead of releasing.
 
 ## Threat, ranks, bosses, durability, bags
 

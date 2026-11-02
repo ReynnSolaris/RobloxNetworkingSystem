@@ -33,6 +33,9 @@ function module:Hostile(attacker: Player, target: Player): boolean
 	if not a or not b or a == b then
 		return false
 	end
+	if self.includes.Combat["Battleground.h"]:SameMatch(attacker, target) then
+		return true
+	end
 	local Zones = self.includes.Zones["Zones.h"]
 	local za, zb = Zones:Current(attacker), Zones:Current(target)
 	if za and zb and za:GetAttribute("Safe") ~= true and zb:GetAttribute("Safe") ~= true and (za:GetAttribute("Pvp") == true or self:Flagged(target)) then
@@ -94,4 +97,5 @@ return Base(module, {
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
 	{ Path = "Auth/Social", Imports = "Achievements.h" },
 	{ Path = "World/Zones", Imports = "Zones.h" },
+	{ Path = "World/Combat", Imports = "Battleground.h" },
 })

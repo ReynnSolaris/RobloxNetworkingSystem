@@ -215,6 +215,14 @@ function module:Gossip(player: Player, guid)
 	if template.auctioneer then
 		table.insert(options, { Id = "auction", Text = "Let me browse the auctions." })
 	end
+	if template.battlemaster then
+		for _, bg in self:DB():Select("battleground_template") do
+			table.insert(options, { Id = "bg:" .. tostring(bg.id), Text = ("I would like to join %s."):format(bg.name) })
+		end
+		if self.includes.Combat["Battleground.h"]:In(player) then
+			table.insert(options, { Id = "bgleave", Text = "Take me out of the battleground." })
+		end
+	end
 	if not self:IsQuestgiver(entry) and #options <= 1 then
 		if options[1] then
 			return self:Select(player, guid, options[1].Id)
@@ -249,6 +257,10 @@ function module:Select(player: Player, guid, option)
 		self.includes.Content["Taxi.h"]:Show(player, guid)
 	elseif option == "auction" and template.auctioneer then
 		self.includes.Content["Auction.h"]:Open(player, guid)
+	elseif typeof(option) == "string" and option:sub(1, 3) == "bg:" and template.battlemaster then
+		self.includes.Combat["Battleground.h"]:Queue(player, tonumber(option:sub(4)))
+	elseif option == "bgleave" and template.battlemaster then
+		self.includes.Combat["Battleground.h"]:Leave(player)
 	elseif option == "bind" and template.innkeeper then
 		local zone = self.includes.Zones["Zones.h"]:At(creature.Root.Position)
 		self.includes.Entities["EntityPlayer.h"]:SetHome(player, creature.Root.Position, zone and zone.Name or template.name)
@@ -483,5 +495,6 @@ return Base(module, {
 	{ Path = "World/Content", Imports = "Creatures.h|Vendors.h|Items.h|Taxi.h|Auction.h" },
 	{ Path = "World/Spells", Imports = "Spells.h|Talents.h|Skills.h" },
 	{ Path = "World/Zones", Imports = "Zones.h" },
+	{ Path = "World/Combat", Imports = "Battleground.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 })

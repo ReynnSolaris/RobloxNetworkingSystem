@@ -8,6 +8,7 @@ local CHANNELS = {
 	WORLD = {},
 	WHISPER = { Target = true },
 	PARTY = { Party = true },
+	RAID = { Party = true, Raid = true },
 	GUILD = { Guild = true },
 	SYSTEM = { ServerOnly = true },
 }

@@ -80,11 +80,14 @@ function module:OnDeath(player: Player, at: CFrame)
 		local hitbox = self.includes.Content["Creatures.h"].LayDown(player.Character)
 		hitbox.Name = "DeathHitbox"
 	end
-	local state = { At = at, Marker = nil, Ghost = false }
+	local inBattleground = self.includes.Combat["Battleground.h"]:OnDeath(player)
+	local state = { At = at, Marker = nil, Ghost = false, Battleground = inBattleground }
 	self.information[player] = state
-	remember(self, player, state)
+	if not inBattleground then
+		remember(self, player, state)
+	end
 	self.includes.System["Effects.h"]:Play("Smoke", player, 10)
-	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_DEATH, {})
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_DEATH, { Battleground = inBattleground, Seconds = Config.Battleground.RespawnSeconds })
 end
 
 -- A character that logged out dead comes back dead: released ones as a ghost at
@@ -111,7 +114,7 @@ end
 
 function module:Repop(player: Player)
 	local state = self.information[player]
-	if not state or state.Ghost then
+	if not state or state.Ghost or state.Battleground then
 		return
 	end
 	state.Ghost = true
@@ -228,6 +231,7 @@ end
 
 return Base(module, {
 	{ Path = "World/Content", Imports = "Creatures.h" },
+	{ Path = "World/Combat", Imports = "Battleground.h" },
 	{ Path = "World/Combat", Imports = "Duel.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },

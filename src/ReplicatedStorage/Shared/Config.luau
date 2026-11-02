@@ -17,6 +17,8 @@ return table.freeze({
 			WHISPER = "#FF80FF",
 			WORLD = "#FFC0C0",
 			PARTY = "#AAAAFF",
+			RAID = "#FF7F00",
+			BATTLEGROUND = "#FF7F00",
 			SYSTEM = "#FFFF00",
 			GM = "#00C0FF",
 			COMMAND = "#9D9D9D",
@@ -137,7 +139,9 @@ return table.freeze({
 
 	ZonePollSeconds = 0.5,
 
-	Party = { MaxSize = 5, InviteSeconds = 60 },
+	Party = { MaxSize = 5, RaidSize = 40, Subgroups = 8, InviteSeconds = 60 },
+	-- Battlegrounds: capture the flag between the factions on a GM-placed field.
+	Battleground = { MinPerSide = 1, MaxPerSide = 10, ScoreToWin = 3, RespawnSeconds = 10, HonorWin = 100, HonorLoss = 25, FlagReturnSeconds = 15, CaptureRange = 6 },
 
 	-- Characters per account and the classes they can be, in Blizzard class colours.
 	MaxCharacters = 3,

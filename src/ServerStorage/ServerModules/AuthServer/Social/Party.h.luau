@@ -5,8 +5,10 @@ local Opcodes = require(ReplicatedStorage.Shared.Opcodes)
 local Config = require(ReplicatedStorage.Shared.Config)
 local module = {}
 
--- WoW groups: /invite, /accept, /decline, /leave, /uninvite, /promote. A party
--- is { Leader = Player, Members = { Player } }; information[player] = its party.
+-- WoW groups: /invite, /accept, /decline, /leave, /uninvite, /promote, and
+-- /raid to convert a party into a raid of up to RaidSize in Subgroups groups
+-- (/setgroup). A party is { Leader, Members, Raid, Groups = { [Player] = n } };
+-- information[player] = its party.
 
 local invites: { [Player]: { From: Player, Party: any, At: number } } = {}
 
@@ -28,15 +30,80 @@ function module:MembersOf(player: Player): { Player }
 	return if party then party.Members else {}
 end
 
+local function limit(party): number
+	return if party and party.Raid then Config.Party.RaidSize else Config.Party.MaxSize
+end
+
+-- First subgroup with room, for a member joining a raid.
+local function freeGroup(party): number
+	local counts = {}
+	for _, n in party.Groups do
+		counts[n] = (counts[n] or 0) + 1
+	end
+	for n = 1, Config.Party.Subgroups do
+		if (counts[n] or 0) < Config.Party.MaxSize then
+			return n
+		end
+	end
+	return 1
+end
+
 function module:Update(party)
 	local Packet = self.includes.Security["Packet.h"]
-	local names = {}
+	local names, groups = {}, {}
 	for _, member in party.Members do
 		table.insert(names, member.Name)
+		groups[member.Name] = party.Groups[member] or 1
 	end
 	for _, member in party.Members do
-		Packet:Send(member, Opcodes.SMSG_PARTY_UPDATE, { Leader = party.Leader.Name, Members = names })
+		Packet:Send(member, Opcodes.SMSG_PARTY_UPDATE, { Leader = party.Leader.Name, Members = names, Raid = party.Raid == true, Groups = groups })
 	end
+end
+
+function module:IsRaid(player: Player): boolean
+	local party = self.information[player]
+	return party ~= nil and party.Raid == true
+end
+
+function module:Convert(player: Player)
+	local party = self.information[player]
+	if not party or party.Leader ~= player then
+		return say(self, player, "You are not the party leader.")
+	elseif party.Raid then
+		return say(self, player, "You are already in a raid.")
+	end
+	party.Raid = true
+	for i, member in party.Members do
+		party.Groups[member] = 1
+	end
+	for _, member in party.Members do
+		say(self, member, "Your party has been converted to a raid.")
+	end
+	self:Update(party)
+end
+
+function module:SetSubgroup(leader: Player, name: string?, group: number?)
+	local party = self.information[leader]
+	local target = self.includes.Entities["EntityPlayer.h"]:FindByName(name)
+	group = math.floor(tonumber(group) or 0)
+	if not party or not party.Raid or party.Leader ~= leader then
+		return say(self, leader, "You are not the raid leader.")
+	elseif not target or self.information[target] ~= party then
+		return say(self, leader, tostring(name) .. " is not in your raid.")
+	elseif group < 1 or group > Config.Party.Subgroups then
+		return say(self, leader, ("Groups run 1 to %d."):format(Config.Party.Subgroups))
+	end
+	local count = 0
+	for _, n in party.Groups do
+		if n == group then
+			count += 1
+		end
+	end
+	if count >= Config.Party.MaxSize then
+		return say(self, leader, "That group is full.")
+	end
+	party.Groups[target] = group
+	self:Update(party)
 end
 
 function module:Invite(leader: Player, name: string?)
@@ -48,7 +115,7 @@ function module:Invite(leader: Player, name: string?)
 	if party and party.Leader ~= leader then
 		return say(self, leader, "You are not the party leader.")
 	end
-	if party and #party.Members >= Config.Party.MaxSize then
+	if party and #party.Members >= limit(party) then
 		return say(self, leader, "Your party is full.")
 	end
 	if self.information[target] then
@@ -67,13 +134,14 @@ function module:Accept(player: Player)
 	end
 	local party = invite.Party or self.information[invite.From]
 	if not party then
-		party = { Leader = invite.From, Members = { invite.From } }
+		party = { Leader = invite.From, Members = { invite.From }, Groups = {} }
 		self.information[invite.From] = party
 	end
-	if #party.Members >= Config.Party.MaxSize then
+	if #party.Members >= limit(party) then
 		return say(self, player, "That party is full.")
 	end
 	table.insert(party.Members, player)
+	party.Groups[player] = if party.Raid then freeGroup(party) else 1
 	self.information[player] = party
 	for _, member in party.Members do
 		say(self, member, nameOf(player) .. " joins the party.")
@@ -95,6 +163,7 @@ function module:Leave(player: Player, kicked: boolean?)
 		return
 	end
 	self.information[player] = nil
+	party.Groups[player] = nil
 	local index = table.find(party.Members, player)
 	if index then
 		table.remove(party.Members, index)
@@ -157,6 +226,14 @@ function module:Start()
 		uninvite = function(player, target) self:Uninvite(player, target) end,
 		promote = function(player, target) self:Promote(player, target) end,
 	}
+	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_CONVERT_RAID, function(player)
+		self:Convert(player)
+	end)
+	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_SET_SUBGROUP, function(player, data)
+		if typeof(data) == "table" then
+			self:SetSubgroup(player, data.Target, tonumber(data.Group))
+		end
+	end)
 	self.includes.Security["Packet.h"]:On(Opcodes.CMSG_PARTY, function(player, data)
 		local action = typeof(data) == "table" and actions[data.Action]
 		if action then

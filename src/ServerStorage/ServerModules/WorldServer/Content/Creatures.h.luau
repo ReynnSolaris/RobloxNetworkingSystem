@@ -37,6 +37,7 @@ local SEED = {
 			{ at = "health", value = 0.3, action = "enrage", text = "Goldtooth becomes enraged!" },
 			{ at = "death", action = "yell", text = "My... candles..." },
 		} },
+	{ name = "Battlemaster", subname = "Battlemaster", modelid = "default", scale = 1.05, gossip = "The Horde will not wait. Will you fight?", faction = "friendly", battlemaster = true },
 	{ name = "Imp", subname = "Minion", modelid = "default", scale = 0.6, faction = "pet", health = 45, dmgmin = 3, dmgmax = 6, speed = 16, spells = { "Firebolt" } },
 	{ name = "Festival Vendor", subname = "Harvest Festival", modelid = "default", scale = 1, gossip = "Fresh from the fields! Only while the festival lasts.", faction = "friendly" },
 }
@@ -756,7 +757,7 @@ function module:Start()
 			byName[template.name] = DB:Insert("creature_template", table.clone(template))
 		else
 			local fields = {}
-			for _, key in { "innkeeper", "banker", "spells", "wander", "beast", "rank", "script", "repair" } do
+			for _, key in { "innkeeper", "banker", "spells", "wander", "beast", "rank", "script", "repair", "battlemaster" } do
 				if template[key] ~= nil and existing[key] == nil then
 					fields[key] = template[key]
 				end
