@@ -749,9 +749,12 @@ import the FBX (armature and clips) with Studio's 3D Importer, keep the
 AnimationController or Humanoid on the Model, drop it in MountTemplates or
 FormTemplates named like the spell's `aura.model` or form, and set its
 attributes AnimIdle, AnimWalk, AnimFly and AnimSpecial to the uploaded
-animation ids (upload each clip from the Animation Editor). The server welds
-the rig's root to the rider and the clients play the clip for the state
-instead of the procedural legs. Creatures with `texts` chatter from them at
+animation ids (upload each clip from the Animation Editor). Stand the template
+upright facing -Z in ServerStorage; the server ignores the importer's pivot,
+scales the rig to `Height` studs (5.5 by default), turns it by `Rotation`
+(degrees) and nudges it by `Offset`, seats the rider on its back, raises the
+rider by its depth, and welds its root part. The clients play the clip for the
+state instead of the procedural legs. Creatures with `texts` chatter from them at
 random when someone is near, TC's creature_text.
 
 ## Factions, guards, equip rules, spirit healers, GM tools

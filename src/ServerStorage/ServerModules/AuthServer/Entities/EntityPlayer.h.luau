@@ -966,16 +966,34 @@ end
 local function rigged(folderName: string, templateName: string): Model?
 	local folder = ServerStorage:FindFirstChild(folderName)
 	local template = folder and folder:FindFirstChild(templateName)
-	if template and (template:FindFirstChildOfClass("AnimationController") or template:FindFirstChildOfClass("Humanoid")) then
+	if template and (template:GetAttribute("Rigged") or template:FindFirstChildOfClass("AnimationController") or template:FindFirstChildOfClass("Humanoid") or template:FindFirstChildWhichIsA("Motor6D", true)) then
 		return template
 	end
 	return nil
 end
 
-local function attachRigged(character: Model, name: string, template: Model, root: BasePart): Model
+-- World-axis bounds of a model's parts, ignoring the pivot the importer chose.
+local function bounds(model: Model): (Vector3, Vector3)
+	local min, max = nil, nil
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			local half = part.Size / 2
+			local a, b = part.Position - half, part.Position + half
+			min = if min then Vector3.new(math.min(min.X, a.X), math.min(min.Y, a.Y), math.min(min.Z, a.Z)) else a
+			max = if max then Vector3.new(math.max(max.X, b.X), math.max(max.Y, b.Y), math.max(max.Z, b.Z)) else b
+		end
+	end
+	return min or Vector3.zero, max or Vector3.zero
+end
+
+-- A rigged template keeps the pose it has in ServerStorage (stand it upright,
+-- facing -Z, there), is scaled to attribute Height studs (default 5.5), turned
+-- by attribute Rotation (degrees) and nudged by Offset, then seated under the
+-- rider with its back a little below the root and welded by its root part.
+-- Returns the model and the depth of its lowest point below the rider.
+local function attachRigged(character: Model, name: string, template: Model, root: BasePart): (Model, number)
 	local model = template:Clone()
 	model.Name = name
-	local body = model.PrimaryPart or model:FindFirstChild("Root") or model:FindFirstChildWhichIsA("BasePart")
 	for _, part in model:GetDescendants() do
 		if part:IsA("BasePart") then
 			part.Anchored = false
@@ -983,7 +1001,24 @@ local function attachRigged(character: Model, name: string, template: Model, roo
 			part.Massless = true
 		end
 	end
-	model:PivotTo(root.CFrame)
+	local min, max = bounds(model)
+	local height = math.max(max.Y - min.Y, 0.01)
+	local wanted = tonumber(model:GetAttribute("Height")) or 5.5
+	if math.abs(height - wanted) > 0.05 then
+		model:ScaleTo(model:GetScale() * wanted / height)
+		min, max = bounds(model)
+	end
+	local center = (min + max) / 2
+	local halfHeight = (max.Y - min.Y) / 2
+	local rotation = model:GetAttribute("Rotation")
+	local offset = model:GetAttribute("Offset")
+	local rot = if typeof(rotation) == "Vector3" then CFrame.Angles(math.rad(rotation.X), math.rad(rotation.Y), math.rad(rotation.Z)) else CFrame.new()
+	local nudge = if typeof(offset) == "Vector3" then offset else Vector3.zero
+	-- the rider sits on the back: the top of the body a little under the root
+	local seat = CFrame.new(0, -(halfHeight + 0.8), 0) * CFrame.new(nudge)
+	local delta = root.CFrame * rot * seat * CFrame.new(-center)
+	model:PivotTo(delta * model:GetPivot())
+	local body = model.PrimaryPart or model:FindFirstChild("Root") or model:FindFirstChildWhichIsA("BasePart")
 	local weld = Instance.new("WeldConstraint")
 	weld.Part0, weld.Part1 = root, body
 	weld.Parent = body
@@ -992,7 +1027,7 @@ local function attachRigged(character: Model, name: string, template: Model, roo
 		Instance.new("AnimationController", model)
 	end
 	model.Parent = character
-	return model
+	return model, -(halfHeight * 2 + 0.8) + nudge.Y
 end
 
 -- Reads a template Model into the part list attachBody takes.
@@ -1162,9 +1197,8 @@ function module:Mount(player: Player, on: boolean, fly: boolean?, modelName: str
 	end
 	local rig = modelName and rigged("MountTemplates", modelName)
 	if rig then
-		attachRigged(character, "Mount", rig, root)
-		local box, size = rig:GetBoundingBox()
-		module.Lift(character, { { offset = CFrame.new(0, box.Position.Y - rig:GetPivot().Position.Y, 0), size = size } })
+		local _, depth = attachRigged(character, "Mount", rig, root)
+		module.Lift(character, { { offset = CFrame.new(0, depth, 0), size = Vector3.zero } })
 		return
 	end
 	local parts = (modelName and templateParts("MountTemplates", modelName)) or (if fly then BODIES.gryphon() else BODIES.horse())
@@ -1228,9 +1262,8 @@ function module:Shapeshift(player: Player, form: string?)
 	local rig = rigged("FormTemplates", form)
 	if rig then
 		hideBody(character, true)
-		attachRigged(character, "Form", rig, root)
-		local box, size = rig:GetBoundingBox()
-		module.Lift(character, { { offset = CFrame.new(0, box.Position.Y - rig:GetPivot().Position.Y, 0), size = size } })
+		local _, depth = attachRigged(character, "Form", rig, root)
+		module.Lift(character, { { offset = CFrame.new(0, depth, 0), size = Vector3.zero } })
 		return
 	end
 	local parts = templateParts("FormTemplates", form) or (BODIES[form] and BODIES[form]()) or BODIES.cat()
