@@ -31,12 +31,14 @@ src/ServerStorage/ServerModules/
   WorldServer/Characters/          Characters (enum, create, delete, login, logout)
   WorldServer/Zones/               Zones (which zone each player stands in)
   WorldServer/Movement/            Anticheat (movement validation)
-  WorldServer/Content/             Creatures (spawns, AI, loot), GameObjects, Items, Teleports
+  WorldServer/Content/             Creatures (spawns, AI, loot), GameObjects, Items, Vendors, Teleports
   WorldServer/Combat/              Combat (player melee, combat log)
 src/ServerStorage/ObjectTemplates/                 models .gobject can place
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus)
-src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, PlayerFrame, TargetFrame, ChatFrame, ZoneBanner, PartyFrame
+src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, PlayerFrame, TargetFrame,
+                                                   ChatFrame, VendorFrame, CharacterSheet, ZoneBanner, PartyFrame,
+                                                   Ui (theme, tooltip), Components (Fusion panels, lists, buttons)
 src/Workspace/Zones/                               demo zone parts
 ```
 
@@ -66,6 +68,10 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | CMSG_SET_TARGET | client | `{ Guid }` or `{}` to clear |
 | CMSG_ATTACK | client | `{ On }` toggles auto-attack on the target |
 | SMSG_COMBAT_LOG | server | `{ Text, Color }` |
+| SMSG_VENDOR_LIST | server | `{ Guid, Items }` opens the vendor window |
+| CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
+| CMSG_EQUIP / CMSG_UNEQUIP | client | `{ Entry }` / `{ Slot }` |
+| SMSG_EQUIPMENT | server | `{ Slots, Stats = { Health, Damage, Armor } }` |
 | SMSG_SPAWN | server | `{ Position, Health, MaxHealth }` |
 | SMSG_DESPAWN | server | on death, respawn follows after `Config.RespawnDelay` |
 | SMSG_HEALTH_UPDATE | server | `{ Health, MaxHealth }` |
@@ -146,7 +152,8 @@ MODERATOR   .lookup creature|object|tele <name>
             .speed <0.1-10> [player]  .hurt <player> <amount>  .heal [player]
             .kill [player]  .revive [player]  .maxhealth <amount> [player]  .time <0-24>
             .levelup [player] [levels]  .setlevel <level> [player]  .modify xp <amount> [player]
-            .additem <entry> [count] [player]  .item template add <name> [quality] [stack] | list
+            .additem <entry> [count] [player]  .item template add <name> [quality] [stack] | set <entry> <field> <value> | list
+            .vendor add <creatureEntry> <itemEntry> | remove <id> | list [entry]
             .morph <userId> [player]  .demorph [player]  .modify hp|speed|scale <value> [player]
             .ban <player> [reason]  .unban <userId>  .announce <text>
             .save [player]  .saveall
@@ -221,7 +228,8 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | gameobject_template | entry | name, modelid, size |
 | gameobject | guid | id (entry), x, y, z, o, scale, by |
 | game_tele | id | name, x, y, z, o |
-| item_template | entry | name, quality 0-5, stack |
+| item_template | entry | name, quality 0-5, stack, class, slot, health, damage, armor, buyprice, sellprice, level |
+| npc_vendor | id | entry (creature), item |
 
 Templates are the assets, spawns reference them by entry, like TC. A creature's
 `modelid` is `default`, `user:<UserId>` (that account's look) or `model:<Name>` for a
@@ -279,6 +287,24 @@ item, and copper between `mingold` and `maxgold` drops. The corpse clears after 
 few seconds and the spawn comes back after `spawntimesecs` (default 30). Two hostile
 templates seed: Kobold Vermin and Young Wolf, with loot rows.
 
+## Vendors and gear
+
+A creature with `npc_vendor` rows opens a vendor window when talked to: its stock
+on the left with prices in copper, your bag on the right with sell prices (a
+quarter of the buy price unless `sellprice` is set). Buying checks range, stock and
+money. General Goods seeds with the starter set.
+
+The vendor window and character sheet are built with
+[Fusion](https://elttob.uk/Fusion/) through `Components.luau`: draggable titled
+panels, hover rows with tooltips, lists bound to the Inventory, Equipment, Stats and
+Money attributes so they redraw themselves.
+
+Items with a `slot` are gear. Press **C** for the character sheet: click a bag item
+to equip it (one per slot, the old one goes back to the bag, `level` is enforced),
+click a slot to unequip. Stats recompute on every change: max health is the level's
+health plus gear `health`, melee adds gear `damage`, and gear `armor` comes off every
+creature hit. Equipment and the bag live on the character record.
+
 ## Saving
 
 `Database.h` wraps DataStores with a per-key cache, retries, and a memory-only
@@ -288,6 +314,7 @@ shutdown.
 
 ## Run
 
-Needs [Rojo](https://rojo.space). `rojo serve` and connect from Studio, or
-`rojo build -o place.rbxl`. Players spawn only after the client authenticates;
+Needs [Rojo](https://rojo.space) and [Wally](https://wally.run). `wally install`
+pulls Fusion into `Packages/` (git-ignored, synced to ReplicatedStorage.Packages),
+then `rojo serve` and connect from Studio, or `rojo build -o place.rbxl`. Players spawn only after the client authenticates;
 `Players.CharacterAutoLoads` is off.

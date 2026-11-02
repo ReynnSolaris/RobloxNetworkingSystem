@@ -194,12 +194,32 @@ handlers[Opcodes.SMSG_COMBAT_LOG] = function(d)
 	display(tint(d.Color or Colors.HIT, esc(tostring(d.Text))), "Log")
 end
 
+-- Bag contents land on attributes for the character sheet and vendor window;
+-- the chat listing only prints when the player asked with /inv.
 handlers[Opcodes.SMSG_INVENTORY] = function(d)
 	local items = d.Items or {}
-	system(("Inventory, %d stack(s), %s:"):format(#items, money(d.Money or 0)))
-	for _, item in items do
-		display("  " .. qualityName(item.Name, item.Quality) .. tint(Colors.SAY, " x" .. tostring(item.Count)))
+	player:SetAttribute("Inventory", HttpService:JSONEncode(items))
+	if d.Announce then
+		system(("Inventory, %d stack(s), %s:"):format(#items, money(d.Money or 0)))
+		for _, item in items do
+			display("  " .. qualityName(item.Name, item.Quality) .. tint(Colors.SAY, " x" .. tostring(item.Count)))
+		end
 	end
+end
+
+handlers[Opcodes.SMSG_EQUIPMENT] = function(d)
+	player:SetAttribute("Equipment", HttpService:JSONEncode(d.Slots or {}))
+	player:SetAttribute("Stats", HttpService:JSONEncode(d.Stats or {}))
+end
+
+-- Vendor windows open on an event so talking to the same vendor twice works.
+local vendorOpen = Instance.new("BindableEvent")
+vendorOpen.Name = "VendorOpen"
+vendorOpen.Parent = script.Parent
+
+handlers[Opcodes.SMSG_VENDOR_LIST] = function(d)
+	player:SetAttribute("Vendor", HttpService:JSONEncode(d.Items or {}))
+	vendorOpen:Fire(tostring(d.Guid))
 end
 
 -- Zone changes land on attributes; ZoneBanner draws them.

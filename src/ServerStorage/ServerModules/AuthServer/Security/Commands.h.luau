@@ -495,9 +495,38 @@ add("loot", 2, ".loot template add <creatureEntry> <itemEntry> <chance> [min] [m
 	end
 end)
 
-add("item", 2, ".item template add <name> [quality 0-5] [stack] | .item template list", function(self, caller, args)
+add("vendor", 2, ".vendor add <creatureEntry> <itemEntry> | .vendor remove <id> | .vendor list [creatureEntry]", function(self, caller, args)
 	local DB = self.includes.Database["WorldDB.h"]
-	if args[1] == "template" and args[2] == "add" then
+	if args[1] == "add" then
+		local row = DB:Insert("npc_vendor", { entry = assert(tonumber(args[2]), "expected a creature entry"), item = assert(tonumber(args[3]), "expected an item entry") })
+		self:Reply(caller, ("npc_vendor id %d added."):format(row.id))
+	elseif args[1] == "remove" then
+		self:Reply(caller, if DB:Delete("npc_vendor", assert(tonumber(args[2]), "expected an id")) then "Removed." else "No such row.")
+	else
+		local entry = tonumber(args[2])
+		for _, row in DB:Select("npc_vendor") do
+			if not entry or row.entry == entry then
+				local item = DB:Get("item_template", row.item) or {}
+				self:Reply(caller, ("  id %d: creature %d sells %s (%d) for %dc"):format(row.id, row.entry, tostring(item.name), row.item, item.buyprice or 0))
+			end
+		end
+	end
+end)
+
+add("item", 2, ".item template add <name> [quality 0-5] [stack] | .item template set <entry> <field> <value> | .item template list", function(self, caller, args)
+	local DB = self.includes.Database["WorldDB.h"]
+	if args[1] == "template" and args[2] == "set" then
+		local entry, field = assert(tonumber(args[3]), "expected an entry"), args[4]
+		local NUMERIC = { quality = 1, stack = 1, health = 1, damage = 1, armor = 1, buyprice = 1, sellprice = 1, level = 1 }
+		local TEXT = { name = 1, class = 1, slot = 1 }
+		assert(NUMERIC[field or ""] or TEXT[field or ""], "field is name, class, slot, quality, stack, health, damage, armor, buyprice, sellprice or level")
+		local value: any = table.concat(args, " ", 5)
+		if NUMERIC[field] then
+			value = assert(tonumber(value), "expected a number")
+		end
+		assert(DB:Update("item_template", entry, { [field] = value }), "no such entry")
+		self:Reply(caller, ("Set %s on item %d."):format(field, entry))
+	elseif args[1] == "template" and args[2] == "add" then
 		local row = DB:Insert("item_template", { name = assert(args[3], "expected a name"), quality = math.clamp(tonumber(args[4]) or 1, 0, 5), stack = tonumber(args[5]) or 1 })
 		self:Reply(caller, ("item_template entry %d: %s"):format(row.entry, row.name))
 	else

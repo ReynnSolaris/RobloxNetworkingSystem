@@ -13,6 +13,7 @@ local TABLES = {
 	game_tele = "id",
 	item_template = "entry",
 	creature_loot_template = "id",
+	npc_vendor = "id",
 }
 module.TABLES = TABLES
 

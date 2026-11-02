@@ -43,11 +43,36 @@ function module:SyncLevel(player: Player)
 	end
 end
 
--- Max health follows level; current health keeps its fraction.
-local function applyLevelHealth(humanoid: Humanoid, level: number)
-	local fraction = if humanoid.MaxHealth > 0 then humanoid.Health / humanoid.MaxHealth else 1
-	humanoid.MaxHealth = Config.Xp.HealthForLevel(level)
-	humanoid.Health = math.max(1, humanoid.MaxHealth * fraction)
+-- Level plus equipment. Max health keeps its fraction when it changes.
+function module:Stats(player: Player)
+	local entity = self.information[player]
+	return entity and entity.Stats or { Health = 100, Damage = 0, Armor = 0 }
+end
+
+function module:ApplyStats(player: Player)
+	local entity = self.information[player]
+	local char = entity and entity.Active
+	if not char then
+		return
+	end
+	local DB = self.includes.Database["WorldDB.h"]
+	local stats = { Health = Config.Xp.HealthForLevel(char.Level or 1), Damage = 0, Armor = 0 }
+	for _, entry in (char.Equipment or {}) do
+		local item = DB:Get("item_template", entry)
+		if item then
+			stats.Health += item.health or 0
+			stats.Damage += item.damage or 0
+			stats.Armor += item.armor or 0
+		end
+	end
+	entity.Stats = stats
+	local humanoid = humanoidOf(entity)
+	if humanoid then
+		local fraction = if humanoid.MaxHealth > 0 then humanoid.Health / humanoid.MaxHealth else 1
+		humanoid.MaxHealth = stats.Health
+		humanoid.Health = math.max(1, stats.Health * fraction)
+	end
+	self:SendEquipment(player)
 end
 
 function module:SetLevel(player: Player, level: number)
@@ -58,10 +83,7 @@ function module:SetLevel(player: Player, level: number)
 	end
 	char.Level = math.clamp(level, 1, Config.Xp.MaxLevel)
 	char.Xp = 0
-	local humanoid = humanoidOf(entity)
-	if humanoid then
-		applyLevelHealth(humanoid, char.Level)
-	end
+	self:ApplyStats(player)
 	self:SyncLevel(player)
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_LEVELUP, { Level = char.Level })
 end
@@ -78,10 +100,7 @@ function module:GrantXp(player: Player, amount: number, reason: string?)
 	while char.Level < Config.Xp.MaxLevel and char.Xp >= Config.Xp.ForLevel(char.Level) do
 		char.Xp -= Config.Xp.ForLevel(char.Level)
 		char.Level += 1
-		local humanoid = humanoidOf(entity)
-		if humanoid then
-			applyLevelHealth(humanoid, char.Level)
-		end
+		self:ApplyStats(player)
 		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_LEVELUP, { Level = char.Level })
 	end
 	if char.Level >= Config.Xp.MaxLevel then
@@ -105,7 +124,7 @@ function module:Discover(player: Player, zoneName: string)
 end
 
 -- Inventory is a list of { entry, count }; stacks merge up to the template's stack size.
-function module:AddItem(player: Player, entry: number, count: number): boolean
+function module:AddItem(player: Player, entry: number, count: number, quiet: boolean?): boolean
 	local char = self.information[player] and self.information[player].Active
 	local template = self.includes.Database["WorldDB.h"]:Get("item_template", entry)
 	if not char or not template or count <= 0 then
@@ -126,9 +145,98 @@ function module:AddItem(player: Player, entry: number, count: number): boolean
 		table.insert(char.Inventory, { entry = entry, count = add })
 		left -= add
 	end
-	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_ITEM_PUSH,
-		{ Entry = entry, Name = template.name, Quality = template.quality or 1, Count = count })
+	if not quiet then
+		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_ITEM_PUSH,
+			{ Entry = entry, Name = template.name, Quality = template.quality or 1, Count = count })
+	end
+	self:SendInventory(player, false)
 	return true
+end
+
+function module:CountItem(player: Player, entry: number): number
+	local char = self.information[player] and self.information[player].Active
+	local total = 0
+	for _, stack in (char and char.Inventory or {}) do
+		if stack.entry == entry then
+			total += stack.count
+		end
+	end
+	return total
+end
+
+function module:RemoveItem(player: Player, entry: number, count: number): boolean
+	local char = self.information[player] and self.information[player].Active
+	if not char or self:CountItem(player, entry) < count then
+		return false
+	end
+	local left = count
+	for i = #char.Inventory, 1, -1 do
+		local stack = char.Inventory[i]
+		if stack.entry == entry and left > 0 then
+			local take = math.min(stack.count, left)
+			stack.count -= take
+			left -= take
+			if stack.count == 0 then
+				table.remove(char.Inventory, i)
+			end
+		end
+	end
+	self:SendInventory(player, false)
+	return true
+end
+
+-- Equip from the bag; whatever was in the slot goes back to the bag.
+function module:Equip(player: Player, entry: number): (boolean, string?)
+	local char = self.information[player] and self.information[player].Active
+	local item = self.includes.Database["WorldDB.h"]:Get("item_template", entry)
+	if not char or not item then
+		return false, "No such item."
+	end
+	if not item.slot then
+		return false, "That cannot be equipped."
+	end
+	if (item.level or 1) > (char.Level or 1) then
+		return false, ("You need to be level %d."):format(item.level)
+	end
+	if self:CountItem(player, entry) == 0 then
+		return false, "You do not have that item."
+	end
+	char.Equipment = char.Equipment or {}
+	local previous = char.Equipment[item.slot]
+	self:RemoveItem(player, entry, 1)
+	char.Equipment[item.slot] = entry
+	if previous then
+		self:AddItem(player, previous, 1, true)
+	end
+	self:ApplyStats(player)
+	return true
+end
+
+function module:Unequip(player: Player, slot: string): boolean
+	local char = self.information[player] and self.information[player].Active
+	local entry = char and char.Equipment and char.Equipment[slot]
+	if not entry then
+		return false
+	end
+	char.Equipment[slot] = nil
+	self:AddItem(player, entry, 1, true)
+	self:ApplyStats(player)
+	return true
+end
+
+function module:SendEquipment(player: Player)
+	local entity = self.information[player]
+	local char = entity and entity.Active
+	if not char then
+		return
+	end
+	local DB = self.includes.Database["WorldDB.h"]
+	local slots = {}
+	for slot, entry in (char.Equipment or {}) do
+		local item = DB:Get("item_template", entry) or {}
+		slots[slot] = { Entry = entry, Name = item.name or "?", Quality = item.quality or 1 }
+	end
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_EQUIPMENT, { Slots = slots, Stats = entity.Stats })
 end
 
 -- Copper, WoW style: 100 copper to a silver, 100 silver to a gold.
@@ -142,15 +250,17 @@ function module:AddMoney(player: Player, copper: number)
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_MONEY, { Amount = copper, Total = char.Money })
 end
 
-function module:SendInventory(player: Player)
+-- announce: print the list in chat (the /inv request); otherwise it is a silent refresh.
+function module:SendInventory(player: Player, announce: boolean?)
 	local char = self.information[player] and self.information[player].Active
 	local DB = self.includes.Database["WorldDB.h"]
 	local items = {}
 	for _, stack in (char and char.Inventory or {}) do
 		local template = DB:Get("item_template", stack.entry) or {}
-		table.insert(items, { Entry = stack.entry, Name = template.name or "?", Quality = template.quality or 1, Count = stack.count })
+		table.insert(items, { Entry = stack.entry, Name = template.name or "?", Quality = template.quality or 1, Count = stack.count,
+			Slot = template.slot, Class = template.class, Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Level = template.level })
 	end
-	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INVENTORY, { Items = items, Money = char and char.Money or 0 })
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INVENTORY, { Items = items, Money = char and char.Money or 0, Announce = announce == true })
 end
 
 function module:Get(player: Player)
@@ -175,7 +285,7 @@ function module:Spawn(player: Player, at: CFrame?)
 
 	local humanoid = character:WaitForChild("Humanoid") :: Humanoid
 	humanoid.DisplayName = saved.Name
-	humanoid.MaxHealth = Config.Xp.HealthForLevel(saved.Level or 1)
+	self:ApplyStats(player)
 	humanoid.Health = humanoid.MaxHealth
 	if saved.Health then
 		humanoid.Health = math.clamp(saved.Health, 1, humanoid.MaxHealth)

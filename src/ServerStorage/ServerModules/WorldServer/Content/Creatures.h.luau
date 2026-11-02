@@ -146,6 +146,7 @@ function module:Spawn(row)
 		prompt.Triggered:Connect(function(player)
 			self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_MESSAGECHAT,
 				{ Channel = "SAY", Sender = template.name, Text = template.gossip or "Greetings, traveler." })
+			self.includes.Content["Vendors.h"]:Open(player, row.guid, row.id)
 		end)
 	end
 
@@ -234,11 +235,13 @@ function module:Think(state)
 	end
 
 	if not target then
+		local Entities = self.includes.Entities["EntityPlayer.h"]
 		local nearest, best = nil, template.aggro or 15
 		for _, player in Players:GetPlayers() do
 			local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 			local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-			if r and h and h.Health > 0 and player:GetAttribute("InWorld") then
+			local entity = Entities:Get(player)
+			if r and h and h.Health > 0 and entity and entity.Active then
 				local d = (r.Position - here).Magnitude
 				if d < best then
 					nearest, best = player, d
@@ -264,7 +267,8 @@ function module:Think(state)
 		humanoid:MoveTo(here)
 		if os.clock() >= state.NextSwing then
 			state.NextSwing = os.clock() + Config.Combat.SwingSeconds
-			local damage = math.random(template.dmgmin or 1, math.max(template.dmgmax or 1, template.dmgmin or 1))
+			local armor = self.includes.Entities["EntityPlayer.h"]:Stats(target).Armor
+			local damage = math.max(1, math.random(template.dmgmin or 1, math.max(template.dmgmax or 1, template.dmgmin or 1)) - armor)
 			targetHumanoid:TakeDamage(damage)
 			Combat:Log(target, ("%s hits you for %d."):format(template.name, damage), Config.Chat.Colors.HURT)
 		end
@@ -351,4 +355,5 @@ return Base(module, {
 	{ Path = "World/Combat", Imports = "Combat.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
+	{ Path = "World/Content", Imports = "Vendors.h" },
 })

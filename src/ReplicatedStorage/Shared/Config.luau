@@ -29,6 +29,10 @@ return table.freeze({
 		},
 	},
 
+	-- Equipment slots, in character sheet order.
+	Slots = { "head", "chest", "legs", "feet", "mainhand", "ring", "trinket" },
+	VendorRange = 12,
+
 	-- Item quality colours, WoW order: poor, common, uncommon, rare, epic, legendary.
 	Quality = { [0] = "#9D9D9D", [1] = "#FFFFFF", [2] = "#1EFF00", [3] = "#0070DD", [4] = "#A335EE", [5] = "#FF8000" },
 

@@ -34,7 +34,8 @@ function module:Swing(player: Player, state)
 	end
 	state.NextSwing = os.clock() + Config.Combat.SwingSeconds
 	local level = player:GetAttribute("CharacterLevel") or 1
-	local damage = math.max(1, math.round(Config.Combat.Damage(level) * (0.8 + math.random() * 0.4)))
+	local bonus = self.includes.Entities["EntityPlayer.h"]:Stats(player).Damage
+	local damage = math.max(1, math.round((Config.Combat.Damage(level) + bonus) * (0.8 + math.random() * 0.4)))
 	creature.Humanoid:TakeDamage(damage)
 	Creatures:Aggro(state.Target, player)
 	self:Log(player, ("Your attack hits %s for %d."):format(creature.Template.name, damage), Config.Chat.Colors.HIT)
@@ -77,4 +78,5 @@ end
 return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "World/Content", Imports = "Creatures.h" },
+	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 })
