@@ -69,7 +69,7 @@ local function slotTile(scope, slotName: string, position: UDim2, labelRight: bo
 	local function showTip()
 		local i = peek(item)
 		if i and not Drag.active() then
-			Ui.showItemTip(i, "Right-click to unequip")
+			Ui.showItemTip(i, if i.Use then "Right-click to use, drag to the bag to unequip" else "Right-click to unequip")
 		elseif peek(hovered) then
 			Ui.hideTip()
 		end
@@ -121,7 +121,10 @@ local function slotTile(scope, slotName: string, position: UDim2, labelRight: bo
 			Drag.begin({ Equip = slotName, Item = i }, abbreviation(i.Name or "?"), Color3.fromHex(Ui.quality(i.Quality)))
 		end,
 		[OnEvent "MouseButton2Click"] = function()
-			if peek(item) then
+			local i = peek(item)
+			if i and i.Use then
+				netSend:Fire(Opcodes.CMSG_USE_ITEM, { Bag = slotName })
+			elseif i then
 				netSend:Fire(Opcodes.CMSG_UNEQUIP, { Slot = slotName })
 			end
 		end,

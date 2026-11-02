@@ -90,8 +90,8 @@ function module:Sync(unit)
 	local now = os.clock()
 	local out = {}
 	for _, aura in self:List(unit) do
-		table.insert(out, { Id = aura.Id, Name = aura.Name, Icon = aura.Icon, School = aura.School, Kind = aura.Kind, Harmful = aura.Harmful,
-			Left = if aura.Ends == math.huge then -1 else math.max(0, aura.Ends - now), Duration = aura.Duration, Description = aura.Description, Stacks = aura.Stacks })
+		table.insert(out, { Id = aura.Id, Name = aura.Name, Icon = aura.Icon, School = aura.School, Kind = aura.Kind, Harmful = aura.Harmful, Form = aura.Form,
+			Left = if (aura.Ends or math.huge) == math.huge then -1 else math.max(0, aura.Ends - now), Duration = aura.Duration, Description = aura.Description, Stacks = aura.Stacks })
 	end
 	if target and target.Parent then
 		target:SetAttribute("Auras", if #out > 0 then HttpService:JSONEncode(out) else nil)
@@ -132,14 +132,6 @@ function module:Apply(caster, unit, spell, amount: number?)
 	aura.Name, aura.Icon, aura.School, aura.Description = spell.name, spell.icon, spell.school, spell.description
 	aura.Kind, aura.Stat, aura.Mult = spec.kind, spec.stat, spec.mult
 	aura.Pct, aura.Stats, aura.Form, aura.Group = spec.pct, spec.stats, spec.form, spec.group
-	-- one of a group at a time: stances, aspects, presences, forms
-	if spec.group then
-		for _, other in table.clone(list) do
-			if other ~= aura and other.Group == spec.group then
-				self:Remove(unit, other.Id, true)
-			end
-		end
-	end
 	aura.Amount = amount or spec.amount or 0
 	aura.Interval = spec.interval or 3
 	aura.Duration = spec.duration or 0
@@ -155,6 +147,14 @@ function module:Apply(caster, unit, spell, amount: number?)
 	end
 	aura.Caster = caster
 	aura.Stacks = math.min((aura.Stacks or 0) + 1, spec.stacks or 1)
+	-- one of a group at a time: stances, aspects, presences, forms
+	if spec.group then
+		for _, other in table.clone(list) do
+			if other ~= aura and other.Group == spec.group then
+				self:Remove(unit, other.Id, true)
+			end
+		end
+	end
 	self:Sync(unit)
 	if Combat:IsPlayer(unit) then
 		Combat:Log(unit, (if aura.Harmful then "You are afflicted by %s." else "You gain %s."):format(spell.name), if aura.Harmful then Config.Chat.Colors.HURT else Config.Chat.Colors.LOOT)
@@ -259,11 +259,11 @@ function module:Start()
 				local changed = false
 				for i = #list.Auras, 1, -1 do
 					local aura = list.Auras[i]
-					if aura.Kind == "periodic" and now >= aura.NextTick and now < aura.Ends + 0.5 then
+					if aura.Kind == "periodic" and now >= (aura.NextTick or now) and now < (aura.Ends or math.huge) + 0.5 then
 						aura.NextTick += aura.Interval
 						tick(self, unit, aura)
 					end
-					if now >= aura.Ends then
+					if now >= (aura.Ends or math.huge) then
 						table.remove(list.Auras, i)
 						changed = true
 						if aura.Kind == "mount" then

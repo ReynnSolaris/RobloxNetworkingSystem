@@ -54,8 +54,8 @@ local function form(class, name, school, formName, stats, mult, base, per, cost,
 end
 -- a stance, aura, aspect or presence: stats per point of amount, exclusive in its group
 local function stance(class, name, school, groupName, stats, mult, base, per, cost, icon, text, starter)
-	return spell(class, name, school, "aura", "self", base, per, cost, 0, 1, 0, icon, text,
-		{ aura = { kind = "stats", group = groupName, stats = stats, mult = mult, duration = 0 }, starter = starter })
+	return spell(class, name, school, "aura", "self", base, per, cost, 0, 1.5, 0, icon, text,
+		{ aura = { kind = "stats", group = groupName, stats = stats, mult = mult, duration = 0 }, starter = starter, nogcd = true })
 end
 
 local function stun(class, name, school, duration, cost, cd, range, icon, text)
@@ -183,7 +183,12 @@ local SEED = {
 	-- item spells: no class, never trained
 	{ name = "Hearthstone", school = "arcane", effect = "hearth", cost = 0, cast_time = 10, cooldown = 60, range = 0, target = "self", icon = "HS", description = "Returns you to your home. Speak to an innkeeper to change your home." },
 	{ name = "Food", school = "physical", effect = "heal", base = 15, per_level = 3, cost = 0, cast_time = 0, cooldown = 5, range = 0, target = "self", icon = "FD", description = "Restores health." },
-	{ name = "Minor Healing Potion", school = "nature", effect = "heal", base = 40, per_level = 5, cost = 0, cast_time = 0, cooldown = 60, range = 0, target = "self", icon = "HP", description = "Restores health instantly." },
+	{ name = "Minor Healing Potion", school = "nature", effect = "heal", base = 40, per_level = 5, cost = 0, cast_time = 0, cooldown = 60, range = 0, target = "self", icon = "HP", description = "Restores health instantly.", nogcd = true },
+	-- trinket effects: procs roll on hits, on-use trinkets are used from the character sheet
+	{ name = "Candle Flare", proc = true, school = "fire", effect = "damage", target = "enemy", base = 12, per_level = 3, cost = 0, cast_time = 0, cooldown = 0, range = 40, icon = "CF", description = "A burst of candle fire." },
+	{ name = "Bandit's Cut", proc = true, school = "physical", effect = "aura", target = "enemy", base = 3, per_level = 1, cost = 0, cast_time = 0, cooldown = 0, range = 40, icon = "BC", description = "A ragged cut that bleeds.", aura = { kind = "periodic", interval = 2, duration = 8, harmful = true } },
+	{ name = "Vigor", school = "nature", effect = "heal", target = "self", base = 60, per_level = 8, cost = 0, cast_time = 0, cooldown = 120, range = 0, icon = "VG", description = "Restores a burst of health.", nogcd = true, proc = true },
+	{ name = "Swiftness", school = "physical", effect = "aura", target = "self", cost = 0, cast_time = 0, cooldown = 90, range = 0, icon = "SN", description = "Increases movement speed by 50% for 10 sec.", aura = { kind = "speed", mult = 1.5, duration = 10 }, nogcd = true, proc = true },
 	{ name = "Linen Bandage", school = "physical", effect = "aura", base = 8, per_level = 2, cost = 0, cast_time = 0, cooldown = 30, range = 0, target = "self", icon = "LB", description = "Heals over 6 sec.", aura = { kind = "periodic", interval = 2, duration = 6 } },
 	{ name = "Summon Brown Horse", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "BH", description = "Summons and dismisses a rideable Brown Horse. Increases movement speed by 60%. Taking damage dismounts you. Requires Apprentice Riding.", aura = { kind = "mount", mult = 1.6, duration = 0, riding = "Apprentice Riding" } },
 	{ name = "Summon Pony", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "PN", description = "Summons and dismisses a rideable Pony from the Pony mount template. Requires Apprentice Riding.", aura = { kind = "mount", mult = 1.6, duration = 0, model = "Pony", riding = "Apprentice Riding" } },
@@ -202,6 +207,9 @@ local TALENT_SPELLS = { "Mortal Strike", "Bloodthirst", "Shield Slam", "Holy Sho
 	"Moonkin Form", "Heart of the Wild", "Tree of Life" }
 for _, row in SEED do
 	if table.find(TALENT_SPELLS, row.name) then
+		row.talent = true
+	end
+	if row.proc then
 		row.talent = true
 	end
 end
@@ -294,6 +302,7 @@ function module:Describe(spell, level: number, caster)
 			Group = spell.aura.group, Form = spell.aura.form, Riding = spell.aura.riding }
 	end
 	out.Forms = spell.forms
+	out.Nogcd = spell.nogcd
 	return out
 end
 
@@ -399,12 +408,48 @@ function module:SetActionButton(player: Player, slot, id)
 end
 
 -- Right-clicking an item with a spell casts it; consumables go when it lands.
+-- An equipped item (a trinket) is used by its slot name.
 function module:UseItem(player: Player, slot, guid)
 	local Entities = self.includes.Entities["EntityPlayer.h"]
+	if typeof(slot) == "string" then
+		local entity = Entities:Get(player)
+		local entry = entity and entity.Active and entity.Active.Equipment and entity.Active.Equipment[slot]
+		local template = entry and self:DB():Get("item_template", entry)
+		if template and template.spell then
+			self:Cast(player, template.spell, guid, { Entry = entry, Consume = false })
+		end
+		return
+	end
 	local stack = Entities:StackAt(player, tonumber(slot) or 0)
 	local template = stack and self:DB():Get("item_template", stack.entry)
 	if template and template.spell then
 		self:Cast(player, template.spell, guid, { Entry = stack.entry, Consume = template.consumable == true })
+	end
+end
+
+-- Equipment procs: each worn item with { proc_spell, proc_chance } rolls on a
+-- hit the player lands; the spell lands on the target, or the player for
+-- heals and buffs.
+function module:Proc(player: Player, target)
+	local entity = self.includes.Entities["EntityPlayer.h"]:Get(player)
+	local char = entity and entity.Active
+	if not char or not char.Equipment then
+		return
+	end
+	local DB = self:DB()
+	for _, entry in char.Equipment do
+		local item = DB:Get("item_template", entry)
+		if item and item.proc_spell and math.random() < (item.proc_chance or 0.1) then
+			local spell = self:Template(item.proc_spell)
+			if spell then
+				local Combat = self.includes.Combat["Combat.h"]
+				local who = if spell.target == "enemy" then target else player
+				if who and Combat:Alive(who) then
+					self:Apply(player, spell, who, nil)
+					Combat:Log(player, ("%s procs from your %s."):format(spell.name, item.name), Config.Chat.Colors.LOOT)
+				end
+			end
+		end
 	end
 end
 
@@ -472,7 +517,7 @@ function module:Cast(player: Player, id, guid, item)
 	local spell = self:Template(id)
 	local Combat = self.includes.Combat["Combat.h"]
 	local root = Combat:Root(player)
-	if not c or not spell or not root or spell.npc or (not item and not c.Spells[tostring(spell.id)]) then
+	if not c or not spell or not root or spell.npc or (spell.proc and not item) or (not item and not c.Spells[tostring(spell.id)]) then
 		return
 	end
 	if spell.effect == "passive" then
@@ -481,8 +526,13 @@ function module:Cast(player: Player, id, guid, item)
 	if spell.effect == "hearth" and not c.Home then
 		return self:Fail(player, "You have no home set. Speak to an innkeeper.")
 	end
+	local s0 = self:State(player)
 	if spell.aura and spell.aura.kind == "mount" then
 		if self.includes.Spells["Auras.h"]:Has(player, "mount") then
+			if os.clock() < s0.Gcd then
+				return
+			end
+			s0.Gcd = os.clock() + Config.Spells.GlobalCooldown
 			self.includes.Spells["Auras.h"]:RemoveKind(player, "mount")
 			return
 		elseif self.includes.Combat["Combat.h"]:InCombat(player) then
@@ -490,6 +540,14 @@ function module:Cast(player: Player, id, guid, item)
 		end
 		self.includes.Spells["Auras.h"]:RemoveKind(player, "form")
 	elseif spell.aura and (spell.aura.kind == "form" or spell.aura.kind == "stealth" or spell.aura.group) and self.includes.Spells["Auras.h"]:Find(player, spell.id) then
+		if os.clock() < s0.Gcd or (s0.Cooldowns[spell.id] or 0) > os.clock() then
+			return
+		end
+		if not spell.nogcd then
+			s0.Gcd = os.clock() + Config.Spells.GlobalCooldown
+		end
+		s0.Cooldowns[spell.id] = os.clock() + (spell.cooldown or 1)
+		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_SPELL_COOLDOWN, { Id = spell.id, Seconds = spell.cooldown or 1 })
 		self.includes.Spells["Auras.h"]:Remove(player, spell.id)
 		return
 	elseif spell.aura and spell.aura.kind == "form" then
@@ -522,7 +580,7 @@ function module:Cast(player: Player, id, guid, item)
 	if s.Casting then
 		return self:Fail(player, "Another action is in progress.")
 	end
-	if now < s.Gcd then
+	if now < s.Gcd and not spell.nogcd then
 		return
 	end
 	if (s.Cooldowns[spell.id] or 0) > now then
@@ -535,7 +593,9 @@ function module:Cast(player: Player, id, guid, item)
 	if not target then
 		return self:Fail(player, reason or "Invalid target.")
 	end
-	s.Gcd = now + Config.Spells.GlobalCooldown
+	if not spell.nogcd then
+		s.Gcd = now + Config.Spells.GlobalCooldown
+	end
 	if (spell.cast_time or 0) > 0 then
 		s.Casting = { Spell = spell, Target = target, Ends = now + spell.cast_time, From = root.Position, Item = item }
 		player:SetAttribute("CastingSpell", spell.name)
@@ -583,6 +643,9 @@ function module:Apply(caster, spell, target, item)
 			source = source .. " crits"
 		end
 		amount = Combat:Damage(caster, target, math.round(amount), spell.school, source)
+		if isPlayer and not spell.proc and amount > 0 then
+			self:Proc(caster, target)
+		end
 	elseif spell.effect == "heal" then
 		amount = Combat:Heal(caster, target, amount, source)
 	elseif spell.effect == "aura" then
@@ -808,8 +871,16 @@ function module:Start()
 	-- items name their spell by `use`; resolve to the id once the spell exists
 	for _, item in DB:Select("item_template") do
 		local spell = item.use and byName[item.use]
+		local proc = item.proc and byName[item.proc.spell]
+		local fields = {}
 		if spell and item.spell ~= spell.id then
-			DB:Update("item_template", item.entry, { spell = spell.id })
+			fields.spell = spell.id
+		end
+		if proc and item.proc_spell ~= proc.id then
+			fields.proc_spell, fields.proc_chance = proc.id, item.proc.chance
+		end
+		if next(fields) then
+			DB:Update("item_template", item.entry, fields)
 		end
 	end
 

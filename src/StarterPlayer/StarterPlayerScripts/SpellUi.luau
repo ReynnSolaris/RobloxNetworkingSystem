@@ -48,6 +48,27 @@ function SpellUi.auraTooltip(aura, left: number): string
 	return table.concat(lines, "\n")
 end
 
+-- What the local player knows and is shifted into, for requirement colours.
+function SpellUi.knows(name: string): boolean
+	local Players = game:GetService("Players")
+	for _, spell in SpellUi.decode(Players.LocalPlayer:GetAttribute("Spells"), {}) do
+		if spell.Name == name then
+			return true
+		end
+	end
+	return false
+end
+
+function SpellUi.currentForm(): string?
+	local Players = game:GetService("Players")
+	for _, aura in SpellUi.decode(Players.LocalPlayer:GetAttribute("Auras"), {}) do
+		if aura.Kind == "form" then
+			return aura.Form
+		end
+	end
+	return nil
+end
+
 function SpellUi.tooltip(spell, extra: string?): string
 	local lines = { ('<font size="17" color="#FFFFFF"><b>%s</b></font>%s'):format(spell.Name or "?", if spell.Rank then ('   <font color="#AAAAAA">Rank %d</font>'):format(spell.Rank) else "") }
 	local cost = if (spell.Cost or 0) > 0 then ("%d Mana"):format(spell.Cost) else nil
@@ -62,13 +83,17 @@ function SpellUi.tooltip(spell, extra: string?): string
 	end
 	if spell.Forms then
 		local names = {}
+		local current = SpellUi.currentForm() or "none"
 		for _, f in spell.Forms do
 			table.insert(names, if f == "none" then "Caster" else (f:sub(1, 1):upper() .. f:sub(2) .. " Form"))
 		end
-		table.insert(lines, ('<font color="#FFFFFF">Requires %s</font>'):format(table.concat(names, ", ")))
+		table.insert(lines, ('<font color="%s">Requires %s</font>'):format(if table.find(spell.Forms, current) then "#FFFFFF" else "#FF2020", table.concat(names, ", ")))
 	end
 	if spell.Aura and spell.Aura.Riding then
-		table.insert(lines, ('<font color="#FFFFFF">Requires %s</font>'):format(spell.Aura.Riding))
+		table.insert(lines, ('<font color="%s">Requires %s</font>'):format(if SpellUi.knows(spell.Aura.Riding) then "#FFFFFF" else "#FF2020", spell.Aura.Riding))
+	end
+	if spell.Nogcd then
+		table.insert(lines, '<font color="#AAAAAA">Not on the global cooldown</font>')
 	end
 	local text = spell.Description or ""
 	local aura = spell.Aura

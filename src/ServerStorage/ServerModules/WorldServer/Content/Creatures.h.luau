@@ -57,6 +57,9 @@ local LOOT_SEED = {
 	{ creature = "Goldtooth", item = "Kobold Mining Helm", chance = 60, mincount = 1, maxcount = 1 },
 	{ creature = "Goldtooth", item = "Rough Copper Sword", chance = 40, mincount = 1, maxcount = 1 },
 	{ creature = "Goldtooth", item = "Linen Cloth", chance = 100, mincount = 3, maxcount = 6 },
+	{ creature = "Goldtooth", item = "Flickering Candle", chance = 25, mincount = 1, maxcount = 1 },
+	{ creature = "Goldtooth", item = "Bandit's Insignia", chance = 25, mincount = 1, maxcount = 1 },
+	{ creature = "Goldtooth", item = "Vial of Vigor", chance = 30, mincount = 1, maxcount = 1 },
 }
 
 local function folder(): Folder

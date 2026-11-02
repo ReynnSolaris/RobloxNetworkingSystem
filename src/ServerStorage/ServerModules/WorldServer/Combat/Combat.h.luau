@@ -266,6 +266,7 @@ function module:Swing(player: Player, state)
 	end
 	self:Damage(player, target, math.max(1, damage), "physical", if roll == "crit" then "Your attack crits" else "Your attack")
 	self.includes.Content["Pets.h"]:Assist(player, target)
+	self.includes.Spells["Spells.h"]:Proc(player, target)
 end
 
 -- Attack roll: miss, dodge, crit or hit. Agility raises crit and dodge.
@@ -328,7 +329,7 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "World/Content", Imports = "Creatures.h|Pets.h" },
 	{ Path = "World/Combat", Imports = "Duel.h|Pvp.h" },
-	{ Path = "World/Spells", Imports = "Auras.h" },
+	{ Path = "World/Spells", Imports = "Auras.h|Spells.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Global/System", Imports = "Effects.h" },
 })

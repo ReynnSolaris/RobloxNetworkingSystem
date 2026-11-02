@@ -8,7 +8,7 @@ local module = {}
 -- npc_vendor: { id, entry (creature), item }. Talking to a creature with rows
 -- opens the vendor window; buying and selling are validated here.
 
-local SEED = { creature = "General Goods", items = { "Tough Jerky", "Linen Cloth", "Worn Shortsword", "Recruit's Tunic", "Recruit's Pants", "Recruit's Boots", "Linen Bag", "Brown Horse Bridle" } }
+local SEED = { creature = "General Goods", items = { "Tough Jerky", "Linen Cloth", "Worn Shortsword", "Recruit's Tunic", "Recruit's Pants", "Recruit's Boots", "Linen Bag", "Brown Horse Bridle", "Swiftness Charm", "Charm of Resilience" } }
 
 function module:DB()
 	return self.includes.Database["WorldDB.h"]

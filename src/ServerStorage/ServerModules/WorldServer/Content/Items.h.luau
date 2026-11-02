@@ -83,6 +83,11 @@ local SEED = {
 	{ name = "Linen Cloak", quality = 1, stack = 1, class = "armor", slot = "back", armor = 1, buyprice = 60, level = 2 },
 	{ name = "Rough Wooden Shield", quality = 1, stack = 1, class = "armor", slot = "offhand", armor = 4, buyprice = 120, level = 1 },
 	{ name = "Kobold Candle", quality = 2, stack = 1, class = "armor", slot = "trinket", spirit = 3, buyprice = 900, level = 4, flavor = "You take candle." },
+	{ name = "Flickering Candle", quality = 3, stack = 1, class = "armor", slot = "trinket", intellect = 4, buyprice = 4000, level = 6, proc = { spell = "Candle Flare", chance = 0.12 }, flavor = "It never quite goes out." },
+	{ name = "Bandit's Insignia", quality = 3, stack = 1, class = "armor", slot = "trinket", agility = 4, buyprice = 4000, level = 6, proc = { spell = "Bandit's Cut", chance = 0.15 } },
+	{ name = "Vial of Vigor", quality = 2, stack = 1, class = "armor", slot = "trinket", stamina = 3, buyprice = 2500, level = 5, use = "Vigor" },
+	{ name = "Swiftness Charm", quality = 2, stack = 1, class = "armor", slot = "trinket", agility = 2, buyprice = 2500, level = 5, use = "Swiftness" },
+	{ name = "Charm of Resilience", quality = 2, stack = 1, class = "armor", slot = "trinket", stamina = 4, spirit = 2, buyprice = 2000, level = 5 },
 	-- class quest rewards
 	{ name = "Trainee's Broadsword", quality = 2, stack = 1, class = "weapon", slot = "mainhand", damage = 6, strength = 1, buyprice = 800, level = 3 },
 	{ name = "Trainee's Hammer", quality = 2, stack = 1, class = "weapon", slot = "mainhand", damage = 5, strength = 1, intellect = 1, buyprice = 800, level = 3 },
@@ -165,7 +170,9 @@ function module:Describe(item, extra)
 	local DB = self:DB()
 	local template = if typeof(item) == "table" then item else (self:Template(item) or {})
 	local spell = template.spell and DB:Get("spell_template", template.spell)
+	local proc = template.proc_spell and DB:Get("spell_template", template.proc_spell)
 	local out = { Entry = template.entry, Name = template.name or "?", Quality = template.quality or 1, Stack = template.stack, Slot = template.slot,
+		Proc = proc and ("Chance on hit: %s"):format(proc.description or proc.name), ProcChance = template.proc_chance, AnyClass = template.anyclass,
 		Class = template.class, Level = template.level, Health = template.health, Damage = template.damage, Armor = template.armor,
 		Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Use = spell and spell.description, Flavor = template.flavor,
 		Bind = template.bind, Recipe = template.recipe, Mount = template.mount, Container = template.container, Subclass = template.subclass, Hands = template.hands, ArmorType = template.armortype }

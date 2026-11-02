@@ -695,6 +695,16 @@ lit while active. Riding is a skill: the Riding Trainer teaches Apprentice
 Riding (ground mounts, level 20) and Expert Riding (flying, level 60), and a
 mount spell names the skill it needs in `aura.riding`.
 
+Spells share a global cooldown (`Config.Spells.GlobalCooldown`) and shifting
+forms, stances and stealth on or off respects it and their own cooldown; a
+spell with `nogcd` (stances, presences, aspects, potions, on-use trinkets)
+sits off the global cooldown and says so in its tooltip. Tooltips colour what
+you lack red: an item type your class cannot use, a form you are not in, a
+riding skill you have not trained. Trinkets carry `proc = { spell, chance }`
+for "Chance on hit" effects (Flickering Candle, Bandit's Insignia, from
+Goldtooth) or a `use` spell used by right-clicking the worn trinket (Vial of
+Vigor, Swiftness Charm). Every window scales with the viewport height.
+
 ## Factions, guards, equip rules, spirit healers, GM tools
 
 Hostility is TC's: `creature_template.faction` is `hostile` (everyone), an

@@ -59,7 +59,15 @@ function Ui.itemTooltip(item, price: string?): string
 		local sub, armor = if typeof(item.Subclass) == "string" then item.Subclass else nil, if typeof(item.ArmorType) == "string" then item.ArmorType else nil
 		local kind = if sub then (sub:sub(1, 1):upper() .. sub:sub(2)) elseif armor then (armor:sub(1, 1):upper() .. armor:sub(2)) elseif item.Class then (CLASS_NAMES[item.Class] or item.Class) else nil
 		local hands = if (item.Hands or 1) == 2 then "Two-Hand" elseif item.Slot == "mainhand" and item.Class == "weapon" then "One-Hand" else nil
-		white(("%s%s"):format(hands or SLOT_NAMES[item.Slot] or item.Slot, if kind then ('<font color="#AAAAAA">   %s</font>'):format(kind) else ""))
+		-- the type goes red when your class cannot use it
+		local usable = true
+		for _, class in Config.Classes do
+			if class.Name == player:GetAttribute("CharacterClass") and not item.AnyClass then
+				if sub and not table.find(class.Weapons, sub) then usable = false end
+				if armor and not table.find(class.Armor, armor) then usable = false end
+			end
+		end
+		white(("%s%s"):format(hands or SLOT_NAMES[item.Slot] or item.Slot, if kind then ('<font color="%s">   %s</font>'):format(if usable then "#AAAAAA" else "#FF2020", kind) else ""))
 	elseif item.Class and item.Class ~= "misc" then
 		white(CLASS_NAMES[item.Class] or item.Class)
 	end
@@ -75,6 +83,7 @@ function Ui.itemTooltip(item, price: string?): string
 		table.insert(lines, ('<font color="%s">Requires Level %d</font>'):format(if mine >= item.Level then "#FFFFFF" else "#FF2020", item.Level))
 	end
 	if item.Container then white(("%d Slot Bag"):format(item.Container)) end
+	if item.Proc then table.insert(lines, ('<font color="#1EFF00">%s (%d%% chance)</font>'):format(item.Proc, math.floor((item.ProcChance or 0.1) * 100 + 0.5))) end
 	if item.Use then table.insert(lines, ('<font color="#1EFF00">Use: %s</font>'):format(item.Use)) end
 	if item.MaxDurability then
 		table.insert(lines, ('<font color="%s">Durability %d / %d%s</font>'):format(if (item.Durability or 0) == 0 then "#FF2020" else "#FFFFFF", item.Durability or 0, item.MaxDurability, if (item.Durability or 0) == 0 then "  (Broken)" else ""))
