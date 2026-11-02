@@ -29,6 +29,7 @@ function module:Select(player: Player, slot: number)
 	char.Xp = char.Xp or 0
 	player:SetAttribute("CharacterName", char.Name)
 	player:SetAttribute("CharacterClass", char.Class)
+	player:SetAttribute("Money", char.Money or 0)
 	self:SyncLevel(player)
 	return true
 end
@@ -130,6 +131,17 @@ function module:AddItem(player: Player, entry: number, count: number): boolean
 	return true
 end
 
+-- Copper, WoW style: 100 copper to a silver, 100 silver to a gold.
+function module:AddMoney(player: Player, copper: number)
+	local char = self.information[player] and self.information[player].Active
+	if not char or copper == 0 then
+		return
+	end
+	char.Money = math.max(0, (char.Money or 0) + copper)
+	player:SetAttribute("Money", char.Money)
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_MONEY, { Amount = copper, Total = char.Money })
+end
+
 function module:SendInventory(player: Player)
 	local char = self.information[player] and self.information[player].Active
 	local DB = self.includes.Database["WorldDB.h"]
@@ -138,7 +150,7 @@ function module:SendInventory(player: Player)
 		local template = DB:Get("item_template", stack.entry) or {}
 		table.insert(items, { Entry = stack.entry, Name = template.name or "?", Quality = template.quality or 1, Count = stack.count })
 	end
-	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INVENTORY, { Items = items })
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INVENTORY, { Items = items, Money = char and char.Money or 0 })
 end
 
 function module:Get(player: Player)

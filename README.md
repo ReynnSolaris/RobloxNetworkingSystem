@@ -31,11 +31,12 @@ src/ServerStorage/ServerModules/
   WorldServer/Characters/          Characters (enum, create, delete, login, logout)
   WorldServer/Zones/               Zones (which zone each player stands in)
   WorldServer/Movement/            Anticheat (movement validation)
-  WorldServer/Content/             Creatures, GameObjects, Items, Teleports (spawns from WorldDB rows)
+  WorldServer/Content/             Creatures (spawns, AI, loot), GameObjects, Items, Teleports
+  WorldServer/Combat/              Combat (player melee, combat log)
 src/ServerStorage/ObjectTemplates/                 models .gobject can place
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus)
-src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, PlayerFrame, ChatFrame, ZoneBanner, PartyFrame
+src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, PlayerFrame, TargetFrame, ChatFrame, ZoneBanner, PartyFrame
 src/Workspace/Zones/                               demo zone parts
 ```
 
@@ -60,7 +61,11 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | SMSG_XP_GAIN | server | `{ Amount, Reason }` |
 | SMSG_LEVELUP | server | `{ Level }` |
 | SMSG_ITEM_PUSH | server | `{ Entry, Name, Quality, Count }` |
-| CMSG_INVENTORY / SMSG_INVENTORY | both | `{}` in, `{ Items = { { Entry, Name, Quality, Count } } }` out |
+| CMSG_INVENTORY / SMSG_INVENTORY | both | `{}` in, `{ Items = { { Entry, Name, Quality, Count } }, Money }` out |
+| SMSG_MONEY | server | `{ Amount, Total }` in copper |
+| CMSG_SET_TARGET | client | `{ Guid }` or `{}` to clear |
+| CMSG_ATTACK | client | `{ On }` toggles auto-attack on the target |
+| SMSG_COMBAT_LOG | server | `{ Text, Color }` |
 | SMSG_SPAWN | server | `{ Position, Health, MaxHealth }` |
 | SMSG_DESPAWN | server | on death, respawn follows after `Config.RespawnDelay` |
 | SMSG_HEALTH_UPDATE | server | `{ Health, MaxHealth }` |
@@ -134,7 +139,8 @@ GAMEMASTER  .buff <all|player> <speed|jump> <multiplier> <seconds>
             .appear <player>  .summon <player>  .reload creature|gameobject
             .gobject add <entry> [yaw] [scale] | delete [guid] | move [guid] | turn [guid] <deg> | near
             .gobject template add <name> <modelid> [size] | template list
-            .npc add <entry> | delete [guid] | move [guid] | say [guid] <text> | info [guid] | near
+            .npc add <entry> | delete [guid] | move [guid] | kill [guid] | say [guid] <text> | info [guid] | near
+            .loot template add <creatureEntry> <itemEntry> <chance> [min] [max] | template list [entry]
             .npc template add <name> [modelid] [subname] | template set <entry> <field> <value> | template list
 MODERATOR   .lookup creature|object|tele <name>
             .speed <0.1-10> [player]  .hurt <player> <amount>  .heal [player]
@@ -209,8 +215,9 @@ placing something on one server sees it appear on all of them. Tables and keys:
 
 | Table | Key | Columns |
 |---|---|---|
-| creature_template | entry | name, subname, modelid, scale, gossip |
-| creature | guid | id (entry), x, y, z, o, by |
+| creature_template | entry | name, subname, modelid, scale, gossip, faction, minlevel, maxlevel, health, dmgmin, dmgmax, aggro, speed, mingold, maxgold |
+| creature | guid | id (entry), x, y, z, o, spawntimesecs, by |
+| creature_loot_template | id | entry (creature), item, chance, mincount, maxcount |
 | gameobject_template | entry | name, modelid, size |
 | gameobject | guid | id (entry), x, y, z, o, scale, by |
 | game_tele | id | name, x, y, z, o |
@@ -255,6 +262,22 @@ and a stack size. A character's inventory is a list of stacks; `.additem` pushes
 and prints "You receive item: [Name]x5." in loot green; `/inv` lists them. `.db`
 reads and edits any world table directly; a write respawns what depends on it, on
 every server.
+
+## Combat
+
+A `creature_template` with `faction = hostile` spawns unanchored with a level rolled
+between `minlevel` and `maxlevel`, health scaled by level, and a brain that ticks
+four times a second: pick the nearest living player inside `aggro`, chase, swing for
+`dmgmin` to `dmgmax` every two seconds in melee range, leash home past 60 studs and
+regenerate there. Click a creature to target it (the frame right of yours reads its
+replicated Humanoid), press T or click again to auto-attack; the server swings on
+its own timer with `Config.Combat.Damage(level)` and logs every hit to the Log tab.
+
+On death the killer gets `Config.Combat.KillXp` (nothing for grey creatures),
+each `creature_loot_template` row for the entry rolls its chance and pushes its
+item, and copper between `mingold` and `maxgold` drops. The corpse clears after a
+few seconds and the spawn comes back after `spawntimesecs` (default 30). Two hostile
+templates seed: Kobold Vermin and Young Wolf, with loot rows.
 
 ## Saving
 

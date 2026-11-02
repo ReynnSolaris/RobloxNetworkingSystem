@@ -175,9 +175,28 @@ handlers[Opcodes.SMSG_ITEM_PUSH] = function(d)
 	notice(tint(Colors.LOOT, "You receive item: ") .. qualityName(d.Name or "?", d.Quality or 1) .. tint(Colors.LOOT, count .. "."))
 end
 
+-- Copper to "1g 23s 45c".
+local function money(copper: number): string
+	local g, s_, c = copper // 10000, (copper % 10000) // 100, copper % 100
+	local parts = {}
+	if g > 0 then table.insert(parts, g .. "g") end
+	if s_ > 0 then table.insert(parts, s_ .. "s") end
+	if c > 0 or #parts == 0 then table.insert(parts, c .. "c") end
+	return table.concat(parts, " ")
+end
+
+handlers[Opcodes.SMSG_MONEY] = function(d)
+	local amount = d.Amount or 0
+	notice(tint(Colors.MONEY, if amount >= 0 then "You loot " .. money(amount) .. "." else "You lose " .. money(-amount) .. "."))
+end
+
+handlers[Opcodes.SMSG_COMBAT_LOG] = function(d)
+	display(tint(d.Color or Colors.HIT, esc(tostring(d.Text))), "Log")
+end
+
 handlers[Opcodes.SMSG_INVENTORY] = function(d)
 	local items = d.Items or {}
-	system(("Inventory, %d stack(s):"):format(#items))
+	system(("Inventory, %d stack(s), %s:"):format(#items, money(d.Money or 0)))
 	for _, item in items do
 		display("  " .. qualityName(item.Name, item.Quality) .. tint(Colors.SAY, " x" .. tostring(item.Count)))
 	end

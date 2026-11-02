@@ -39,6 +39,11 @@ local Opcodes = {
 	SMSG_ITEM_PUSH = 92,
 	CMSG_INVENTORY = 93,
 	SMSG_INVENTORY = 94,
+	SMSG_MONEY = 95,
+
+	CMSG_SET_TARGET = 100,
+	CMSG_ATTACK = 101,
+	SMSG_COMBAT_LOG = 102,
 }
 
 local names = {}

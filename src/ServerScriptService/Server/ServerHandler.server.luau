@@ -54,6 +54,7 @@ local WorldDB = World.Database["WorldDB.h"]
 local GameObjects = World.Content["GameObjects.h"]
 local Creatures = World.Content["Creatures.h"]
 local Items = World.Content["Items.h"]
+local Combat = World.Combat["Combat.h"]
 local Bus = Global.System["Global.h"]
 local Database = Global.Database["Database.h"]
 
@@ -71,6 +72,7 @@ WorldDB:Start()
 GameObjects:Start()
 Creatures:Start()
 Items:Start()
+Combat:Start()
 Session:OnAuthed(function(player)
 	Characters:Enum(player)
 	Commands:SyncState(player)

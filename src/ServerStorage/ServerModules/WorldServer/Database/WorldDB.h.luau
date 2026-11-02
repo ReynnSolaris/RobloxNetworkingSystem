@@ -12,6 +12,7 @@ local TABLES = {
 	gameobject = "guid",
 	game_tele = "id",
 	item_template = "entry",
+	creature_loot_template = "id",
 }
 module.TABLES = TABLES
 

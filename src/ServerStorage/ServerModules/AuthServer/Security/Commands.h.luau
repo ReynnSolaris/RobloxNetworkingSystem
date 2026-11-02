@@ -352,7 +352,7 @@ add("gobject", 2, ".gobject add <entry> [yaw] [scale] | delete [guid] | move [gu
 	end
 end)
 
-add("npc", 2, ".npc add <entry> | delete [guid] | move [guid] | say [guid] <text> | info [guid] | near [radius] | template add <name> [modelid] [subname] | template set <entry> <field> <value> | template list", function(self, caller, args)
+add("npc", 2, ".npc add <entry> | delete [guid] | move [guid] | kill [guid] | say [guid] <text> | info [guid] | near [radius] | template add <name> [modelid] [subname] | template set <entry> <field> <value> | template list", function(self, caller, args)
 	local Creatures = self.includes.Content["Creatures.h"]
 	local DB = self.includes.Database["WorldDB.h"]
 	local sub = args[1]
@@ -362,9 +362,11 @@ add("npc", 2, ".npc add <entry> | delete [guid] | move [guid] | say [guid] <text
 			self:Reply(caller, ("creature_template entry %d: %s"):format(row.entry, row.name))
 		elseif args[2] == "set" then
 			local entry, field = assert(tonumber(args[3]), "expected an entry"), args[4]
-			assert(({ name = 1, subname = 1, modelid = 1, scale = 1, gossip = 1 })[field or ""], "field is name, subname, modelid, scale or gossip")
+			local NUMERIC = { scale = 1, minlevel = 1, maxlevel = 1, health = 1, dmgmin = 1, dmgmax = 1, aggro = 1, speed = 1, mingold = 1, maxgold = 1 }
+			local TEXT = { name = 1, subname = 1, modelid = 1, gossip = 1, faction = 1 }
+			assert(NUMERIC[field or ""] or TEXT[field or ""], "field is name, subname, modelid, gossip, faction, scale, minlevel, maxlevel, health, dmgmin, dmgmax, aggro, speed, mingold or maxgold")
 			local value: any = table.concat(args, " ", 5)
-			if field == "scale" then
+			if NUMERIC[field] then
 				value = assert(tonumber(value), "expected a number")
 			end
 			assert(DB:Update("creature_template", entry, { [field] = value }), "no such entry")
@@ -389,6 +391,13 @@ add("npc", 2, ".npc add <entry> | delete [guid] | move [guid] | say [guid] <text
 	elseif sub == "say" then
 		local model, i = pick(self, "Creatures.h", caller, args, 2)
 		Creatures:Say(model, table.concat(args, " ", i))
+	elseif sub == "kill" then
+		local model = pick(self, "Creatures.h", caller, args, 2)
+		local state = Creatures:State(model:GetAttribute("Guid"))
+		if state then
+			state.LastAttacker = caller
+			state.Humanoid.Health = 0
+		end
 	elseif sub == "info" then
 		local model = pick(self, "Creatures.h", caller, args, 2)
 		local t = Creatures:Template(model:GetAttribute("Entry")) or {}
@@ -462,6 +471,28 @@ add("additem", 2, ".additem <entry> [count] [player]", function(self, caller, ar
 	local entry, count = assert(tonumber(args[1]), "expected an item entry"), tonumber(args[2]) or 1
 	local target = targetOrSelf(args, 3, caller)
 	assert(self.includes.Entities["EntityPlayer.h"]:AddItem(target, entry, count), "no item_template entry " .. entry)
+end)
+
+add("loot", 2, ".loot template add <creatureEntry> <itemEntry> <chance> [min] [max] | .loot template list <creatureEntry>", function(self, caller, args)
+	local DB = self.includes.Database["WorldDB.h"]
+	if args[1] == "template" and args[2] == "add" then
+		local row = DB:Insert("creature_loot_template", {
+			entry = assert(tonumber(args[3]), "expected a creature entry"),
+			item = assert(tonumber(args[4]), "expected an item entry"),
+			chance = math.clamp(assert(tonumber(args[5]), "expected a chance"), 0, 100),
+			mincount = tonumber(args[6]) or 1,
+			maxcount = tonumber(args[7]) or tonumber(args[6]) or 1,
+		})
+		self:Reply(caller, ("creature_loot_template id %d added."):format(row.id))
+	else
+		local entry = tonumber(args[3])
+		for _, row in DB:Select("creature_loot_template") do
+			if not entry or row.entry == entry then
+				local item = DB:Get("item_template", row.item) or {}
+				self:Reply(caller, ("  id %d: creature %d drops %s (%d) %s%%, %d-%d"):format(row.id, row.entry, tostring(item.name), row.item, tostring(row.chance), row.mincount or 1, row.maxcount or 1))
+			end
+		end
+	end
 end)
 
 add("item", 2, ".item template add <name> [quality 0-5] [stack] | .item template list", function(self, caller, args)

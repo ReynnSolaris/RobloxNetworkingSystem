@@ -23,11 +23,32 @@ return table.freeze({
 			EMOTE = "#FF8040",
 			XP = "#7070FF",
 			LOOT = "#00AA00",
+			MONEY = "#FFD700",
+			HIT = "#FFFF80",
+			HURT = "#FF8080",
 		},
 	},
 
 	-- Item quality colours, WoW order: poor, common, uncommon, rare, epic, legendary.
 	Quality = { [0] = "#9D9D9D", [1] = "#FFFFFF", [2] = "#1EFF00", [3] = "#0070DD", [4] = "#A335EE", [5] = "#FF8000" },
+
+	Combat = {
+		Range = 6, -- studs, melee
+		SwingSeconds = 2,
+		-- player melee: base plus per level, times 0.8 to 1.2
+		Damage = function(level: number): number
+			return 5 + level * 2
+		end,
+		-- kill experience: nothing once the creature is grey (five or more levels below)
+		KillXp = function(playerLevel: number, creatureLevel: number): number
+			if playerLevel - creatureLevel >= 5 then
+				return 0
+			end
+			return 45 + creatureLevel * 5
+		end,
+		CorpseSeconds = 6,
+		DefaultRespawn = 30,
+	},
 
 	Xp = {
 		MaxLevel = 80,
