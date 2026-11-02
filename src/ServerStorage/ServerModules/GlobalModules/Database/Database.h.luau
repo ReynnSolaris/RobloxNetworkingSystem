@@ -85,6 +85,30 @@ function module:Open(name: string)
 		return saved
 	end
 
+	-- Read-modify-write against the live store (UpdateAsync), for records every
+	-- server edits. Falls back to the cache when offline.
+	function store.Transform(_, key: string, fn: (any) -> any)
+		if online then
+			local ok, result = attempt(function()
+				return dataStore:UpdateAsync(key, fn)
+			end)
+			if ok then
+				cache[key] = result
+				dirty[key] = nil
+				return result
+			end
+		end
+		cache[key] = fn(cache[key])
+		return cache[key]
+	end
+
+	-- Drop the cached copy so the next Get reads the live value.
+	function store.Refresh(_, key: string)
+		if not dirty[key] then
+			cache[key] = nil
+		end
+	end
+
 	function store.FlushAll(_)
 		for key in dirty do
 			store:Flush(key)

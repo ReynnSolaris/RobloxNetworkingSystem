@@ -1,0 +1,31 @@
+{
+  "className": "Part",
+  "properties": {
+    "Anchored": true,
+    "CanCollide": false,
+    "CanQuery": false,
+    "Transparency": 0.9,
+    "Color": [
+      0.4,
+      0.7,
+      0.4
+    ],
+    "Size": [
+      120,
+      80,
+      120
+    ],
+    "Position": [
+      0,
+      40,
+      0
+    ],
+    "Tags": [
+      "Zone"
+    ]
+  },
+  "attributes": {
+    "Pvp": false,
+    "Safe": true
+  }
+}

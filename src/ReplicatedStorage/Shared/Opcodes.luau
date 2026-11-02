@@ -14,6 +14,13 @@ local Opcodes = {
 	SMSG_NOTIFICATION = 22,
 
 	SMSG_GM_STATE = 30,
+
+	SMSG_ZONE_UPDATE = 40,
+
+	CMSG_EMOTE = 50,
+	SMSG_EMOTE = 51,
+
+	CMSG_TICKET = 60,
 }
 
 local names = {}

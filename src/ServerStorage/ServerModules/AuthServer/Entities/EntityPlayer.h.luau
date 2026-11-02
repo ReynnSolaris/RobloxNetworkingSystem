@@ -86,6 +86,33 @@ function module:Teleport(player: Player, at: CFrame)
 	end
 end
 
+-- Timed multiplier on WalkSpeed ("speed") or JumpPower ("jump"); < 1 is a debuff.
+local BUFFS = { speed = { "WalkSpeed", 16 }, jump = { "JumpPower", 50 } }
+module.BUFFS = BUFFS
+
+function module:Buff(player: Player, effect: string, mult: number, seconds: number): boolean
+	local spec = BUFFS[effect]
+	local entity = self.information[player]
+	local humanoid = humanoidOf(entity)
+	if not spec or not humanoid then
+		return false
+	end
+	local property, base = spec[1], spec[2]
+	entity.Buffs = entity.Buffs or {}
+	entity.Buffs[effect] = (entity.Buffs[effect] or 0) + 1
+	local token = entity.Buffs[effect]
+	humanoid[property] = base * mult
+	task.delay(seconds, function()
+		if self.information[player] == entity and entity.Buffs[effect] == token then
+			local h = humanoidOf(entity)
+			if h then
+				h[property] = base
+			end
+		end
+	end)
+	return true
+end
+
 function module:GiveHat(player: Player, assetId: number): boolean
 	local entity = self.information[player]
 	if not entity or not entity.Character then

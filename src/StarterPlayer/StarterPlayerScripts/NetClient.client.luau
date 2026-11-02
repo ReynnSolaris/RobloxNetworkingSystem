@@ -95,6 +95,26 @@ handlers[Opcodes.SMSG_NOTIFICATION] = function(d)
 	system("[Server] " .. tostring(d.Text))
 end
 
+-- Zone changes land on attributes; ZoneBanner draws them.
+handlers[Opcodes.SMSG_ZONE_UPDATE] = function(d)
+	player:SetAttribute("Zone", d.Name)
+	player:SetAttribute("ZoneKind", if d.Name == nil then nil elseif d.Safe then "Sanctuary" elseif d.Pvp then "Contested Territory" else "Friendly Territory")
+end
+
+handlers[Opcodes.SMSG_EMOTE] = function(d)
+	local emote = Config.Emotes[d.Emote]
+	if emote then
+		display(tint(Colors.EMOTE, emote.Text:format(esc(d.Sender or "?"))))
+	end
+end
+
+local function playEmote(name: string)
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		pcall(humanoid.PlayEmote, humanoid, name)
+	end
+end
+
 -- GM visibility. Staff see hidden GMs faded; players see nothing, not even a nametag.
 local gmState: { [string]: { Gm: boolean, Invisible: boolean } } = {}
 
@@ -142,23 +162,35 @@ remote.OnClientEvent:Connect(function(opcode, _seq, data)
 	end
 end)
 
--- "/y text" yells, "/w Name text" whispers, "/world text" goes to everyone, anything else is SAY.
+-- What a typed line means. "/y text" yells, "/w Name text" whispers, "/world text"
+-- goes to everyone, "/wave" emotes, "/ticket text" opens a GM ticket, ".x" is a
+-- command, anything else is SAY.
 local function parse(text: string)
-	local prefix, rest = text:match("^/(%w+)%s+(.*)$")
-	if prefix == "y" or prefix == "yell" then
-		return "YELL", rest
+	local prefix, rest = text:match("^/(%w+)%s*(.*)$")
+	if prefix and Config.Emotes[prefix:lower()] then
+		return { Kind = "EMOTE", Emote = prefix:lower() }
+	elseif prefix == "ticket" then
+		return { Kind = "TICKET", Body = rest }
+	elseif prefix == "y" or prefix == "yell" then
+		return { Kind = "CHAT", Channel = "YELL", Body = rest }
 	elseif prefix == "world" or prefix == "g" then
-		return "WORLD", rest
+		return { Kind = "CHAT", Channel = "WORLD", Body = rest }
 	elseif prefix == "w" or prefix == "whisper" then
 		local target, body = rest:match("^(%S+)%s+(.*)$")
-		return "WHISPER", body or "", target
+		return { Kind = "CHAT", Channel = "WHISPER", Body = body or "", Target = target }
 	end
-	return "SAY", text
+	return { Kind = "CHAT", Channel = "SAY", Body = text, Command = text:sub(1, 1) == "." }
 end
 
-local function chat(text: string)
-	local name, body, target = parse(text)
-	send(Opcodes.CMSG_MESSAGECHAT, { Channel = name, Text = body, Target = target })
+local function dispatch(p)
+	if p.Kind == "EMOTE" then
+		playEmote(Config.Emotes[p.Emote].Anim)
+		send(Opcodes.CMSG_EMOTE, { Emote = p.Emote })
+	elseif p.Kind == "TICKET" then
+		send(Opcodes.CMSG_TICKET, { Text = p.Body })
+	else
+		send(Opcodes.CMSG_MESSAGECHAT, { Channel = p.Channel, Text = p.Body, Target = p.Target })
+	end
 end
 
 if modern then
@@ -176,41 +208,40 @@ if modern then
 		if not (message.TextSource and message.TextSource.UserId == player.UserId) then
 			return nil
 		end
-		local raw = message.Text
-		local name, body, target = parse(raw)
-		pending = { Channel = name, Body = body, Target = target }
+		local p = parse(message.Text)
+		pending = p
 
 		local me = gmState[player.Name]
 		local who = (if me and me.Gm then tint(Colors.GM, "&lt;GM&gt;") .. " " else "") .. esc(player.DisplayName)
-		local color, prefix
-		if raw:sub(1, 1) == "." then
+		local color, prefix, body = Colors.SAY, who .. " says:", p.Body or ""
+		if p.Kind == "EMOTE" then
+			color, prefix, body = Colors.EMOTE, "", Config.Emotes[p.Emote].Text:format(esc(player.DisplayName))
+		elseif p.Kind == "TICKET" then
+			color, prefix = Colors.COMMAND, "Ticket:"
+		elseif p.Command then
 			color, prefix = Colors.COMMAND, ">"
-		elseif name == "WHISPER" then
-			color, prefix = Colors.WHISPER, ("To %s:"):format(esc(target or "?"))
-		elseif name == "YELL" then
+		elseif p.Channel == "WHISPER" then
+			color, prefix = Colors.WHISPER, ("To %s:"):format(esc(p.Target or "?"))
+		elseif p.Channel == "YELL" then
 			color, prefix = Colors.YELL, who .. " yells:"
-		elseif name == "WORLD" then
+		elseif p.Channel == "WORLD" then
 			color, prefix = Colors.WORLD, ("[World] [%s]:"):format(who)
-		else
-			color, prefix = Colors.SAY, who .. " says:"
 		end
 		local props = Instance.new("TextChatMessageProperties")
 		props.PrefixText = tint(color, prefix)
-		props.Text = tint(color, esc(body))
+		props.Text = tint(color, if p.Kind == "EMOTE" then body else esc(body))
 		return props
 	end
 
 	TextChatService.SendingMessage:Connect(function(message)
-		local p = pending
+		local p = pending or parse(message.Text)
 		pending = nil
-		if p then
-			send(Opcodes.CMSG_MESSAGECHAT, { Channel = p.Channel, Text = p.Body, Target = p.Target })
-		else
-			chat(message.Text)
-		end
+		dispatch(p)
 	end)
 else
-	player.Chatted:Connect(chat)
+	player.Chatted:Connect(function(text)
+		dispatch(parse(text))
+	end)
 end
 
 -- The server opens the session after a DataStore read, so keep knocking until it answers.

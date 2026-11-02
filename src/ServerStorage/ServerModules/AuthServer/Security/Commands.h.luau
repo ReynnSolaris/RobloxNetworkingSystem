@@ -40,6 +40,18 @@ local function minutes(seconds: number): string
 	return ("%d min"):format(math.ceil(seconds / 60))
 end
 
+-- A name that is online here, or a UserId looked up for someone on another server.
+local function resolveUserId(name: string?): (number, string)
+	assert(name and #name > 0, "no player given")
+	local ok, player = pcall(findPlayer, name)
+	if ok then
+		return player.UserId, player.Name
+	end
+	local found, id = pcall(Players.GetUserIdFromNameAsync, Players, name)
+	assert(found, "no player named " .. name)
+	return id, name
+end
+
 -- Pick the target: args[i] if given, else the caller.
 local function targetOrSelf(args, i: number, caller: Player): Player
 	return if args[i] then findPlayer(args[i]) else caller
@@ -77,6 +89,37 @@ add("server", 1, ".server info", function(self, caller)
 	local up = os.time() - started
 	self:Reply(caller, ("Build %d, up %dh %dm, %d players, %d Hz"):format(
 		Config.Build, up // 3600, (up % 3600) // 60, #Players:GetPlayers(), math.round(1 / game:GetService("RunService").Heartbeat:Wait())))
+end)
+
+add("zone", 1, ".zone", function(self, caller)
+	local Zones = self.includes.Zones["Zones.h"]
+	local here = Zones:Current(caller)
+	self:Reply(caller, "You are in: " .. (if here then here.Name else "no zone"))
+	for _, part in Zones:All() do
+		self:Reply(caller, ("  %s%s%s"):format(part.Name,
+			if part:GetAttribute("Pvp") then " [PvP]" else "", if part:GetAttribute("Safe") then " [Safe]" else ""))
+	end
+end)
+
+add("ticket", 1, ".ticket list | .ticket view <id> | .ticket reply <id> <text> | .ticket close <id>", function(self, caller, args)
+	local Tickets = self.includes.Support["Tickets.h"]
+	local sub, id = args[1], tonumber(args[2])
+	if sub == "list" then
+		local open = Tickets:State().Open
+		self:Reply(caller, ("%d open ticket(s)"):format(#open))
+		for _, ticket in open do
+			self:Reply(caller, ("  #%d %s: %s"):format(ticket.Id, ticket.Name, ticket.Text:sub(1, 60)))
+		end
+	elseif sub == "view" then
+		local ticket = assert(Tickets:Get(assert(id, "expected an id")), "no such ticket")
+		self:Reply(caller, ("#%d %s (%d), %s ago: %s"):format(ticket.Id, ticket.Name, ticket.UserId, minutes(os.time() - ticket.At), ticket.Text))
+	elseif sub == "reply" then
+		self:Reply(caller, Tickets:Reply(assert(id, "expected an id"), table.concat(args, " ", 3)))
+	elseif sub == "close" then
+		self:Reply(caller, if Tickets:Close(assert(id, "expected an id")) then "Closed." else "No such ticket.")
+	else
+		error("expected list, view, reply or close", 0)
+	end
 end)
 
 -- gm mode and visibility
@@ -199,11 +242,32 @@ add("unmute", 1, ".unmute <player>", function(self, caller, args)
 end)
 
 add("kick", 1, ".kick <player> [reason]", function(self, caller, args)
-	findPlayer(args[1]):Kick(table.concat(args, " ", 2))
+	local userId, name = resolveUserId(args[1])
+	local reason = table.concat(args, " ", 2)
+	local online = Players:GetPlayerByUserId(userId)
+	if online then
+		online:Kick(reason)
+	end
+	self.includes.System["Global.h"]:Publish("KICK", { UserId = userId, Reason = reason })
+	self:Reply(caller, ("Kicked %s everywhere."):format(name))
 end)
 
 add("ban", 2, ".ban <player> [reason]", function(self, caller, args)
-	self.includes.Database["AuthDatabase.h"]:Ban(findPlayer(args[1]).UserId, table.concat(args, " ", 2), caller)
+	local userId, name = resolveUserId(args[1])
+	local reason = table.concat(args, " ", 2)
+	self.includes.Database["AuthDatabase.h"]:Ban(userId, reason, caller)
+	self.includes.System["Global.h"]:Publish("KICK", { UserId = userId, Reason = "Banned: " .. reason })
+	self:Reply(caller, ("Banned %s everywhere."):format(name))
+end)
+
+add("buff", 2, ".buff <all|player> <speed|jump> <multiplier> <seconds>", function(self, caller, args)
+	local effect, mult, seconds = args[2], tonumber(args[3]), tonumber(args[4])
+	assert(self.includes.Entities["EntityPlayer.h"].BUFFS[effect or ""], "effect is speed or jump")
+	assert(mult and seconds, "expected a multiplier and seconds")
+	local target = if args[1] == "all" then "all" else findPlayer(args[1]).Name
+	self:ApplyBuff(target, effect, mult, seconds)
+	self.includes.System["Global.h"]:Publish("BUFF", { Target = target, Effect = effect, Mult = mult, Seconds = seconds })
+	self:Reply(caller, ("%s x%s on %s for %ds, all servers."):format(effect, mult, target, seconds))
 end)
 
 add("unban", 2, ".unban <userId>", function(self, caller, args)
@@ -226,7 +290,9 @@ end)
 -- world
 
 add("announce", 2, ".announce <text>", function(self, caller, args)
-	self.includes.Security["Packet.h"]:Broadcast(Opcodes.SMSG_NOTIFICATION, { Text = table.concat(args, " ") })
+	local text = table.concat(args, " ")
+	self.includes.Security["Packet.h"]:Broadcast(Opcodes.SMSG_NOTIFICATION, { Text = text })
+	self.includes.System["Global.h"]:Publish("ANNOUNCE", { Text = text })
 end)
 
 add("save", 2, ".save [player]", function(self, caller, args)
@@ -244,6 +310,34 @@ add("saveall", 2, ".saveall", function(self, caller)
 end)
 
 -- plumbing
+
+function module:ApplyBuff(target: string, effect: string, mult: number, seconds: number)
+	local Entities = self.includes.Entities["EntityPlayer.h"]
+	for _, player in Players:GetPlayers() do
+		if target == "all" or player.Name == target then
+			if Entities:Buff(player, effect, mult, seconds) then
+				self:Reply(player, ("%s %s x%s for %ds."):format(if mult >= 1 then "Buff:" else "Debuff:", effect, mult, seconds))
+			end
+		end
+	end
+end
+
+-- Reactions to the other servers.
+function module:Start()
+	local Global = self.includes.System["Global.h"]
+	Global:On("ANNOUNCE", function(data)
+		self.includes.Security["Packet.h"]:Broadcast(Opcodes.SMSG_NOTIFICATION, { Text = tostring(data.Text) })
+	end)
+	Global:On("KICK", function(data)
+		local online = Players:GetPlayerByUserId(tonumber(data.UserId) or 0)
+		if online then
+			online:Kick(tostring(data.Reason or ""))
+		end
+	end)
+	Global:On("BUFF", function(data)
+		self:ApplyBuff(tostring(data.Target), tostring(data.Effect), tonumber(data.Mult) or 1, tonumber(data.Seconds) or 0)
+	end)
+end
 
 function module:Reply(player: Player, text: string)
 	self.includes.Chat["Chat.h"]:System(player, text)
@@ -296,5 +390,8 @@ return Base(module, {
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Database", Imports = "AuthDatabase.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
+	{ Path = "Auth/Support", Imports = "Tickets.h" },
+	{ Path = "World/Zones", Imports = "Zones.h" },
 	{ Path = "Global/Database", Imports = "Database.h" },
+	{ Path = "Global/System", Imports = "Global.h" },
 })

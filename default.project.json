@@ -6,6 +6,10 @@
       "$className": "ReplicatedStorage",
       "Shared": { "$path": "src/ReplicatedStorage/Shared" }
     },
+    "Workspace": {
+      "$className": "Workspace",
+      "Zones": { "$path": "src/Workspace/Zones" }
+    },
     "ServerScriptService": {
       "$className": "ServerScriptService",
       "$path": "src/ServerScriptService"

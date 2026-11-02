@@ -25,10 +25,13 @@ src/ServerStorage/ServerModules/
   AuthServer/Database/             AuthDatabase (accounts, roles, bans)
   AuthServer/Entities/             EntityPlayer
   AuthServer/Chat/                 Chat, ChatRegistry, ChatFunctions
+  AuthServer/Support/              Tickets
   WorldServer/Database/            WorldDatabase (position, health)
+  WorldServer/Zones/               Zones (which zone each player stands in)
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
-  GlobalModules/System/            Compiler (resolves module includes)
-src/StarterPlayer/StarterPlayerScripts/NetClient   the client half
+  GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus)
+src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), ZoneBanner
+src/Workspace/Zones/                               demo zone parts
 ```
 
 ## Packets
@@ -50,6 +53,9 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | SMSG_MESSAGECHAT | server | `{ Channel, Sender, Target, Text }` |
 | SMSG_NOTIFICATION | server | `{ Text }` from `.announce` |
 | SMSG_GM_STATE | server | `{ Name, Gm, Invisible }` how clients draw a GM |
+| SMSG_ZONE_UPDATE | server | `{ Name, Pvp, Safe }` or `{}` when leaving all zones |
+| CMSG_EMOTE / SMSG_EMOTE | both | `{ Emote }` in, `{ Emote, Sender }` out to SAY range |
+| CMSG_TICKET | client | `{ Text }` opens a GM ticket |
 
 Add an opcode in `Shared/Opcodes.luau`, then `Packet:On(opcode, handler)` on the
 server and `handlers[opcode]` on the client.
@@ -85,10 +91,12 @@ Commands are typed in chat with a leading dot, WoW style. A PLAYER gets
 "There is no such command"; `.help` lists what the caller's role can run.
 
 ```
-MODERATOR   .help  .who  .server info  .gm on|off  .gm invis on|off  .gm list
+MODERATOR   .help  .who  .server info  .zone  .gm on|off  .gm invis on|off  .gm list
+            .ticket list | view <id> | reply <id> <text> | close <id>
             .freeze <player>  .unfreeze <player>  .mute <player> <minutes> [reason]
             .unmute <player>  .kick <player> [reason]
-GAMEMASTER  .tele <x> <y> <z> | .tele <player>  .appear <player>  .summon <player>
+GAMEMASTER  .buff <all|player> <speed|jump> <multiplier> <seconds>
+            .tele <x> <y> <z> | .tele <player>  .appear <player>  .summon <player>
             .speed <0.1-10> [player]  .hurt <player> <amount>  .heal [player]
             .kill [player]  .revive [player]  .maxhealth <amount> [player]
             .ban <player> [reason]  .unban <userId>  .announce <text>
@@ -112,6 +120,32 @@ echo, restyled through `OnIncomingMessage`; the server never sends it back. Robl
 off: the project file sets `CreateDefaultTextChannels` and `CreateDefaultCommands`
 to false on TextChatService (they are not scriptable), and the "Net" channel the
 chat box types into has `ShouldDeliverCallback` returning false.
+
+## Zones, emotes, tickets
+
+A zone is any Part tagged `Zone` (CollectionService). Its name is the zone name;
+attributes `Pvp` and `Safe` describe it. The world server polls players every
+`Config.ZonePollSeconds` and sends `SMSG_ZONE_UPDATE` on change; the client sets the
+`Zone` and `ZoneKind` attributes on the Player and `ZoneBanner` fades the name in
+like the WoW zone text. Two demo zones ship under `src/Workspace/Zones`.
+
+`/wave`, `/dance`, `/laugh`, `/cheer`, `/point` play the R15 emote and tell everyone
+in SAY range in orange. The table is `Config.Emotes`.
+
+`/ticket <text>` opens a GM ticket (one open per player). Staff on every server get
+a yellow notice; `.ticket` lists, views, replies to and closes them. Tickets live in
+one `Tickets` DataStore record edited with `UpdateAsync`, so servers never overwrite
+each other, and replies reach the player on whichever server they are on.
+
+## Cross-server
+
+`Global.h` is a bus on one MessagingService topic. A command does its local work,
+then publishes; every other server reacts and the origin ignores its own message.
+`.announce`, `.kick`, `.ban` and `.buff` are global this way, and `.kick`/`.ban`
+accept the name of someone who is not on this server (looked up to a UserId).
+`.buff all speed 2 60` doubles everyone's WalkSpeed for a minute on every server;
+a multiplier under 1 is a debuff. Without MessagingService (Studio without API
+access) it logs once and runs single-server.
 
 ## Saving
 

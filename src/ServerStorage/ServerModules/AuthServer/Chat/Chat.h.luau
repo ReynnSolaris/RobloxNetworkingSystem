@@ -80,6 +80,28 @@ function module:Start()
 		end
 	end)
 
+	-- /wave and friends: text to everyone in SAY range except the sender, whose
+	-- own client plays the animation and shows the echo.
+	Packet:On(Opcodes.CMSG_EMOTE, function(player, data)
+		local emote = typeof(data) == "table" and typeof(data.Emote) == "string" and Config.Emotes[data.Emote]
+		if not emote then
+			return
+		end
+		local packet = { Emote = data.Emote, Sender = player.DisplayName }
+		for _, recipient in Functions:Recipients(Registry:Get("SAY"), player) do
+			if recipient ~= player then
+				Packet:Send(recipient, Opcodes.SMSG_EMOTE, packet)
+			end
+		end
+	end)
+
+	Packet:On(Opcodes.CMSG_TICKET, function(player, data)
+		if typeof(data) == "table" and typeof(data.Text) == "string" and #data.Text > 0 then
+			local text = Functions:Filter(player, data.Text:sub(1, Config.Chat.MaxLength))
+			self:System(player, self.includes.Support["Tickets.h"]:Open(player, text))
+		end
+	end)
+
 	Players.PlayerRemoving:Connect(function(player)
 		self.information[player] = nil
 	end)
@@ -88,4 +110,5 @@ end
 return Base(module, {
 	{ Path = "Auth/Chat", Imports = "ChatRegistry.h|ChatFunctions.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h|Commands.h|Session.h" },
+	{ Path = "Auth/Support", Imports = "Tickets.h" },
 })

@@ -45,11 +45,18 @@ local Session = Auth.Security["Session.h"]
 local Entities = Auth.Entities["EntityPlayer.h"]
 local Chat = Auth.Chat["Chat.h"]
 local Commands = Auth.Security["Commands.h"]
+local Zones = World.Zones["Zones.h"]
+local Tickets = Auth.Support["Tickets.h"]
+local Bus = Global.System["Global.h"]
 local Database = Global.Database["Database.h"]
 
+Bus:Start()
 Packet:Start()
 Session:Start()
 Chat:Start()
+Zones:Start()
+Tickets:Start()
+Commands:Start()
 Session:OnAuthed(function(player)
 	Entities:Spawn(player)
 	Commands:SyncState(player)
