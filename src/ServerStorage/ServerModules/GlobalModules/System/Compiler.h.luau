@@ -1,56 +1,49 @@
+local Base = require(game:GetService("ServerStorage").ServerModules["Template.h"])
 local module = {}
---[[
-	Module Base
---]]
---[[
-	Module Custom Functions
---]]
 
---[[
-	Example () -> Does an example function
---]]
 local ServerModules = game:GetService("ServerStorage"):WaitForChild("ServerModules")
-function module:Import(ModuleScript:std, ImportName:std, Path:std)
-	local Paths = {
-		["Global"] = ServerModules:WaitForChild("GlobalModules"),
-		["Auth"] = ServerModules:WaitForChild("AuthServer"),
-		["World"] = ServerModules:WaitForChild("WorldServer")
-	}
-	local args = Path:split("/")
-	local ToImport = {}
-	local importString = ImportName:split("|")
-	table.foreach(Paths[args[1]]:GetDescendants(), function(a, b)
-		if b.Parent.Name == args[2] then
-			table.foreach(importString, function(c, d)
-				if b.Name == d then
-					ToImport[#ToImport+1] = b
-					return
-				end
-			end)
-		end
-	end)
-	local ImportFinale = {}
-	for _, x in next, ToImport do
-		ImportFinale[tostring(x)] = require(x)()
+local Roots = {
+	Global = ServerModules:WaitForChild("GlobalModules"),
+	Auth = ServerModules:WaitForChild("AuthServer"),
+	World = ServerModules:WaitForChild("WorldServer"),
+}
+
+local cache: { [ModuleScript]: any } = {}
+
+-- One instance per ModuleScript, so every importer shares the same state.
+function module:Load(script: ModuleScript)
+	if cache[script] == nil then
+		cache[script] = require(script)()
 	end
-	return ImportFinale
+	return cache[script]
 end
 
-return function()
-	return setmetatable({
-		["includes"] = {},
-		["information"] = {}
-	}, {
-		__index = function(self, index)
-			if module[index] ~= nil then
-				if typeof(module[index]) == "function" then
-					return function(self, ...)
-						return module[index](self, ...)
-					end
-				else
-					return module[index]
-				end
-			end
-		end,
-	})
+-- Import("Auth/Security", "RBAC_Permissions.h|Packet.h") -> { ["RBAC_Permissions.h"] = ..., ["Packet.h"] = ... }
+function module:Import(path: string, names: string)
+	local root, folder = table.unpack(path:split("/"))
+	local parent = assert(Roots[root], "unknown root " .. tostring(root)):FindFirstChild(folder)
+	assert(parent, ("no folder %s under %s"):format(folder, root))
+
+	local out = {}
+	for _, name in names:split("|") do
+		local child = parent:FindFirstChild(name)
+		assert(child and child:IsA("ModuleScript"), ("no module %s in %s"):format(name, path))
+		out[name] = self:Load(child)
+	end
+	return out
 end
+
+-- Replace a module's include declarations with the resolved modules.
+function module:Resolve(instance)
+	local resolved = {}
+	for _, include in instance.includes do
+		local folder = include.Path:split("/")[2]
+		resolved[folder] = resolved[folder] or {}
+		for name, mod in self:Import(include.Path, include.Imports) do
+			resolved[folder][name] = mod
+		end
+	end
+	instance.includes = resolved
+end
+
+return Base(module)

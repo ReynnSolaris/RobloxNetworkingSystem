@@ -1,7 +1,11 @@
 {
-  "name": "Place2",
+  "name": "RobloxNetworkingSystem",
   "tree": {
     "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Shared": { "$path": "src/ReplicatedStorage/Shared" }
+    },
     "ServerScriptService": {
       "$className": "ServerScriptService",
       "$path": "src/ServerScriptService"
@@ -10,11 +14,15 @@
       "$className": "ServerStorage",
       "$path": "src/ServerStorage"
     },
+    "TextChatService": {
+      "$className": "TextChatService",
+      "$properties": { "CreateDefaultTextChannels": false, "CreateDefaultCommands": false }
+    },
     "StarterPlayer": {
       "$className": "StarterPlayer",
-      "StarterCharacterScripts": {
-        "$className": "StarterCharacterScripts",
-        "$path": "src/StarterPlayer/StarterCharacterScripts"
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$path": "src/StarterPlayer/StarterPlayerScripts"
       }
     }
   }

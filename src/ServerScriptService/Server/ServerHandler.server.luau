@@ -1,121 +1,95 @@
-local ServerBase = script.Parent
+local Players = game:GetService("Players")
+local ServerStorage = game:GetService("ServerStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
 
-local SS = game:GetService("ServerStorage")
-local ServerModules = SS:WaitForChild("ServerModules")
-local AuthServer, WorldServer, GlobalModules = ServerModules:WaitForChild("AuthServer"), ServerModules:WaitForChild("WorldServer"), ServerModules:WaitForChild("GlobalModules")
+-- Players spawn after they authenticate. Chat delivery is ours too; the project
+-- file turns off TextChatService's default channels and commands.
+Players.CharacterAutoLoads = false
 
-local AuthServerModules = {}
-local WorldServerModules = {}
-local GlobalServerModules = {}
+local ServerModules = ServerStorage:WaitForChild("ServerModules")
+local Compiler = require(ServerModules.GlobalModules.System["Compiler.h"])()
 
-local loadDependencies = function()
-	local function Search(folder, last)
-		for _,x in next, folder:GetChildren() do
-			if not x:IsA'Folder' then
-				if x:IsA'ModuleScript' then
-					last[tostring(x)] = require(x)()
-				else
-					last[tostring(x)] = x.Value
-				end
-			else
-				last[tostring(x)] = {}
-				Search(x, last[tostring(x)])
-			end
+-- Mirror the folder tree into tables of module instances, then resolve includes.
+local function load(folder: Instance, into)
+	for _, child in folder:GetChildren() do
+		if child:IsA("Folder") then
+			into[child.Name] = {}
+			load(child, into[child.Name])
+		elseif child:IsA("ModuleScript") then
+			into[child.Name] = Compiler:Load(child)
 		end
 	end
-	print("================ LOADING AUTH SERVER ================")
-	--[[
-		Handle the auth-server (authentication service mod 1.0)
-	--]]
-	Search(AuthServer, AuthServerModules)
-	print(AuthServerModules)
-	print("================ LOADED AUTH SERVER ================")
-	
-	print("================ LOADING WORLD SERVER ================")
-	--[[
-		Handle the auth-server (authentication service mod 1.0)
-	--]]
-	Search(WorldServer, WorldServerModules)
-	print(WorldServerModules)
-	print("================ LOADED WORLD SERVER ================")
-	
-	print("================ LOADING GLOBAL MODULES ================")
-	--[[
-		Handle the auth-server (authentication service mod 1.0)
-	--]]
-	Search(GlobalModules, GlobalServerModules)
-	print(GlobalServerModules)
-	print("================ LOADED GLOBAL MODULES ================")
-	--[[
-		Handle the imports of the module scripts within the modules.
-	--]]
-	print("================ COMPILING IMPORTS ================")
-	local CompilerService = GlobalServerModules["System"]["Compiler.h"]
-	local function Import(mod)
-		local StoredImports = {}
-		for z, x in next, mod do
-			if tostring(x) ~= "Compiler.h" then
-				if x["includes"] ~= nil then
-					if #x.includes ~= 0 then
-						for _, import in next, x.includes do
-							StoredImports[import.Path:split("/")[2]] = CompilerService:Import(x, import.Imports, import.Path)
-							print(("Imported [%s] for [%s]"):format(import.Imports, tostring(z)))
-						end
-						x.includes = StoredImports
-					end
-				else
-					Import(x)
-				end
-			end
-		end
-	end
-	Import(AuthServerModules)
-	Import(WorldServerModules)
-	Import(GlobalServerModules)
-	print("================ IMPORTS COMPILED ================")
+	return into
 end
 
-
-loadDependencies()
-local EntityPlayer = AuthServerModules["Entities"]["EntityPlayer.h"]
-
-local DatabaseTest = GlobalServerModules["Database"]["Database.h"]:CreateDatabase("Debunked.")
---local Imported = CompilerService:Import(EntityPlayer, "Database.h|DatabaseUUID.h", "Global/Database")
---AuthServerModules["Chat"]["Chat.h"]:Test()
-local Security = AuthServerModules["Security"]
-local RBAC = Security["RBAC_Permissions.h"]
-game.Players.PlayerAdded:Connect(function(Player)
-	EntityPlayer:NewPlayerInstance(Player)
-	Player.CharacterAdded:Connect(function(Character)
-		Character:WaitForChild("Humanoid").Died:connect(function()
-			wait(3)
-			EntityPlayer:SpawnPlayer(Player, CFrame.new(0, 5, 0))
-			Security["Packet.h"]:createPacket(Player, "SPAWN_EVENT", {
-				["CFrame"] = CFrame.new(0, 5, 0),
-				["PacketType"] = "Server",
-			})
-		end)
-	end)
-	EntityPlayer:SpawnPlayer(Player, CFrame.new(0, 5, 0))
-	--wait(1)
-	--EntityPlayer:Hurt(Player.Name, 25)
-	Security["Packet.h"]:createPacket(Player, "SPAWN_EVENT", {
-		["CFrame"] = CFrame.new(0, 5, 0),
-		["PacketType"] = "Server",
-	})
-	local PlayerRBAC = EntityPlayer:GetPlayerInfo(Player.Name).RBAC
-	if RBAC:GetRoleName(PlayerRBAC) == "RBAC_PERMISSION_OWNER" then
-		EntityPlayer:GiveHat(Player.Name, 21070012)
+local function resolve(tree)
+	for _, value in tree do
+		if rawget(value, "includes") ~= nil then
+			Compiler:Resolve(value)
+		else
+			resolve(value)
+		end
 	end
-	
+end
+
+local Auth = load(ServerModules.AuthServer, {})
+local World = load(ServerModules.WorldServer, {})
+local Global = load(ServerModules.GlobalModules, {})
+resolve(Auth)
+resolve(World)
+resolve(Global)
+
+local Packet = Auth.Security["Packet.h"]
+local Session = Auth.Security["Session.h"]
+local Entities = Auth.Entities["EntityPlayer.h"]
+local Chat = Auth.Chat["Chat.h"]
+local Database = Global.Database["Database.h"]
+
+Packet:Start()
+Session:Start()
+Chat:Start()
+Session:OnAuthed(function(player)
+	Entities:Spawn(player)
 end)
 
-ServerBase:WaitForChild("Server_Reference").OnInvoke = function(Entry:string)
-	if Entry == "GLOBAL" then
-		return GlobalServerModules
-	elseif Entry == "WORLD" then
-		return WorldServerModules
-	else
-		return AuthServerModules
+-- Both loads yield on DataStores. The entity goes first so a session never exists
+-- without one, and a player who left mid-load is cleaned up instead of leaking.
+local function join(player: Player)
+	Entities:Add(player)
+	local session = player.Parent == Players and Session:Open(player)
+	if not session or player.Parent ~= Players then
+		Entities:Remove(player)
+		Session:Close(player)
 	end
+end
+Players.PlayerAdded:Connect(join)
+for _, player in Players:GetPlayers() do
+	join(player)
+end
+Players.PlayerRemoving:Connect(function(player)
+	Entities:Remove(player)
+	Session:Close(player)
+end)
+
+local function saveAll()
+	for _, player in Players:GetPlayers() do
+		Entities:Save(player)
+	end
+	Database:FlushAll()
+end
+task.spawn(function()
+	while true do
+		task.wait(Config.AutosaveSeconds)
+		saveAll()
+	end
+end)
+game:BindToClose(saveAll)
+
+-- Other server scripts reach the loaded modules through this.
+local reference = script.Parent:FindFirstChild("Server_Reference") or Instance.new("BindableFunction")
+reference.Name = "Server_Reference"
+reference.Parent = script.Parent
+reference.OnInvoke = function(entry: string)
+	return if entry == "GLOBAL" then Global elseif entry == "WORLD" then World else Auth
 end

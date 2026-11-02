@@ -1,33 +1,35 @@
+local Base = require(game:GetService("ServerStorage").ServerModules["Template.h"])
+local Players = game:GetService("Players")
+local TextService = game:GetService("TextService")
 local module = {}
---[[
-	Module Base
---]]
---[[
-	Module Custom Functions
---]]
 
---[[
-	Example () -> Does an example function
---]]
-function module:Example(std:Example_Variable)
-	
+function module:Filter(sender: Player, text: string): string
+	local ok, result = pcall(function()
+		return TextService:FilterStringAsync(text, sender.UserId):GetNonChatStringForBroadcastAsync()
+	end)
+	return if ok then result else string.rep("#", #text)
 end
 
-return function()
-	return setmetatable({
-		["includes"] = {},
-		["information"] = {}
-	}, {
-		__index = function(self, index)
-			if module[index] ~= nil then
-				if typeof(module[index]) == "function" then
-					return function(self, ...)
-						return module[index](self, ...)
-					end
-				else
-					return module[index]
-				end
-			end
-		end,
-	})
+function module:Recipients(channel, sender: Player, targetName: string?): { Player }
+	if channel.Target then
+		local target = targetName and Players:FindFirstChild(targetName)
+		return if target then { target } else {}
+	end
+	if not channel.Range then
+		return Players:GetPlayers()
+	end
+	local origin = sender.Character and sender.Character:GetPivot().Position
+	if not origin then
+		return { sender }
+	end
+	local out = {}
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		if character and (character:GetPivot().Position - origin).Magnitude <= channel.Range then
+			table.insert(out, player)
+		end
+	end
+	return out
 end
+
+return Base(module)
