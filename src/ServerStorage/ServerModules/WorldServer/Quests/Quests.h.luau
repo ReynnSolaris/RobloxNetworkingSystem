@@ -1,0 +1,399 @@
+local Base = require(game:GetService("ServerStorage").ServerModules["Template.h"])
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Opcodes = require(ReplicatedStorage.Shared.Opcodes)
+local Config = require(ReplicatedStorage.Shared.Config)
+local module = {}
+
+-- quest_template: { id, title, details, objectives, minlevel, level, reward_xp,
+-- reward_money, reward_items = { { entry, count } }, req_creature = { { entry, count } },
+-- req_item = { { entry, count } } }. creature_queststarter / creature_questender:
+-- { id, entry (creature), quest }. A character's quest state lives on its record:
+-- Quests = { [questId] = { Status = active|complete, Kills = { [entry] = n } } },
+-- Done = { [questId] = true }.
+
+local SEED = {
+	{
+		title = "Vermin Problem",
+		details = "Kobolds have crept into the valley again, digging up every cellar and candle they can find. Thin their numbers before they grow bold.",
+		objectives = "Slay 5 Kobold Vermin and return to the Town Guard.",
+		minlevel = 1, level = 2, reward_xp = 150, reward_money = 50,
+		reward_items = { { item = "Recruit's Tunic", count = 1 } },
+		req_creature = { { creature = "Kobold Vermin", count = 5 } },
+		starter = "Town Guard", ender = "Town Guard",
+	},
+	{
+		title = "Wolves at the Gate",
+		details = "Young wolves have taken to the road and the travellers have taken to my common room, which would be fine if any of them paid. Clear the wolves and bring me cloth for bandages.",
+		objectives = "Slay 3 Young Wolves and bring 3 Linen Cloth to the Innkeeper.",
+		minlevel = 1, level = 3, reward_xp = 220, reward_money = 80,
+		reward_items = { { item = "Recruit's Boots", count = 1 } },
+		req_creature = { { creature = "Young Wolf", count = 3 } },
+		req_item = { { item = "Linen Cloth", count = 3 } },
+		starter = "Innkeeper", ender = "Innkeeper",
+	},
+}
+
+function module:DB()
+	return self.includes.Database["WorldDB.h"]
+end
+
+function module:Template(id)
+	return self:DB():Get("quest_template", id)
+end
+
+local function char(self, player: Player)
+	local entity = self.includes.Entities["EntityPlayer.h"]:Get(player)
+	local c = entity and entity.Active
+	if c then
+		c.Quests = c.Quests or {}
+		c.Done = c.Done or {}
+	end
+	return c
+end
+
+local function commit(self, player: Player)
+	self.includes.Database["WorldDatabase.h"]:Commit(player)
+end
+
+-- rows for a creature entry
+local function startersOf(self, entry)
+	local out = {}
+	for _, row in self:DB():Select("creature_queststarter") do
+		if tostring(row.entry) == tostring(entry) then
+			table.insert(out, row.quest)
+		end
+	end
+	return out
+end
+
+local function endersOf(self, entry)
+	local out = {}
+	for _, row in self:DB():Select("creature_questender") do
+		if tostring(row.entry) == tostring(entry) then
+			table.insert(out, row.quest)
+		end
+	end
+	return out
+end
+
+function module:IsQuestgiver(entry): boolean
+	return #startersOf(self, entry) > 0 or #endersOf(self, entry) > 0
+end
+
+-- Objective progress for one active quest: list of { Text, Have, Need }.
+function module:Progress(player: Player, id)
+	local c = char(self, player)
+	local template = self:Template(id)
+	local state = c and c.Quests[tostring(id)]
+	if not template or not state then
+		return {}
+	end
+	local DB = self:DB()
+	local lines = {}
+	for _, req in (template.req_creature or {}) do
+		local creature = DB:Get("creature_template", req.entry) or {}
+		table.insert(lines, { Text = (creature.name or "?") .. " slain", Have = math.min(state.Kills[tostring(req.entry)] or 0, req.count), Need = req.count })
+	end
+	for _, req in (template.req_item or {}) do
+		local item = DB:Get("item_template", req.entry) or {}
+		table.insert(lines, { Text = item.name or "?", Have = math.min(self.includes.Entities["EntityPlayer.h"]:CountItem(player, req.entry), req.count), Need = req.count })
+	end
+	return lines
+end
+
+function module:IsComplete(player: Player, id): boolean
+	for _, line in self:Progress(player, id) do
+		if line.Have < line.Need then
+			return false
+		end
+	end
+	return true
+end
+
+-- Status a questgiver shows this player: "available", "complete", "incomplete" or nil.
+function module:StatusFor(player: Player, entry): string?
+	local c = char(self, player)
+	if not c then
+		return nil
+	end
+	local level = c.Level or 1
+	for _, id in endersOf(self, entry) do
+		local state = c.Quests[tostring(id)]
+		if state then
+			return if self:IsComplete(player, id) then "complete" else "incomplete"
+		end
+	end
+	for _, id in startersOf(self, entry) do
+		local template = self:Template(id)
+		if template and not c.Quests[tostring(id)] and not c.Done[tostring(id)] and level >= (template.minlevel or 1) then
+			return "available"
+		end
+	end
+	return nil
+end
+
+-- Every spawned questgiver's status, for the markers.
+function module:SendStatuses(player: Player)
+	local list = {}
+	for guid, state in self.includes.Content["Creatures.h"].information do
+		if not state.Dead and self:IsQuestgiver(state.Row.id) then
+			list[guid] = self:StatusFor(player, state.Row.id) or "none"
+		end
+	end
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTGIVER_STATUS_MULTIPLE, { Statuses = list })
+end
+
+function module:SendLog(player: Player)
+	local c = char(self, player)
+	if not c then
+		return
+	end
+	local log = {}
+	for id, state in c.Quests do
+		local template = self:Template(id)
+		if template then
+			table.insert(log, { Id = tonumber(id), Title = template.title, Level = template.level, Objectives = template.objectives,
+				Complete = self:IsComplete(player, id), Progress = self:Progress(player, id) })
+		end
+	end
+	table.sort(log, function(a, b)
+		return a.Id < b.Id
+	end)
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTLOG, { Quests = log })
+end
+
+local function describe(self, id, status: string)
+	local template = self:Template(id)
+	local DB = self:DB()
+	local rewards = {}
+	for _, reward in (template.reward_items or {}) do
+		local item = DB:Get("item_template", reward.entry) or {}
+		table.insert(rewards, { Entry = reward.entry, Count = reward.count, Name = item.name or "?", Quality = item.quality or 1,
+			Slot = item.slot, Class = item.class, Level = item.level, Health = item.health, Damage = item.damage, Armor = item.armor })
+	end
+	return { Id = template.id, Title = template.title, Details = template.details, Objectives = template.objectives, Level = template.level,
+		RewardXp = template.reward_xp or 0, RewardMoney = template.reward_money or 0, RewardItems = rewards, Status = status }
+end
+
+-- Talk: list what this questgiver has for the player.
+function module:Hello(player: Player, guid)
+	local creature = self.includes.Content["Creatures.h"]:State(guid)
+	local c = char(self, player)
+	if not creature or not c then
+		return
+	end
+	local entry = creature.Row.id
+	local list = {}
+	for _, id in endersOf(self, entry) do
+		if c.Quests[tostring(id)] then
+			table.insert(list, { Id = id, Title = self:Template(id).title, Status = if self:IsComplete(player, id) then "complete" else "incomplete" })
+		end
+	end
+	for _, id in startersOf(self, entry) do
+		local template = self:Template(id)
+		if template and not c.Quests[tostring(id)] and not c.Done[tostring(id)] and (c.Level or 1) >= (template.minlevel or 1) then
+			table.insert(list, { Id = id, Title = template.title, Status = "available" })
+		end
+	end
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTGIVER_QUEST_LIST,
+		{ Guid = tostring(guid), Name = creature.Template.name, Greeting = creature.Template.gossip, Quests = list })
+end
+
+function module:Query(player: Player, guid, id)
+	local c = char(self, player)
+	local template = self:Template(id)
+	if not c or not template then
+		return
+	end
+	local status = if c.Quests[tostring(id)] then (if self:IsComplete(player, id) then "complete" else "incomplete") else "available"
+	local packet = describe(self, id, status)
+	packet.Guid = tostring(guid)
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTGIVER_QUEST_DETAILS, packet)
+end
+
+function module:Accept(player: Player, guid, id)
+	local c = char(self, player)
+	local template = self:Template(id)
+	local creature = self.includes.Content["Creatures.h"]:State(guid)
+	if not c or not template or not creature or not table.find(startersOf(self, creature.Row.id), template.id) then
+		return
+	end
+	if c.Quests[tostring(id)] or c.Done[tostring(id)] then
+		return
+	end
+	local count = 0
+	for _ in c.Quests do
+		count += 1
+	end
+	if count >= Config.QuestLogSize then
+		return self.includes.Chat["Chat.h"]:System(player, "Your quest log is full.")
+	end
+	c.Quests[tostring(id)] = { Status = "active", Kills = {} }
+	commit(self, player)
+	self.includes.Chat["Chat.h"]:System(player, "Quest accepted: " .. template.title)
+	self:Refresh(player, id)
+end
+
+function module:Complete(player: Player, guid, id)
+	local c = char(self, player)
+	local template = self:Template(id)
+	local creature = self.includes.Content["Creatures.h"]:State(guid)
+	if not c or not template or not creature or not c.Quests[tostring(id)] then
+		return
+	end
+	if not table.find(endersOf(self, creature.Row.id), template.id) or not self:IsComplete(player, id) then
+		return
+	end
+	local Entities = self.includes.Entities["EntityPlayer.h"]
+	for _, req in (template.req_item or {}) do
+		Entities:RemoveItem(player, req.entry, req.count)
+	end
+	for _, reward in (template.reward_items or {}) do
+		Entities:AddItem(player, reward.entry, reward.count)
+	end
+	if (template.reward_money or 0) > 0 then
+		Entities:AddMoney(player, template.reward_money)
+	end
+	c.Quests[tostring(id)] = nil
+	c.Done[tostring(id)] = true
+	commit(self, player)
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTGIVER_QUEST_COMPLETE, { Id = template.id, Title = template.title, Xp = template.reward_xp or 0 })
+	if (template.reward_xp or 0) > 0 then
+		Entities:GrantXp(player, template.reward_xp, "Quest complete")
+	end
+	self:Refresh(player)
+end
+
+function module:Remove(player: Player, id)
+	local c = char(self, player)
+	if c and c.Quests[tostring(id)] then
+		c.Quests[tostring(id)] = nil
+		commit(self, player)
+		self:Refresh(player)
+	end
+end
+
+-- Log and markers after any change; check completion of one quest when given.
+function module:Refresh(player: Player, id)
+	local c = char(self, player)
+	if id and c and c.Quests[tostring(id)] and self:IsComplete(player, id) and c.Quests[tostring(id)].Status ~= "complete" then
+		c.Quests[tostring(id)].Status = "complete"
+		self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTUPDATE_COMPLETE, { Id = tonumber(id), Title = self:Template(id).title })
+	end
+	self:SendLog(player)
+	self:SendStatuses(player)
+end
+
+-- Kill credit for the killer and party members nearby.
+function module:OnKill(killer: Player, creatureEntry, position: Vector3)
+	local credited = { killer }
+	for _, member in self.includes.Social["Party.h"]:MembersOf(killer) do
+		local root = member.Character and member.Character:FindFirstChild("HumanoidRootPart")
+		if member ~= killer and root and (root.Position - position).Magnitude <= 100 then
+			table.insert(credited, member)
+		end
+	end
+	for _, player in credited do
+		local c = char(self, player)
+		if c then
+			for id, state in c.Quests do
+				local template = self:Template(id)
+				for _, req in (template and template.req_creature or {}) do
+					if tostring(req.entry) == tostring(creatureEntry) and (state.Kills[tostring(req.entry)] or 0) < req.count then
+						state.Kills[tostring(req.entry)] = (state.Kills[tostring(req.entry)] or 0) + 1
+						local creature = self:DB():Get("creature_template", req.entry) or {}
+						self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_QUESTUPDATE_ADD_KILL,
+							{ Id = tonumber(id), Name = creature.name or "?", Have = state.Kills[tostring(req.entry)], Need = req.count })
+						commit(self, player)
+						self:Refresh(player, id)
+					end
+				end
+			end
+		end
+	end
+end
+
+-- Collect objectives are counted from the bag, so any bag change may complete one.
+function module:OnItemChange(player: Player)
+	local c = char(self, player)
+	if not c then
+		return
+	end
+	local touched = false
+	for id, state in c.Quests do
+		local template = self:Template(id)
+		if template and template.req_item and #template.req_item > 0 then
+			touched = true
+			local complete = self:IsComplete(player, id)
+			if complete and state.Status ~= "complete" then
+				self:Refresh(player, id)
+			elseif not complete and state.Status == "complete" then
+				state.Status = "active"
+			end
+		end
+	end
+	if touched then
+		self:SendLog(player)
+		self:SendStatuses(player)
+	end
+end
+
+function module:Start()
+	local DB = self:DB()
+	if #DB:Select("quest_template") == 0 then
+		local creatures, items = {}, {}
+		for _, row in DB:Select("creature_template") do
+			creatures[row.name] = row.entry
+		end
+		for _, row in DB:Select("item_template") do
+			items[row.name] = row.entry
+		end
+		for _, seed in SEED do
+			local quest = { title = seed.title, details = seed.details, objectives = seed.objectives, minlevel = seed.minlevel, level = seed.level,
+				reward_xp = seed.reward_xp, reward_money = seed.reward_money, reward_items = {}, req_creature = {}, req_item = {} }
+			for _, r in (seed.reward_items or {}) do
+				if items[r.item] then table.insert(quest.reward_items, { entry = items[r.item], count = r.count }) end
+			end
+			for _, r in (seed.req_creature or {}) do
+				if creatures[r.creature] then table.insert(quest.req_creature, { entry = creatures[r.creature], count = r.count }) end
+			end
+			for _, r in (seed.req_item or {}) do
+				if items[r.item] then table.insert(quest.req_item, { entry = items[r.item], count = r.count }) end
+			end
+			quest = DB:Insert("quest_template", quest)
+			if creatures[seed.starter] then
+				DB:Insert("creature_queststarter", { entry = creatures[seed.starter], quest = quest.id })
+			end
+			if creatures[seed.ender] then
+				DB:Insert("creature_questender", { entry = creatures[seed.ender], quest = quest.id })
+			end
+		end
+	end
+
+	local Packet = self.includes.Security["Packet.h"]
+	Packet:On(Opcodes.CMSG_QUESTGIVER_HELLO, function(player, data)
+		if typeof(data) == "table" then self:Hello(player, data.Guid) end
+	end)
+	Packet:On(Opcodes.CMSG_QUESTGIVER_QUERY_QUEST, function(player, data)
+		if typeof(data) == "table" then self:Query(player, data.Guid, tonumber(data.Quest)) end
+	end)
+	Packet:On(Opcodes.CMSG_QUESTGIVER_ACCEPT_QUEST, function(player, data)
+		if typeof(data) == "table" then self:Accept(player, data.Guid, tonumber(data.Quest)) end
+	end)
+	Packet:On(Opcodes.CMSG_QUESTGIVER_COMPLETE_QUEST, function(player, data)
+		if typeof(data) == "table" then self:Complete(player, data.Guid, tonumber(data.Quest)) end
+	end)
+	Packet:On(Opcodes.CMSG_QUESTLOG_REMOVE_QUEST, function(player, data)
+		if typeof(data) == "table" then self:Remove(player, tonumber(data.Quest)) end
+	end)
+end
+
+return Base(module, {
+	{ Path = "Auth/Security", Imports = "Packet.h" },
+	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
+	{ Path = "Auth/Chat", Imports = "Chat.h" },
+	{ Path = "Auth/Social", Imports = "Party.h" },
+	{ Path = "World/Content", Imports = "Creatures.h" },
+	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
+})

@@ -199,6 +199,7 @@ function module:AddItem(player: Player, entry: number, count: number, quiet: boo
 			{ Entry = entry, Name = template.name, Quality = template.quality or 1, Count = count })
 	end
 	self:SendInventory(player, false)
+	self.includes.Quests["Quests.h"]:OnItemChange(player)
 	return true
 end
 
@@ -232,6 +233,7 @@ function module:RemoveItem(player: Player, entry: number, count: number): boolea
 		end
 	end
 	self:SendInventory(player, false)
+	self.includes.Quests["Quests.h"]:OnItemChange(player)
 	return true
 end
 
@@ -557,5 +559,6 @@ return Base(module, {
 	{ Path = "World/Database", Imports = "WorldDatabase.h|WorldDB.h" },
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
 	{ Path = "World/Combat", Imports = "Death.h" },
+	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "Global/System", Imports = "Effects.h" },
 })

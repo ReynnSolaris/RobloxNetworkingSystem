@@ -26,10 +26,12 @@ return table.freeze({
 			MONEY = "#FFD700",
 			HIT = "#FFFF80",
 			HURT = "#FF8080",
+			QUEST = "#FFFF00",
 		},
 	},
 
 	BagSlots = 16, -- the backpack
+	QuestLogSize = 25,
 	BuybackSlots = 12,
 
 	-- Equipment slots, in character sheet order.

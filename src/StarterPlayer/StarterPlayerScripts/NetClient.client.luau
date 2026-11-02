@@ -327,6 +327,44 @@ handlers[Opcodes.SMSG_DEATH] = function()
 	player:SetAttribute("Dead", true)
 end
 
+-- Quests: the log and questgiver statuses live on attributes; the questgiver
+-- window opens on events carrying the packets.
+local questList = Instance.new("BindableEvent")
+questList.Name = "QuestList"
+questList.Parent = script.Parent
+local questDetails = Instance.new("BindableEvent")
+questDetails.Name = "QuestDetails"
+questDetails.Parent = script.Parent
+
+handlers[Opcodes.SMSG_QUESTGIVER_QUEST_LIST] = function(d)
+	questList:Fire(d)
+end
+
+handlers[Opcodes.SMSG_QUESTGIVER_QUEST_DETAILS] = function(d)
+	questDetails:Fire(d)
+end
+
+handlers[Opcodes.SMSG_QUESTLOG] = function(d)
+	player:SetAttribute("QuestLog", HttpService:JSONEncode(d.Quests or {}))
+end
+
+handlers[Opcodes.SMSG_QUESTGIVER_STATUS_MULTIPLE] = function(d)
+	player:SetAttribute("QuestgiverStatus", HttpService:JSONEncode(d.Statuses or {}))
+end
+
+handlers[Opcodes.SMSG_QUESTUPDATE_ADD_KILL] = function(d)
+	notice(tint(Colors.QUEST, esc(("%s slain: %d/%d"):format(d.Name or "?", d.Have or 0, d.Need or 0))))
+end
+
+handlers[Opcodes.SMSG_QUESTUPDATE_COMPLETE] = function(d)
+	notice(tint(Colors.QUEST, esc((d.Title or "Quest") .. " (Complete)")))
+end
+
+handlers[Opcodes.SMSG_QUESTGIVER_QUEST_COMPLETE] = function(d)
+	notice(tint(Colors.QUEST, esc("Quest completed: " .. (d.Title or "?"))))
+	questList:Fire(nil)
+end
+
 handlers[Opcodes.SMSG_BUYBACK_LIST] = function(d)
 	player:SetAttribute("Buyback", HttpService:JSONEncode(d.Items or {}))
 end

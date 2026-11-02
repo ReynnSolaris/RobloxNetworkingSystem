@@ -300,15 +300,15 @@ end
 
 add("lookup", 1, ".lookup creature|object|item|tele <name>", function(self, caller, args)
 	local what, needle = args[1], (table.concat(args, " ", 2)):lower()
-	local tableName = ({ creature = "creature_template", object = "gameobject_template", item = "item_template", tele = "game_tele" })[what]
-	assert(tableName, "expected creature, object, item or tele")
+	local tableName = ({ creature = "creature_template", object = "gameobject_template", item = "item_template", tele = "game_tele", quest = "quest_template" })[what]
+	assert(tableName, "expected creature, object, item, quest or tele")
 	local DB = self.includes.Database["WorldDB.h"]
 	local pk = DB.TABLES[tableName]
 	local hits = 0
 	for _, row in DB:Select(tableName) do
-		if hits < 20 and (needle == "" or tostring(row.name):lower():find(needle, 1, true)) then
+		if hits < 20 and (needle == "" or tostring(row.name or row.title):lower():find(needle, 1, true)) then
 			hits += 1
-			self:Reply(caller, ("  %s: %s%s"):format(tostring(row[pk]), tostring(row.name), if row.subname then " <" .. row.subname .. ">" else ""))
+			self:Reply(caller, ("  %s: %s%s"):format(tostring(row[pk]), tostring(row.name or row.title), if row.subname then " <" .. row.subname .. ">" else ""))
 		end
 	end
 	self:Reply(caller, ("%d match(es)"):format(hits))
@@ -469,6 +469,42 @@ add("revive", 2, ".revive [player]", function(self, caller, args)
 	else
 		self.includes.Entities["EntityPlayer.h"]:Spawn(other, other.Character and other.Character:GetPivot())
 	end
+end)
+
+add("quest", 2, ".quest add <id> [player] | .quest complete <id> [player] | .quest remove <id> [player] | .quest template list", function(self, caller, args)
+	local Quests = self.includes.Quests["Quests.h"]
+	local DB = self.includes.Database["WorldDB.h"]
+	if args[1] == "template" then
+		for _, row in DB:Select("quest_template") do
+			self:Reply(caller, ("  %d: %s (level %d, min %d)"):format(row.id, row.title, row.level or 1, row.minlevel or 1))
+		end
+		return
+	end
+	local id = assert(tonumber(args[2]), "expected a quest id")
+	local target = targetOrSelf(args, 3, caller)
+	local Entities = self.includes.Entities["EntityPlayer.h"]
+	local entity = assert(Entities:Get(target), "no entity")
+	local c = assert(entity.Active, "not in world")
+	c.Quests = c.Quests or {}
+	c.Done = c.Done or {}
+	assert(Quests:Template(id), "no such quest")
+	if args[1] == "add" then
+		c.Quests[tostring(id)] = { Status = "active", Kills = {} }
+	elseif args[1] == "complete" then
+		local template = Quests:Template(id)
+		for _, req in (template.req_creature or {}) do
+			c.Quests[tostring(id)] = c.Quests[tostring(id)] or { Status = "active", Kills = {} }
+			c.Quests[tostring(id)].Kills[tostring(req.entry)] = req.count
+		end
+	elseif args[1] == "remove" then
+		c.Quests[tostring(id)] = nil
+		c.Done[tostring(id)] = nil
+	else
+		error("expected add, complete, remove or template", 0)
+	end
+	self.includes.Database["WorldDatabase.h"]:Commit(target)
+	Quests:Refresh(target, id)
+	self:Reply(caller, "Done.")
 end)
 
 add("graveyard", 2, ".graveyard add <name> | .graveyard list", function(self, caller, args)
@@ -798,8 +834,9 @@ return Base(module, {
 	{ Path = "World/Zones", Imports = "Zones.h" },
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
 	{ Path = "World/Combat", Imports = "Death.h" },
+	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Content", Imports = "Teleports.h|GameObjects.h|Creatures.h" },
-	{ Path = "World/Database", Imports = "WorldDB.h" },
+	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 	{ Path = "Global/Database", Imports = "Database.h" },
 	{ Path = "Global/System", Imports = "Global.h" },
 })

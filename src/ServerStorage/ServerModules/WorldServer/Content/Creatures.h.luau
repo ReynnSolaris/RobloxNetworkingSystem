@@ -144,8 +144,13 @@ function module:Spawn(row)
 		prompt.RequiresLineOfSight = false
 		prompt.Parent = root
 		prompt.Triggered:Connect(function(player)
-			self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_MESSAGECHAT,
-				{ Channel = "SAY", Sender = template.name, Text = template.gossip or "Greetings, traveler." })
+			local Quests = self.includes.Quests["Quests.h"]
+			if Quests:IsQuestgiver(row.id) then
+				Quests:Hello(player, row.guid)
+			else
+				self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_MESSAGECHAT,
+					{ Channel = "SAY", Sender = template.name, Text = template.gossip or "Greetings, traveler." })
+			end
 			self.includes.Content["Vendors.h"]:Open(player, row.guid, row.id)
 		end)
 	end
@@ -210,6 +215,7 @@ function module:OnDeath(state)
 		if xp > 0 then
 			Entities:GrantXp(killer, xp, state.Template.name .. " slain")
 		end
+		self.includes.Quests["Quests.h"]:OnKill(killer, state.Row.id, state.Root.Position)
 	end
 	-- roll loot onto the corpse; the Loot prompt hands it out
 	local loot = { Items = {}, Money = 0 }
@@ -390,4 +396,5 @@ return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "World/Content", Imports = "Vendors.h" },
+	{ Path = "World/Quests", Imports = "Quests.h" },
 })
