@@ -748,7 +748,7 @@ Mounts have idle breathing, a gait bob, a flight tilt into the velocity, and
 import the FBX (armature and clips) with Studio's 3D Importer, keep the
 AnimationController or Humanoid on the Model, drop it in MountTemplates or
 FormTemplates named like the spell's `aura.model` or form, and set its
-attributes AnimIdle, AnimWalk, AnimFly and AnimSpecial to the uploaded
+attributes AnimIdle, AnimWalk, AnimRun (fast mounts), AnimFly and AnimSpecial to the uploaded
 animation ids (upload each clip from the Animation Editor). Stand the template
 upright in ServerStorage; the server ignores the importer's pivot, scales the
 rig to `Height` studs (5.5 by default), turns a body that is longer along X to

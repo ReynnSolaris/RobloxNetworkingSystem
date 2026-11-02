@@ -214,7 +214,8 @@ RunService.RenderStepped:Connect(function()
 		local special = (other:GetAttribute("MountSpecial") or -10)
 		local specialAge = t - special
 		if body:GetAttribute("Rigged") then
-			rigPlay(body, if specialAge < 1.6 then "Special" elseif flying then "Fly" elseif speed > 1 then "Walk" else "Idle")
+			local run = speed > 22 and body:GetAttribute("AnimRun") ~= nil
+			rigPlay(body, if specialAge < 1.6 then "Special" elseif flying then "Fly" elseif run then "Run" elseif speed > 1 then "Walk" else "Idle")
 			continue
 		end
 		local legs, bodyMotor = {}, nil
