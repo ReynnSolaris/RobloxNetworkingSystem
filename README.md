@@ -35,7 +35,7 @@ src/ServerStorage/ServerModules/
 src/ServerStorage/ObjectTemplates/                 models .gobject can place
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus)
-src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, ZoneBanner, PartyFrame
+src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, PlayerFrame, ZoneBanner, PartyFrame
 src/Workspace/Zones/                               demo zone parts
 ```
 
@@ -97,13 +97,17 @@ wherever it is imported. Per-instance state lives in `self.information`.
 
 ## Login sequence
 
-Like 3.3.5a: auth, then character select, then the world. After `SMSG_AUTH_RESPONSE`
-the client asks for `CHAR_ENUM` and shows the select screen; an account holds up to
+Like 3.3.5a: auth, then character select, then the world. The select screen is up
+from the first frame with the realm name and a status line that walks through
+connecting, authenticating and retrieving the character list over skeleton slots;
+after `SMSG_AUTH_RESPONSE` the client asks for `CHAR_ENUM` and fills it in; an account holds up to
 `Config.MaxCharacters` characters, each with a name, one of the ten classes and a
 level. `PLAYER_LOGIN` picks one and only then does the server spawn, with the
 character's name on the Humanoid and its saved position. `/logout` saves and drops
 back to the list. Before entering the world only the character opcodes and ping get
-through the session guard. Character names are what chat, parties and GM commands
+through the session guard, and the client shows no chat or core UI; on spawn the
+player frame (portrait, name, level, class, health, latency) appears top-left and
+the server greets the character. Character names are what chat, parties and GM commands
 show and accept, coloured by class in Blizzard's class colours.
 
 ## Roles and commands

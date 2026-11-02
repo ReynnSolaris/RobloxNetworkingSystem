@@ -13,6 +13,13 @@ local channel = if modern then TextChatService:WaitForChild("Net", 10) :: TextCh
 local Colors = Config.Chat.Colors
 local myLevel = 0
 
+-- Where the client is in the login sequence; CharacterSelect draws it.
+-- connecting, authenticating, authenticated, characters, entering, world, rejected
+local function setState(state: string)
+	player:SetAttribute("NetState", state)
+end
+setState("connecting")
+
 local seq = 0
 local function send(opcode: number, data: any)
 	seq += 1
@@ -80,7 +87,10 @@ handlers[Opcodes.SMSG_AUTH_RESPONSE] = function(d)
 	myLevel = d.Level or 0
 	system(if d.Ok then "Connected as " .. d.Role else "Rejected: " .. tostring(d.Reason))
 	if d.Ok then
+		setState("authenticated")
 		send(Opcodes.CMSG_CHAR_ENUM, {})
+	else
+		setState("rejected")
 	end
 end
 
@@ -89,6 +99,7 @@ handlers[Opcodes.SMSG_CHAR_ENUM] = function(d)
 	player:SetAttribute("Characters", HttpService:JSONEncode(d.Characters or {}))
 	player:SetAttribute("MaxCharacters", d.Max or Config.MaxCharacters)
 	player:SetAttribute("InWorld", false)
+	setState("characters")
 end
 
 handlers[Opcodes.SMSG_CHAR_RESULT] = function(d)
@@ -108,6 +119,7 @@ handlers[Opcodes.SMSG_SPAWN] = function(d)
 	player:SetAttribute("Health", d.Health)
 	player:SetAttribute("MaxHealth", d.MaxHealth)
 	player:SetAttribute("InWorld", true)
+	setState("world")
 end
 
 handlers[Opcodes.SMSG_DESPAWN] = function()
@@ -313,6 +325,7 @@ else
 end
 
 -- The server opens the session after a DataStore read, so keep knocking until it answers.
+setState("authenticating")
 while not authed do
 	send(Opcodes.CMSG_AUTH_SESSION, { Build = Config.Build })
 	task.wait(0.5)

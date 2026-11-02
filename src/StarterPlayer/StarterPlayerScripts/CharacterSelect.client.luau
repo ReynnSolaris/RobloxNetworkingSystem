@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Opcodes = require(ReplicatedStorage.Shared.Opcodes)
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -54,6 +55,7 @@ local function button(parent, size: UDim2, position: UDim2, label: string): Text
 end
 
 text(backdrop, UDim2.new(1, 0, 0, 60), UDim2.new(0, 0, 0.06, 0), "Character Select", 44, GOLD).TextXAlignment = Enum.TextXAlignment.Center
+text(backdrop, UDim2.new(1, 0, 0, 24), UDim2.new(0, 0, 0.06, 56), "Realm: " .. Config.RealmName, 20, DIM).TextXAlignment = Enum.TextXAlignment.Center
 
 local slots = Instance.new("Frame")
 slots.AnchorPoint = Vector2.new(1, 0)
@@ -121,11 +123,54 @@ local characters = {}
 local selected: number? = nil
 local rows = {}
 
+local STATUS = {
+	connecting = "Connecting to realm...",
+	authenticating = "Authenticating...",
+	authenticated = "Retrieving character list...",
+	characters = "",
+	entering = "Entering world...",
+	rejected = "Connection rejected.",
+}
+
+local function netState(): string
+	return player:GetAttribute("NetState") or "connecting"
+end
+
+-- Grey placeholder slots that breathe while the list is still on its way.
+local function skeleton()
+	for slot = 1, Config.MaxCharacters do
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, 0, 0, 56)
+		row.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+		row.BorderSizePixel = 0
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 4)
+		for i, width in { 0.5, 0.35 } do
+			local bar = Instance.new("Frame")
+			bar.Size = UDim2.new(width, 0, 0, 10)
+			bar.Position = UDim2.fromOffset(12, 12 + (i - 1) * 20)
+			bar.BackgroundColor3 = Color3.fromRGB(60, 60, 72)
+			bar.BorderSizePixel = 0
+			Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 3)
+			bar.Parent = row
+			TweenService:Create(bar, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true, slot * 0.15), { BackgroundTransparency = 0.6 }):Play()
+		end
+		row.Parent = slots
+		table.insert(rows, row)
+	end
+	enter.Visible, delete.Visible, create.Visible = false, false, false
+end
+
 local function refresh()
 	for _, r in rows do
 		r:Destroy()
 	end
 	rows = {}
+	local state = netState()
+	status.Text = STATUS[state] or ""
+	status.TextColor3 = if state == "rejected" then Color3.fromRGB(230, 90, 90) else DIM
+	if state ~= "characters" and state ~= "entering" then
+		return skeleton()
+	end
 	local max = player:GetAttribute("MaxCharacters") or Config.MaxCharacters
 	for slot = 1, max do
 		local char = characters[slot]
@@ -170,9 +215,9 @@ local function load()
 end
 
 player:GetAttributeChangedSignal("Characters"):Connect(load)
+player:GetAttributeChangedSignal("NetState"):Connect(refresh)
 player:GetAttributeChangedSignal("InWorld"):Connect(function()
 	gui.Enabled = player:GetAttribute("InWorld") ~= true
-	status.Text = ""
 end)
 player:GetAttributeChangedSignal("CharError"):Connect(function()
 	status.Text = player:GetAttribute("CharError") or ""
@@ -180,7 +225,7 @@ end)
 
 enter.Activated:Connect(function()
 	if selected then
-		status.Text = "Entering world..."
+		player:SetAttribute("NetState", "entering")
 		netSend:Fire(Opcodes.CMSG_PLAYER_LOGIN, { Slot = selected })
 	end
 end)
