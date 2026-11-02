@@ -297,7 +297,7 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | gameobject | guid | id (entry), x, y, z, o, scale, spawntimesecs, by |
 | game_tele | id | name, x, y, z, o |
 | game_graveyard | id | name, x, y, z, o |
-| quest_template | id | title, details, objectives, minlevel, level, reward_xp, reward_money, reward_items, req_creature, req_item |
+| quest_template | id | title, details, objectives, minlevel, level, reward_xp, reward_money, reward_items, req_creature, req_item, class, race, prevquest, reward_rep |
 | creature_queststarter / creature_questender | id | entry (creature), quest |
 | spell_template | id | name, rank, description, class, school, effect (damage, heal, aura, hearth), base, per_level, cost, cast_time, cooldown, range, target (enemy, friend, self), aura = { kind, stat, mult, interval, duration, harmful }, icon, npc |
 | playercreateinfo_spell | id | class, spell |
@@ -658,6 +658,33 @@ order: name in quality colour, binding, slot and type, armor, green stats, level
 requirement in red when too low, Use line, max stack, sell price in coin colours.
 Spells show cost and range, cast time and cooldown, rank, class, description and
 what the aura does. Items list primary stats and spell power.
+
+## Paper doll, tooltips, starter sets
+
+The character sheet is WoW's paper doll: head, neck, shoulders, back, chest,
+wrist, hands and waist down the left, legs, feet, two rings and two trinkets
+down the right, main and off hand beneath, a turning preview of the character
+in the middle and Attributes, Melee and Spell, Defense and Honor blocks below
+with the total item score. Rings and trinkets fill the first empty slot of
+their pair. Bags live in the backpack window: four slots along the bottom,
+drop a bag on one to wear it, right-click to take it off.
+
+Item tooltips show an Item Score (`Config.ItemScore` weights by stat times a
+quality factor), redraw when the item under the mouse changes, and while
+Shift (first slot) or Alt (second of a pair) is held show "Currently Equipped"
+beside them with green and red stat differences and the score change.
+
+New characters start as in Wrath: a set by class (recruit's, squire's,
+trapper's, thug's, neophyte's, Acherus knight's, primitive, apprentice's,
+acolyte's, novice's) with the class's weapon, food by race, and a Hearthstone
+and Linen Bag for everyone (`Config.StarterGear`). The last talent of every
+tree teaches a signature spell (Mortal Strike, Holy Shock, Arcane Power and so
+on) that trainers never sell and a talent reset takes back. Quests may require
+a class, a race or a previous quest: each class has a trainer quest for a
+Trainee's weapon, and "Goldtooth's Candles" follows "Vermin Problem".
+
+Mounts carry a saddle and sit the rider; horse legs swing with its speed,
+gryphon wings glide on the ground and flap in the air.
 
 ## Swings, casts, attacking
 

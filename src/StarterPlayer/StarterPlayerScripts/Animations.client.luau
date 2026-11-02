@@ -7,7 +7,8 @@ local player = Players.LocalPlayer
 -- Casting hold a casting pose while set, SpellGo plays the release. Roblox's
 -- own R15 animations are used so nothing needs uploading.
 
-local IDS = { slash = "rbxassetid://522635514", cast = "rbxassetid://507770453", release = "rbxassetid://522638767" }
+local IDS = { slash = "rbxassetid://522635514", cast = "rbxassetid://507770453", release = "rbxassetid://522638767", ride = "rbxassetid://2506281703" }
+local RunService = game:GetService("RunService")
 
 local tracks: { [Model]: { [string]: AnimationTrack } } = {}
 
@@ -27,8 +28,8 @@ local function trackFor(model: Model, name: string): AnimationTrack?
 			return nil
 		end
 		track = loaded
-		track.Priority = Enum.AnimationPriority.Action
-		track.Looped = name == "cast"
+		track.Priority = if name == "ride" then Enum.AnimationPriority.Movement else Enum.AnimationPriority.Action
+		track.Looped = name == "cast" or name == "ride"
 		tracks[model][name] = track
 	end
 	return track
@@ -69,6 +70,19 @@ local function watch(owner: Instance, model: () -> Model?)
 			end
 		end))
 	end
+	-- riding: sit on the mount; wings and legs animate below
+	table.insert(connections, owner:GetAttributeChangedSignal("Mounted"):Connect(function()
+		local m = model()
+		if m then
+			if owner:GetAttribute("Mounted") then
+				task.delay(0.1, function()
+					play(m, "ride")
+				end)
+			else
+				stop(m, "ride")
+			end
+		end
+	end))
 	table.insert(connections, owner:GetAttributeChangedSignal("SpellGo"):Connect(function()
 		local m = model()
 		if m then
@@ -110,3 +124,34 @@ if creatures then
 		watchCreature(model)
 	end
 end
+
+-- Mount motors: wings flap in the air and glide on the ground, legs swing with
+-- the mount's speed. Motor6D transforms are local, so each client animates
+-- every mount it can see the same way.
+local baseC0: { [Motor6D]: CFrame } = {}
+RunService.RenderStepped:Connect(function()
+	local t = os.clock()
+	for _, other in Players:GetPlayers() do
+		local character = other.Character
+		local mount = character and character:FindFirstChild("Mount")
+		if not mount then
+			continue
+		end
+		local root = character:FindFirstChild("HumanoidRootPart")
+		local speed = if root then Vector3.new(root.AssemblyLinearVelocity.X, 0, root.AssemblyLinearVelocity.Z).Magnitude else 0
+		local flying = other:GetAttribute("FlightState") == "air"
+		for _, motor in mount:GetDescendants() do
+			if motor:IsA("Motor6D") and motor.Name == "MountMotor" then
+				baseC0[motor] = baseC0[motor] or motor.C0
+				local kind, side, phase = motor:GetAttribute("Kind"), motor:GetAttribute("Side") or 1, motor:GetAttribute("Phase") or 0
+				if kind == "wing" then
+					local flap = if flying then math.sin(t * 7) * 0.55 elseif speed > 1 then math.sin(t * 3) * 0.15 else -0.25
+					motor.C0 = baseC0[motor] * CFrame.Angles(0, 0, side * flap)
+				elseif kind == "leg" then
+					local swing = if flying then 0.3 else math.sin(t * math.clamp(speed * 0.35, 0, 14) + phase) * math.clamp(speed / 16, 0, 1) * 0.7
+					motor.C0 = baseC0[motor] * CFrame.Angles(swing, 0, 0)
+				end
+			end
+		end
+	end
+end)

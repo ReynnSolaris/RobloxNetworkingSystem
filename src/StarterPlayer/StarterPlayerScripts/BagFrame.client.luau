@@ -57,6 +57,22 @@ local function tile(scope, slot: number)
 	end)
 	local hovered = scope:Value(false)
 	local row, col = (slot - 1) // COLUMNS, (slot - 1) % COLUMNS
+	local function showTip()
+		local s = peek(stack)
+		if s and not Drag.active() then
+			local hint = if peek(vendorShowing) then "Right-click to sell for " .. Ui.money((s.Sell or 0) * (s.Count or 1))
+				elseif s.Slot then "Right-click to equip" elseif s.Use then "Right-click to use" else nil
+			Ui.showItemTip(s, hint)
+		elseif peek(hovered) then
+			Ui.hideTip()
+		end
+	end
+	-- the item under the mouse changed (used, equipped, moved): redraw the tooltip
+	scope:Observer(stack):onChange(function()
+		if peek(hovered) then
+			task.defer(showTip)
+		end
+	end)
 	local button = scope:New "TextButton" {
 		Position = UDim2.fromOffset(12 + col * (TILE + GAP), 12 + row * (TILE + GAP)),
 		Size = UDim2.fromOffset(TILE, TILE),
@@ -77,12 +93,7 @@ local function tile(scope, slot: number)
 		end),
 		[OnEvent "MouseEnter"] = function()
 			hovered:set(true)
-			local s = peek(stack)
-			if s and not Drag.active() then
-				local hint = if peek(vendorShowing) then "Right-click to sell for " .. Ui.money((s.Sell or 0) * (s.Count or 1))
-					elseif s.Slot then "Right-click to equip" elseif s.Use then "Right-click to use" else nil
-				Ui.showTip(Ui.itemTooltip(s) .. (if hint then '\n<font color="#AAAAAA">' .. hint .. "</font>" else ""), Ui.itemBorder(s))
-			end
+			showTip()
 		end,
 		[OnEvent "MouseLeave"] = function()
 			hovered:set(false)
@@ -158,11 +169,71 @@ local tiles = scope:Computed(function(use)
 	return list
 end)
 
+-- equipped bags along the bottom; drop a bag on one to wear it, right-click to take it off
+local equipment = Components.attribute(scope, player, "Equipment", "{}")
+local worn = scope:Computed(function(use)
+	return decode(use(equipment))
+end)
+local function bagTile(scope, index: number)
+	local slotName = Config.BagSlotNames[index]
+	local item = scope:Computed(function(use)
+		return use(worn)[slotName]
+	end)
+	local hovered = scope:Value(false)
+	local button = scope:New "TextButton" {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 12 + (index - 1) * (TILE + GAP), 1, -30),
+		Size = UDim2.fromOffset(TILE, 34),
+		AutoButtonColor = false,
+		BorderSizePixel = 0,
+		BackgroundColor3 = scope:Computed(function(use)
+			return if use(hovered) then Ui.ROW_HOVER else Color3.fromRGB(22, 20, 28)
+		end),
+		Font = Enum.Font.GothamBold,
+		TextSize = 12,
+		TextColor3 = scope:Computed(function(use)
+			local i = use(item)
+			return if i then Color3.fromHex(Ui.quality(i.Quality)) else Color3.fromRGB(70, 70, 80)
+		end),
+		Text = scope:Computed(function(use)
+			local i = use(item)
+			return if i then ("%d slots"):format(i.Container or 0) else "Bag"
+		end),
+		[OnEvent "MouseEnter"] = function()
+			hovered:set(true)
+			local i = peek(item)
+			if i then
+				Ui.showItemTip(i, "Right-click to take off")
+			end
+		end,
+		[OnEvent "MouseLeave"] = function()
+			hovered:set(false)
+			Ui.hideTip()
+		end,
+		[OnEvent "MouseButton2Click"] = function()
+			if peek(item) then
+				netSend:Fire(Opcodes.CMSG_UNEQUIP, { Slot = slotName })
+			end
+		end,
+		[Children] = { scope:New "UICorner" { CornerRadius = UDim.new(0, 4) }, scope:New "UIStroke" { Color = Color3.fromRGB(60, 55, 45) } },
+	}
+	Drag.target(button, function(payload)
+		if payload.Bag and payload.Item and payload.Item.Slot == "bag" then
+			netSend:Fire(Opcodes.CMSG_EQUIP, { Bag = payload.Bag })
+		end
+	end)
+	return button
+end
+local bagTiles = {}
+for index = 1, #Config.BagSlotNames do
+	table.insert(bagTiles, bagTile(scope, index))
+end
+
 Components.Panel(scope, {
 	Name = "BagFrame",
 	Size = scope:Computed(function(use)
 		local rows = math.ceil(use(bagSlots) / COLUMNS)
-		return UDim2.fromOffset(12 * 2 + COLUMNS * TILE + (COLUMNS - 1) * GAP, 36 + 12 * 2 + rows * TILE + (rows - 1) * GAP + 26)
+		return UDim2.fromOffset(12 * 2 + COLUMNS * TILE + (COLUMNS - 1) * GAP, 36 + 12 * 2 + rows * TILE + (rows - 1) * GAP + 26 + 44)
 	end),
 	Position = UDim2.new(1, -170, 0.5, 60),
 	Enabled = open,
@@ -172,6 +243,7 @@ Components.Panel(scope, {
 		scope:ForValues(tiles, function(use, scope, slot)
 			return tile(scope, slot)
 		end),
+		bagTiles,
 		Components.Text(scope, { Size = UDim2.new(1, -24, 0, 20), Position = UDim2.new(0, 12, 1, -24), Color = Ui.GOLD, Align = Enum.TextXAlignment.Right, Text = scope:Computed(function(use)
 			return Ui.money(use(money))
 		end) }),

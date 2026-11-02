@@ -7,7 +7,7 @@ local module = {}
 
 -- quest_template: { id, title, details, objectives, minlevel, level, reward_xp,
 -- reward_money, reward_items = { { entry, count } }, req_creature = { { entry, count } },
--- req_item = { { entry, count } } }. creature_queststarter / creature_questender:
+-- req_item = { { entry, count } }, class?, race?, prevquest? (a chain), reward_rep? }. creature_queststarter / creature_questender:
 -- { id, entry (creature), quest }. A character's quest state lives on its record:
 -- Quests = { [questId] = { Status = active|complete, Kills = { [entry] = n } } },
 -- Done = { [questId] = true }.
@@ -32,7 +32,36 @@ local SEED = {
 		req_item = { { item = "Linen Cloth", count = 3 } },
 		starter = "Innkeeper", ender = "Innkeeper",
 	},
+	{
+		title = "Goldtooth's Candles",
+		details = "The kobolds you thinned answer to a chieftain called Goldtooth, who hoards every candle in the valley. Put him down before the rest rally to him.",
+		objectives = "Slay Goldtooth and return to the Town Guard.",
+		minlevel = 4, level = 6, reward_xp = 600, reward_money = 500, prevquest = "Vermin Problem",
+		reward_items = { { item = "Kobold Candle Pendant", count = 1 } },
+		req_creature = { { creature = "Goldtooth", count = 1 } },
+		starter = "Town Guard", ender = "Town Guard",
+	},
 }
+-- one per class from the class trainer: prove yourself on the kobolds, take a weapon
+local CLASS_QUESTS = {
+	Warrior = { title = "The Way of Arms", weapon = "Trainee's Broadsword" }, Paladin = { title = "The Light's Charge", weapon = "Trainee's Hammer" },
+	Hunter = { title = "Etched Sigil", weapon = "Trainee's Bow" }, Rogue = { title = "Encrypted Letter", weapon = "Trainee's Dirk" },
+	Priest = { title = "Hallowed Scroll", weapon = "Trainee's Holy Staff" }, ["Death Knight"] = { title = "In Service of the Lich King", weapon = "Trainee's Runeblade" },
+	Shaman = { title = "Call of Earth", weapon = "Trainee's Totem Mace" }, Mage = { title = "Glyphic Letter", weapon = "Trainee's Arcane Staff" },
+	Warlock = { title = "Tainted Scroll", weapon = "Trainee's Shadow Staff" }, Druid = { title = "Verdant Note", weapon = "Trainee's Wild Staff" },
+}
+for class, info in CLASS_QUESTS do
+	table.insert(SEED, {
+		title = info.title, class = class,
+		details = ("Your trainer wants proof that a %s of Northshire can hold their own. Kobolds will do; bring back three of their candles as well."):format(class),
+		objectives = "Slay 4 Kobold Vermin and collect 3 Linen Cloth, then return to the Class Trainer.",
+		minlevel = 2, level = 3, reward_xp = 250, reward_money = 100,
+		reward_items = { { item = info.weapon, count = 1 } },
+		req_creature = { { creature = "Kobold Vermin", count = 4 } },
+		req_item = { { item = "Linen Cloth", count = 3 } },
+		starter = "Class Trainer", ender = "Class Trainer",
+	})
+end
 
 function module:DB()
 	return self.includes.Database["WorldDB.h"]
@@ -75,6 +104,20 @@ local function endersOf(self, entry)
 		end
 	end
 	return out
+end
+
+-- May this character take the quest: level, class, race and the quest before it.
+function module:Eligible(c, template): boolean
+	if (c.Level or 1) < (template.minlevel or 1) then
+		return false
+	elseif template.class and template.class ~= c.Class then
+		return false
+	elseif template.race and template.race ~= c.Race then
+		return false
+	elseif template.prevquest and not (c.Done or {})[tostring(template.prevquest)] then
+		return false
+	end
+	return true
 end
 
 function module:IsQuestgiver(entry): boolean
@@ -126,7 +169,7 @@ function module:StatusFor(player: Player, entry): string?
 	end
 	for _, id in startersOf(self, entry) do
 		local template = self:Template(id)
-		if template and not c.Quests[tostring(id)] and not c.Done[tostring(id)] and level >= (template.minlevel or 1) then
+		if template and not c.Quests[tostring(id)] and not c.Done[tostring(id)] and self:Eligible(c, template) then
 			return "available"
 		end
 	end
@@ -283,7 +326,7 @@ function module:Hello(player: Player, guid, options)
 	end
 	for _, id in startersOf(self, entry) do
 		local template = self:Template(id)
-		if template and not c.Quests[tostring(id)] and not c.Done[tostring(id)] and (c.Level or 1) >= (template.minlevel or 1) then
+		if template and not c.Quests[tostring(id)] and not c.Done[tostring(id)] and self:Eligible(c, template) then
 			table.insert(list, { Id = id, Title = template.title, Status = "available" })
 		end
 	end
@@ -310,7 +353,7 @@ function module:Accept(player: Player, guid, id)
 	if not c or not template or not creature or not table.find(startersOf(self, creature.Row.id), template.id) then
 		return
 	end
-	if c.Quests[tostring(id)] or c.Done[tostring(id)] then
+	if c.Quests[tostring(id)] or c.Done[tostring(id)] or not self:Eligible(c, template) then
 		return
 	end
 	local count = 0
@@ -436,8 +479,12 @@ end
 
 function module:Start()
 	local DB = self:DB()
-	if #DB:Select("quest_template") == 0 then
-		local creatures, items = {}, {}
+	local byTitle = {}
+	for _, row in DB:Select("quest_template") do
+		byTitle[row.title] = row
+	end
+	local creatures, items = {}, {}
+	if true then
 		for _, row in DB:Select("creature_template") do
 			creatures[row.name] = row.entry
 		end
@@ -445,8 +492,12 @@ function module:Start()
 			items[row.name] = row.entry
 		end
 		for _, seed in SEED do
+			if byTitle[seed.title] then
+				continue
+			end
 			local quest = { title = seed.title, details = seed.details, objectives = seed.objectives, minlevel = seed.minlevel, level = seed.level,
-				reward_xp = seed.reward_xp, reward_money = seed.reward_money, reward_items = {}, req_creature = {}, req_item = {} }
+				reward_xp = seed.reward_xp, reward_money = seed.reward_money, reward_items = {}, req_creature = {}, req_item = {}, class = seed.class, race = seed.race,
+				prevquest = seed.prevquest and byTitle[seed.prevquest] and byTitle[seed.prevquest].id }
 			for _, r in (seed.reward_items or {}) do
 				if items[r.item] then table.insert(quest.reward_items, { entry = items[r.item], count = r.count }) end
 			end
@@ -457,6 +508,7 @@ function module:Start()
 				if items[r.item] then table.insert(quest.req_item, { entry = items[r.item], count = r.count }) end
 			end
 			quest = DB:Insert("quest_template", quest)
+			byTitle[quest.title] = quest
 			if creatures[seed.starter] then
 				DB:Insert("creature_queststarter", { entry = creatures[seed.starter], quest = quest.id })
 			end

@@ -64,7 +64,7 @@ local function tile(scope, slot: number)
 		[OnEvent "MouseEnter"] = function()
 			local s = peek(stack)
 			if s and not Drag.active() then
-				Ui.showTip(Ui.itemTooltip(s) .. (if peek(data).CanWithdraw then '\n<font color="#AAAAAA">Right-click to withdraw</font>' else ""), Ui.itemBorder(s))
+				Ui.showItemTip(s, if peek(data).CanWithdraw then "Right-click to withdraw" else nil)
 			end
 		end,
 		[OnEvent "MouseLeave"] = Ui.hideTip,

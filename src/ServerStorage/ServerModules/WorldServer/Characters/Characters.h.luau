@@ -145,7 +145,12 @@ function module:StarterGear(player: Player)
 		return
 	end
 	c.Starter = nil
-	local list = Config.StarterGear[c.Class] or Config.StarterGear.Default
+	local list = {}
+	for _, group in { Config.StarterGear.Class[c.Class] or {}, Config.StarterGear.Race[c.Race] or {}, Config.StarterGear.Everyone } do
+		for _, entry in group do
+			table.insert(list, entry)
+		end
+	end
 	for _, entry in list do
 		local item = Items:ByName(entry[1])
 		if item and Entities:AddItem(player, item.entry, entry[2] or 1, true) then

@@ -519,6 +519,16 @@ function module:Equip(player: Player, slot: number): (boolean, string?)
 		if not slotName then
 			return false, "All your bag slots are full."
 		end
+	elseif Config.PairedSlots[slotName] then
+		-- rings and trinkets: the first empty of the pair, else the first
+		local pair = Config.PairedSlots[slotName]
+		slotName = pair[1]
+		for _, name in pair do
+			if not char.Equipment[name] then
+				slotName = name
+				break
+			end
+		end
 	end
 	local previous = char.Equipment[slotName]
 	if previous and item.container then
@@ -843,7 +853,8 @@ function module:Mount(player: Player, on: boolean, fly: boolean?)
 	end
 	local mount = Instance.new("Model")
 	mount.Name = "Mount"
-	local function part(name, size, offset, color, shape)
+	-- parts weld to the root; wings and legs hang on Motor6Ds the clients animate
+	local function part(name, size, offset, color, parent, motor)
 		local p = Instance.new("Part")
 		p.Name = name
 		p.Size = size
@@ -851,40 +862,55 @@ function module:Mount(player: Player, on: boolean, fly: boolean?)
 		p.Material = Enum.Material.SmoothPlastic
 		p.CanCollide = false
 		p.Massless = true
-		if shape then
-			p.Shape = shape
-		end
 		p.CFrame = root.CFrame * offset
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0, weld.Part1 = root, p
-		weld.Parent = p
+		if motor then
+			local m = Instance.new("Motor6D")
+			m.Name = "MountMotor"
+			m.Part0, m.Part1 = parent, p
+			m.C0 = parent.CFrame:ToObjectSpace(root.CFrame * motor.pivot)
+			m.C1 = p.CFrame:ToObjectSpace(root.CFrame * motor.pivot)
+			m:SetAttribute("Kind", motor.kind)
+			m:SetAttribute("Side", motor.side)
+			m:SetAttribute("Phase", motor.phase or 0)
+			m.Parent = p
+		else
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0, weld.Part1 = parent, p
+			weld.Parent = p
+		end
 		p.Parent = mount
 		return p
 	end
+	local leather = Color3.fromRGB(70, 45, 28)
 	if fly then
 		local feather, gold = Color3.fromRGB(230, 232, 240), Color3.fromRGB(214, 170, 70)
-		part("Body", Vector3.new(2.4, 2, 5.5), CFrame.new(0, -2.6, 0.3), feather)
-		part("Neck", Vector3.new(1.4, 2.2, 1.4), CFrame.new(0, -1.3, -2.8) * CFrame.Angles(math.rad(-25), 0, 0), feather)
-		part("Head", Vector3.new(1.3, 1.2, 1.8), CFrame.new(0, -0.3, -3.9), feather)
-		part("Beak", Vector3.new(0.5, 0.5, 0.9), CFrame.new(0, -0.5, -5.1), gold)
-		part("Tail", Vector3.new(1.6, 0.3, 2.2), CFrame.new(0, -2.4, 3.9), feather)
+		local body = part("Body", Vector3.new(2.4, 2, 5.5), CFrame.new(0, -2.6, 0.3), feather, root)
+		part("Saddle", Vector3.new(2.6, 0.5, 2.2), CFrame.new(0, -1.5, 0), leather, body)
+		part("Neck", Vector3.new(1.4, 2.2, 1.4), CFrame.new(0, -1.3, -2.8) * CFrame.Angles(math.rad(-25), 0, 0), feather, body)
+		part("Head", Vector3.new(1.3, 1.2, 1.8), CFrame.new(0, -0.3, -3.9), feather, body)
+		part("Beak", Vector3.new(0.5, 0.5, 0.9), CFrame.new(0, -0.5, -5.1), gold, body)
+		part("Tail", Vector3.new(1.6, 0.3, 2.2), CFrame.new(0, -2.4, 3.9), feather, body)
 		for _, side in { -1, 1 } do
-			part("Wing", Vector3.new(5, 0.3, 3), CFrame.new(side * 3.6, -1.6, 0) * CFrame.Angles(0, 0, side * math.rad(18)), feather)
-			part("WingTip", Vector3.new(2.4, 0.25, 2), CFrame.new(side * 7, -0.6, 0.3) * CFrame.Angles(0, 0, side * math.rad(32)), feather)
-			for _, z in { -1.8, 1.8 } do
-				part("Leg", Vector3.new(0.6, 2.4, 0.6), CFrame.new(side * 0.8, -4.7, z), gold)
+			local wing = part("Wing", Vector3.new(5, 0.3, 3), CFrame.new(side * 3.6, -1.6, 0) * CFrame.Angles(0, 0, side * math.rad(18)), feather, body,
+				{ kind = "wing", side = side, pivot = CFrame.new(side * 1.2, -1.6, 0) })
+			part("WingTip", Vector3.new(2.4, 0.25, 2), CFrame.new(side * 7, -0.6, 0.3) * CFrame.Angles(0, 0, side * math.rad(32)), feather, wing)
+			for i, z in { -1.8, 1.8 } do
+				part("Leg", Vector3.new(0.6, 2.4, 0.6), CFrame.new(side * 0.8, -4.7, z), gold, body,
+					{ kind = "leg", side = side, phase = if (i == 1) == (side == 1) then 0 else math.pi, pivot = CFrame.new(side * 0.8, -3.6, z) })
 			end
 		end
 	else
 		local brown, dark = Color3.fromRGB(96, 62, 36), Color3.fromRGB(40, 28, 18)
-		part("Body", Vector3.new(2.2, 2, 5), CFrame.new(0, -2.6, 0), brown)
-		part("Neck", Vector3.new(1.2, 2.4, 1.2), CFrame.new(0, -1.4, -2.8) * CFrame.Angles(math.rad(-30), 0, 0), brown)
-		part("Head", Vector3.new(1.1, 1.1, 2), CFrame.new(0, -0.4, -3.9), brown)
-		part("Mane", Vector3.new(0.4, 1.6, 1.6), CFrame.new(0, -0.8, -2.6), dark)
-		part("Tail", Vector3.new(0.5, 2, 0.5), CFrame.new(0, -3, 2.8) * CFrame.Angles(math.rad(25), 0, 0), dark)
+		local body = part("Body", Vector3.new(2.2, 2, 5), CFrame.new(0, -2.6, 0), brown, root)
+		part("Saddle", Vector3.new(2.4, 0.5, 2), CFrame.new(0, -1.5, 0), leather, body)
+		part("Neck", Vector3.new(1.2, 2.4, 1.2), CFrame.new(0, -1.4, -2.8) * CFrame.Angles(math.rad(-30), 0, 0), brown, body)
+		part("Head", Vector3.new(1.1, 1.1, 2), CFrame.new(0, -0.4, -3.9), brown, body)
+		part("Mane", Vector3.new(0.4, 1.6, 1.6), CFrame.new(0, -0.8, -2.6), dark, body)
+		part("Tail", Vector3.new(0.5, 2, 0.5), CFrame.new(0, -3, 2.8) * CFrame.Angles(math.rad(25), 0, 0), dark, body)
 		for _, x in { -0.75, 0.75 } do
-			for _, z in { -1.8, 1.8 } do
-				part("Leg", Vector3.new(0.6, 2.6, 0.6), CFrame.new(x, -4.8, z), dark)
+			for i, z in { -1.8, 1.8 } do
+				part("Leg", Vector3.new(0.6, 2.6, 0.6), CFrame.new(x, -4.8, z), dark, body,
+					{ kind = "leg", side = if x < 0 then -1 else 1, phase = if (i == 1) == (x > 0) then 0 else math.pi, pivot = CFrame.new(x, -3.6, z) })
 			end
 		end
 	end

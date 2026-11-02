@@ -106,6 +106,37 @@ local SEED = {
 	hot("Druid", "Rejuvenation", 5, 1, 20, 3, 12, "RJ", "Heals the target over 12 sec."),
 	stat("Druid", "Mark of the Wild", "nature", "Armor", 2, 1, 25, 1800, "MW", "Increases the friendly target's armor for 30 min."),
 	dot("Druid", "Moonfire", "arcane", 3, 1, 15, 0, 30, 3, 12, "MF", "Burns the enemy with arcane energy over 12 sec."),
+	-- signature spells taught by the last talent of each tree (talent = true keeps trainers from selling them)
+	dmg("Warrior", "Mortal Strike", "physical", 18, 4, 20, 0, 6, 8, "MS", "A vicious strike that deals heavy damage."),
+	dmg("Warrior", "Bloodthirst", "physical", 16, 4, 20, 0, 4, 8, "BT", "Instantly attack the target, fuelled by rage."),
+	dmg("Warrior", "Shield Slam", "physical", 14, 3, 15, 0, 6, 8, "SL", "Slam the target with your shield."),
+	dmg("Paladin", "Holy Shock", "holy", 16, 4, 25, 0, 6, 20, "HK", "Blasts the target with holy energy."),
+	stat("Paladin", "Holy Shield", "holy", "Armor", 6, 2, 20, 10, "HD", "Shields you with holy power, increasing armor for 10 sec."),
+	stun("Paladin", "Repentance", "holy", 6, 20, 60, 20, "RP", "Puts the enemy target in a state of meditation, stunning it for 6 sec."),
+	stat("Hunter", "Bestial Wrath", "nature", "Damage", 6, 2, 20, 18, "BW", "Sends you and your pet into a rage, increasing damage for 18 sec."),
+	stat("Hunter", "Trueshot Aura", "physical", "Agility", 6, 2, 20, 1800, "TS", "Increases your Agility for 30 min."),
+	stat("Hunter", "Lightning Reflexes", "physical", "Agility", 4, 2, 20, 600, "LR", "Sharpens your reflexes, increasing Agility for 10 min."),
+	stat("Rogue", "Cold Blood", "physical", "Damage", 8, 2, 15, 12, "CB", "Chills your blood, increasing damage for 12 sec."),
+	speed("Rogue", "Adrenaline Rush", 1.4, 15, 20, 120, "AR", "Increases your speed for 15 sec."),
+	stat("Rogue", "Preparation", "physical", "Stamina", 6, 2, 20, 600, "PR", "Prepares you for battle, increasing Stamina for 10 min."),
+	stat("Priest", "Power Infusion", "holy", "SpellPower", 8, 3, 30, 15, "PI", "Infuses the target with power, increasing spell power for 15 sec."),
+	heal("Priest", "Circle of Healing", 30, 7, 40, 0, "CH", "Heals the target instantly."),
+	stat("Priest", "Shadowform", "shadow", "SpellPower", 6, 2, 25, 1800, "SF", "Assume a shadowy form, increasing spell power for 30 min."),
+	stat("Death Knight", "Dancing Rune Weapon", "shadow", "Damage", 8, 2, 20, 12, "DR", "Summons the power of a rune weapon, increasing damage for 12 sec."),
+	dmg("Death Knight", "Howling Blast", "frost", 18, 4, 25, 0, 8, 20, "HB", "Blast the target with a frigid wind."),
+	dmg("Death Knight", "Summon Gargoyle", "shadow", 20, 5, 30, 0, 30, 30, "SG", "Calls a gargoyle's strike down upon the target."),
+	stat("Shaman", "Elemental Mastery", "nature", "SpellPower", 8, 3, 25, 15, "EM", "Increases spell power for 15 sec."),
+	dmg("Shaman", "Stormstrike", "nature", 16, 4, 20, 0, 8, 8, "SK", "Instantly strike with the fury of the storm."),
+	stat("Shaman", "Mana Tide", "nature", "Intellect", 8, 2, 20, 12, "MT", "Raises a tide of mana, increasing Intellect for 12 sec."),
+	stat("Mage", "Arcane Power", "arcane", "SpellPower", 10, 3, 30, 15, "AP", "Increases spell power for 15 sec."),
+	dmg("Mage", "Combustion", "fire", 20, 5, 30, 0, 30, 30, "CM", "Engulfs the target in flame."),
+	stat("Mage", "Ice Barrier", "frost", "Armor", 10, 3, 25, 30, "IB", "Shields you in ice, increasing armor for 30 sec."),
+	dot("Warlock", "Unstable Affliction", "shadow", 6, 2, 25, 0, 30, 3, 15, "UA", "Shadow energy slowly destroys the target over 15 sec."),
+	stat("Warlock", "Demonic Sacrifice", "shadow", "Intellect", 8, 2, 20, 1800, "DS", "Sacrifices demonic power, increasing Intellect for 30 min."),
+	dmg("Warlock", "Conflagrate", "fire", 20, 5, 30, 0, 10, 30, "CF", "Ignites the target."),
+	stat("Druid", "Moonkin Form", "arcane", "SpellPower", 6, 2, 25, 1800, "MK", "Take the form of a moonkin, increasing spell power for 30 min."),
+	stat("Druid", "Heart of the Wild", "nature", "Stamina", 6, 2, 20, 1800, "HW", "Increases Stamina for 30 min."),
+	stat("Druid", "Tree of Life", "nature", "SpellPower", 6, 2, 25, 1800, "TL", "Take the form of a tree, increasing spell power for 30 min."),
 	-- item spells: no class, never trained
 	{ name = "Hearthstone", school = "arcane", effect = "hearth", cost = 0, cast_time = 10, cooldown = 60, range = 0, target = "self", icon = "HS", description = "Returns you to your home. Speak to an innkeeper to change your home." },
 	{ name = "Food", school = "physical", effect = "heal", base = 15, per_level = 3, cost = 0, cast_time = 0, cooldown = 5, range = 0, target = "self", icon = "FD", description = "Restores health." },
@@ -119,6 +150,17 @@ local SEED = {
 	{ name = "Fire Blast", npc = true, school = "fire", effect = "damage", target = "enemy", base = 6, per_level = 2, cost = 0, cast_time = 1.5, cooldown = 6, range = 25, icon = "FB", description = "Blasts the target with fire." },
 	{ name = "Firebolt", npc = true, school = "fire", effect = "damage", target = "enemy", base = 5, per_level = 1, cost = 0, cast_time = 1.5, cooldown = 4, range = 25, icon = "FI", description = "Hurls a bolt of fire." },
 }
+
+-- taught by talents, not trainers
+local TALENT_SPELLS = { "Mortal Strike", "Bloodthirst", "Shield Slam", "Holy Shock", "Holy Shield", "Repentance", "Bestial Wrath", "Trueshot Aura", "Lightning Reflexes",
+	"Cold Blood", "Adrenaline Rush", "Preparation", "Power Infusion", "Circle of Healing", "Shadowform", "Dancing Rune Weapon", "Howling Blast", "Summon Gargoyle",
+	"Elemental Mastery", "Stormstrike", "Mana Tide", "Arcane Power", "Combustion", "Ice Barrier", "Unstable Affliction", "Demonic Sacrifice", "Conflagrate",
+	"Moonkin Form", "Heart of the Wild", "Tree of Life" }
+for _, row in SEED do
+	if table.find(TALENT_SPELLS, row.name) then
+		row.talent = true
+	end
+end
 
 function module:DB()
 	return self.includes.Database["WorldDB.h"]
@@ -654,7 +696,7 @@ function module:Start()
 			row.starter = nil
 			byName[seed.name] = DB:Insert("spell_template", row)
 			-- new class spells reach old databases through the trainer
-			if not fresh and trainer and seed.class and not seed.starter then
+			if not fresh and trainer and seed.class and not seed.starter and not seed.talent then
 				DB:Insert("npc_trainer", { entry = trainer.entry, spell = byName[seed.name].id, cost = 100, reqlevel = 2 })
 			end
 		end
@@ -664,7 +706,7 @@ function module:Start()
 			local spell = byName[seed.name]
 			if seed.starter then
 				DB:Insert("playercreateinfo_spell", { class = seed.class, spell = spell.id })
-			elseif trainer and seed.class then
+			elseif trainer and seed.class and not seed.talent then
 				DB:Insert("npc_trainer", { entry = trainer.entry, spell = spell.id, cost = 100, reqlevel = 2 })
 			end
 		end

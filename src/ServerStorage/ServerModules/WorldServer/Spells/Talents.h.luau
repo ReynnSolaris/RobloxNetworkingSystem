@@ -23,57 +23,59 @@ local function pct(stat, value) return { kind = "pct", stat = stat, value = valu
 local function flat(stat, value) return { kind = "flat", stat = stat, value = value } end
 local function school(name, value) return { kind = "school", school = name, value = value } end
 local function rating(stat, value) return { kind = "rating", stat = stat, value = value } end
+-- the last tier of every tree teaches the spell named after the talent
+local function grant(name) return { kind = "spell", spell = name, value = 0 } end
 
 local TREES = {
 	Warrior = {
-		{ { "Deflection", rating("Dodge", 1) }, { "Improved Heroic Strike", pct("Damage", 2) }, { "Tactical Mastery", pct("Strength", 2) }, { "Deep Wounds", school("physical", 3) }, { "Mortal Strike", pct("Damage", 5) } },
-		{ { "Cruelty", rating("Crit", 1) }, { "Unbridled Wrath", pct("Strength", 2) }, { "Enrage", school("physical", 3) }, { "Flurry", rating("Crit", 2) }, { "Bloodthirst", pct("Damage", 5) } },
-		{ { "Shield Specialization", pct("Armor", 3) }, { "Anticipation", rating("Dodge", 1) }, { "Toughness", pct("Armor", 4) }, { "Last Stand", pct("Health", 3) }, { "Shield Slam", pct("Stamina", 4) } },
+		{ { "Deflection", rating("Dodge", 1) }, { "Improved Heroic Strike", pct("Damage", 2) }, { "Tactical Mastery", pct("Strength", 2) }, { "Deep Wounds", school("physical", 3) }, { "Mortal Strike", grant("Mortal Strike") } },
+		{ { "Cruelty", rating("Crit", 1) }, { "Unbridled Wrath", pct("Strength", 2) }, { "Enrage", school("physical", 3) }, { "Flurry", rating("Crit", 2) }, { "Bloodthirst", grant("Bloodthirst") } },
+		{ { "Shield Specialization", pct("Armor", 3) }, { "Anticipation", rating("Dodge", 1) }, { "Toughness", pct("Armor", 4) }, { "Last Stand", pct("Health", 3) }, { "Shield Slam", grant("Shield Slam") } },
 	},
 	Paladin = {
-		{ { "Divine Strength", pct("Strength", 2) }, { "Divine Intellect", pct("Intellect", 2) }, { "Healing Light", pct("SpellPower", 3) }, { "Illumination", pct("Spirit", 3) }, { "Holy Shock", school("holy", 5) } },
-		{ { "Redoubt", pct("Armor", 3) }, { "Toughness", pct("Stamina", 2) }, { "Anticipation", rating("Dodge", 1) }, { "Sacred Duty", pct("Health", 3) }, { "Holy Shield", pct("Armor", 5) } },
-		{ { "Benediction", pct("Damage", 2) }, { "Conviction", rating("Crit", 1) }, { "Seal of Command", school("holy", 3) }, { "Vengeance", pct("Damage", 3) }, { "Repentance", school("holy", 5) } },
+		{ { "Divine Strength", pct("Strength", 2) }, { "Divine Intellect", pct("Intellect", 2) }, { "Healing Light", pct("SpellPower", 3) }, { "Illumination", pct("Spirit", 3) }, { "Holy Shock", grant("Holy Shock") } },
+		{ { "Redoubt", pct("Armor", 3) }, { "Toughness", pct("Stamina", 2) }, { "Anticipation", rating("Dodge", 1) }, { "Sacred Duty", pct("Health", 3) }, { "Holy Shield", grant("Holy Shield") } },
+		{ { "Benediction", pct("Damage", 2) }, { "Conviction", rating("Crit", 1) }, { "Seal of Command", school("holy", 3) }, { "Vengeance", pct("Damage", 3) }, { "Repentance", grant("Repentance") } },
 	},
 	Hunter = {
-		{ { "Endurance Training", pct("Health", 2) }, { "Thick Hide", pct("Armor", 3) }, { "Unleashed Fury", pct("Damage", 2) }, { "Ferocity", rating("Crit", 1) }, { "Bestial Wrath", pct("Agility", 4) } },
-		{ { "Lethal Shots", rating("Crit", 1) }, { "Efficiency", pct("Intellect", 2) }, { "Mortal Shots", school("arcane", 3) }, { "Ranged Weapon Specialization", pct("Damage", 3) }, { "Trueshot Aura", pct("Agility", 5) } },
-		{ { "Monster Slaying", school("physical", 2) }, { "Deflection", rating("Dodge", 1) }, { "Survivalist", pct("Health", 3) }, { "Killer Instinct", rating("Crit", 2) }, { "Lightning Reflexes", pct("Agility", 5) } },
+		{ { "Endurance Training", pct("Health", 2) }, { "Thick Hide", pct("Armor", 3) }, { "Unleashed Fury", pct("Damage", 2) }, { "Ferocity", rating("Crit", 1) }, { "Bestial Wrath", grant("Bestial Wrath") } },
+		{ { "Lethal Shots", rating("Crit", 1) }, { "Efficiency", pct("Intellect", 2) }, { "Mortal Shots", school("arcane", 3) }, { "Ranged Weapon Specialization", pct("Damage", 3) }, { "Trueshot Aura", grant("Trueshot Aura") } },
+		{ { "Monster Slaying", school("physical", 2) }, { "Deflection", rating("Dodge", 1) }, { "Survivalist", pct("Health", 3) }, { "Killer Instinct", rating("Crit", 2) }, { "Lightning Reflexes", grant("Lightning Reflexes") } },
 	},
 	Rogue = {
-		{ { "Malice", rating("Crit", 1) }, { "Ruthlessness", pct("Damage", 2) }, { "Lethality", school("physical", 3) }, { "Vile Poisons", pct("Agility", 3) }, { "Cold Blood", rating("Crit", 3) } },
-		{ { "Lightning Reflexes", rating("Dodge", 1) }, { "Precision", pct("Damage", 2) }, { "Dual Wield Specialization", school("physical", 3) }, { "Blade Flurry", pct("Agility", 3) }, { "Adrenaline Rush", pct("Damage", 5) } },
-		{ { "Master of Deception", pct("Agility", 2) }, { "Camouflage", rating("Dodge", 1) }, { "Elusiveness", pct("Health", 3) }, { "Ghostly Strike", rating("Dodge", 2) }, { "Preparation", pct("Stamina", 4) } },
+		{ { "Malice", rating("Crit", 1) }, { "Ruthlessness", pct("Damage", 2) }, { "Lethality", school("physical", 3) }, { "Vile Poisons", pct("Agility", 3) }, { "Cold Blood", grant("Cold Blood") } },
+		{ { "Lightning Reflexes", rating("Dodge", 1) }, { "Precision", pct("Damage", 2) }, { "Dual Wield Specialization", school("physical", 3) }, { "Blade Flurry", pct("Agility", 3) }, { "Adrenaline Rush", grant("Adrenaline Rush") } },
+		{ { "Master of Deception", pct("Agility", 2) }, { "Camouflage", rating("Dodge", 1) }, { "Elusiveness", pct("Health", 3) }, { "Ghostly Strike", rating("Dodge", 2) }, { "Preparation", grant("Preparation") } },
 	},
 	Priest = {
-		{ { "Unbreakable Will", pct("Stamina", 2) }, { "Silent Resolve", pct("Spirit", 2) }, { "Improved Power Word: Fortitude", pct("Health", 3) }, { "Mental Strength", pct("Intellect", 3) }, { "Power Infusion", pct("SpellPower", 5) } },
-		{ { "Healing Focus", pct("SpellPower", 2) }, { "Spiritual Healing", pct("Spirit", 3) }, { "Holy Specialization", school("holy", 3) }, { "Spiritual Guidance", pct("SpellPower", 3) }, { "Circle of Healing", school("holy", 5) } },
-		{ { "Spirit Tap", pct("Spirit", 2) }, { "Blackout", school("shadow", 2) }, { "Shadow Focus", pct("Intellect", 3) }, { "Darkness", school("shadow", 4) }, { "Shadowform", school("shadow", 6) } },
+		{ { "Unbreakable Will", pct("Stamina", 2) }, { "Silent Resolve", pct("Spirit", 2) }, { "Improved Power Word: Fortitude", pct("Health", 3) }, { "Mental Strength", pct("Intellect", 3) }, { "Power Infusion", grant("Power Infusion") } },
+		{ { "Healing Focus", pct("SpellPower", 2) }, { "Spiritual Healing", pct("Spirit", 3) }, { "Holy Specialization", school("holy", 3) }, { "Spiritual Guidance", pct("SpellPower", 3) }, { "Circle of Healing", grant("Circle of Healing") } },
+		{ { "Spirit Tap", pct("Spirit", 2) }, { "Blackout", school("shadow", 2) }, { "Shadow Focus", pct("Intellect", 3) }, { "Darkness", school("shadow", 4) }, { "Shadowform", grant("Shadowform") } },
 	},
 	["Death Knight"] = {
-		{ { "Butchery", pct("Strength", 2) }, { "Blade Barrier", pct("Armor", 3) }, { "Bladed Armor", pct("Damage", 2) }, { "Veteran of the Third War", pct("Stamina", 3) }, { "Dancing Rune Weapon", pct("Damage", 5) } },
-		{ { "Improved Icy Touch", school("frost", 3) }, { "Toughness", pct("Armor", 3) }, { "Black Ice", school("frost", 3) }, { "Killing Machine", rating("Crit", 2) }, { "Howling Blast", school("frost", 5) } },
-		{ { "Vicious Strikes", rating("Crit", 1) }, { "Virulence", school("shadow", 3) }, { "Anticipation", rating("Dodge", 1) }, { "Necrosis", school("shadow", 3) }, { "Summon Gargoyle", pct("Damage", 5) } },
+		{ { "Butchery", pct("Strength", 2) }, { "Blade Barrier", pct("Armor", 3) }, { "Bladed Armor", pct("Damage", 2) }, { "Veteran of the Third War", pct("Stamina", 3) }, { "Dancing Rune Weapon", grant("Dancing Rune Weapon") } },
+		{ { "Improved Icy Touch", school("frost", 3) }, { "Toughness", pct("Armor", 3) }, { "Black Ice", school("frost", 3) }, { "Killing Machine", rating("Crit", 2) }, { "Howling Blast", grant("Howling Blast") } },
+		{ { "Vicious Strikes", rating("Crit", 1) }, { "Virulence", school("shadow", 3) }, { "Anticipation", rating("Dodge", 1) }, { "Necrosis", school("shadow", 3) }, { "Summon Gargoyle", grant("Summon Gargoyle") } },
 	},
 	Shaman = {
-		{ { "Convection", pct("Intellect", 2) }, { "Concussion", school("nature", 3) }, { "Call of Flame", school("fire", 3) }, { "Elemental Fury", rating("Crit", 2) }, { "Elemental Mastery", pct("SpellPower", 5) } },
-		{ { "Ancestral Knowledge", pct("Intellect", 2) }, { "Thundering Strikes", rating("Crit", 1) }, { "Improved Weapon Totems", pct("Damage", 3) }, { "Flurry", pct("Strength", 3) }, { "Stormstrike", pct("Damage", 5) } },
-		{ { "Improved Healing Wave", pct("SpellPower", 2) }, { "Tidal Focus", pct("Spirit", 2) }, { "Totemic Focus", pct("Health", 3) }, { "Nature's Guidance", pct("SpellPower", 3) }, { "Mana Tide", pct("Intellect", 5) } },
+		{ { "Convection", pct("Intellect", 2) }, { "Concussion", school("nature", 3) }, { "Call of Flame", school("fire", 3) }, { "Elemental Fury", rating("Crit", 2) }, { "Elemental Mastery", grant("Elemental Mastery") } },
+		{ { "Ancestral Knowledge", pct("Intellect", 2) }, { "Thundering Strikes", rating("Crit", 1) }, { "Improved Weapon Totems", pct("Damage", 3) }, { "Flurry", pct("Strength", 3) }, { "Stormstrike", grant("Stormstrike") } },
+		{ { "Improved Healing Wave", pct("SpellPower", 2) }, { "Tidal Focus", pct("Spirit", 2) }, { "Totemic Focus", pct("Health", 3) }, { "Nature's Guidance", pct("SpellPower", 3) }, { "Mana Tide", grant("Mana Tide") } },
 	},
 	Mage = {
-		{ { "Arcane Subtlety", pct("Intellect", 2) }, { "Arcane Focus", school("arcane", 3) }, { "Arcane Concentration", pct("Spirit", 3) }, { "Arcane Mind", pct("Intellect", 3) }, { "Arcane Power", pct("SpellPower", 5) } },
-		{ { "Improved Fireball", school("fire", 2) }, { "Ignite", school("fire", 3) }, { "Incinerate", rating("Crit", 2) }, { "Fire Power", school("fire", 4) }, { "Combustion", rating("Crit", 3) } },
-		{ { "Frost Warding", pct("Armor", 3) }, { "Elemental Precision", school("frost", 3) }, { "Ice Shards", rating("Crit", 2) }, { "Piercing Ice", school("frost", 4) }, { "Ice Barrier", pct("Health", 4) } },
+		{ { "Arcane Subtlety", pct("Intellect", 2) }, { "Arcane Focus", school("arcane", 3) }, { "Arcane Concentration", pct("Spirit", 3) }, { "Arcane Mind", pct("Intellect", 3) }, { "Arcane Power", grant("Arcane Power") } },
+		{ { "Improved Fireball", school("fire", 2) }, { "Ignite", school("fire", 3) }, { "Incinerate", rating("Crit", 2) }, { "Fire Power", school("fire", 4) }, { "Combustion", grant("Combustion") } },
+		{ { "Frost Warding", pct("Armor", 3) }, { "Elemental Precision", school("frost", 3) }, { "Ice Shards", rating("Crit", 2) }, { "Piercing Ice", school("frost", 4) }, { "Ice Barrier", grant("Ice Barrier") } },
 	},
 	Warlock = {
-		{ { "Suppression", pct("Spirit", 2) }, { "Improved Corruption", school("shadow", 3) }, { "Fel Concentration", pct("Intellect", 3) }, { "Shadow Mastery", school("shadow", 4) }, { "Unstable Affliction", pct("SpellPower", 5) } },
-		{ { "Demonic Embrace", pct("Stamina", 3) }, { "Fel Vitality", pct("Health", 3) }, { "Demonic Aegis", pct("Armor", 4) }, { "Master Demonologist", pct("SpellPower", 3) }, { "Demonic Sacrifice", pct("Intellect", 5) } },
-		{ { "Improved Shadow Bolt", school("shadow", 2) }, { "Cataclysm", pct("Intellect", 2) }, { "Bane", school("fire", 3) }, { "Devastation", rating("Crit", 2) }, { "Conflagrate", school("fire", 5) } },
+		{ { "Suppression", pct("Spirit", 2) }, { "Improved Corruption", school("shadow", 3) }, { "Fel Concentration", pct("Intellect", 3) }, { "Shadow Mastery", school("shadow", 4) }, { "Unstable Affliction", grant("Unstable Affliction") } },
+		{ { "Demonic Embrace", pct("Stamina", 3) }, { "Fel Vitality", pct("Health", 3) }, { "Demonic Aegis", pct("Armor", 4) }, { "Master Demonologist", pct("SpellPower", 3) }, { "Demonic Sacrifice", grant("Demonic Sacrifice") } },
+		{ { "Improved Shadow Bolt", school("shadow", 2) }, { "Cataclysm", pct("Intellect", 2) }, { "Bane", school("fire", 3) }, { "Devastation", rating("Crit", 2) }, { "Conflagrate", grant("Conflagrate") } },
 	},
 	Druid = {
-		{ { "Starlight Wrath", school("nature", 2) }, { "Focused Starlight", rating("Crit", 1) }, { "Improved Moonfire", school("arcane", 3) }, { "Vengeance", rating("Crit", 2) }, { "Moonkin Form", pct("SpellPower", 5) } },
-		{ { "Ferocity", pct("Damage", 2) }, { "Feral Instinct", pct("Agility", 2) }, { "Thick Hide", pct("Armor", 4) }, { "Sharpened Claws", rating("Crit", 2) }, { "Heart of the Wild", pct("Stamina", 5) } },
-		{ { "Improved Mark of the Wild", pct("Armor", 2) }, { "Furor", pct("Spirit", 2) }, { "Naturalist", pct("SpellPower", 3) }, { "Intensity", pct("Intellect", 3) }, { "Tree of Life", pct("SpellPower", 5) } },
+		{ { "Starlight Wrath", school("nature", 2) }, { "Focused Starlight", rating("Crit", 1) }, { "Improved Moonfire", school("arcane", 3) }, { "Vengeance", rating("Crit", 2) }, { "Moonkin Form", grant("Moonkin Form") } },
+		{ { "Ferocity", pct("Damage", 2) }, { "Feral Instinct", pct("Agility", 2) }, { "Thick Hide", pct("Armor", 4) }, { "Sharpened Claws", rating("Crit", 2) }, { "Heart of the Wild", grant("Heart of the Wild") } },
+		{ { "Improved Mark of the Wild", pct("Armor", 2) }, { "Furor", pct("Spirit", 2) }, { "Naturalist", pct("SpellPower", 3) }, { "Intensity", pct("Intellect", 3) }, { "Tree of Life", grant("Tree of Life") } },
 	},
 }
 
@@ -113,6 +115,8 @@ local function describe(mod)
 		return ("Increases your %s by %d per rank."):format(mod.stat, v)
 	elseif mod.kind == "school" then
 		return ("Increases the damage of your %s spells and abilities by %d%% per rank."):format(mod.school, v)
+	elseif mod.kind == "spell" then
+		return ("Teaches you %s."):format(mod.spell)
 	end
 	return ("Increases your %s chance by %d%% per rank."):format(mod.stat, v)
 end
@@ -193,6 +197,12 @@ function module:Learn(player: Player, id)
 	c.Talents[tostring(row.id)] = rank + 1
 	self.includes.Database["WorldDatabase.h"]:Commit(player)
 	Chat:System(player, ("You have learned %s (Rank %d)."):format(row.name, rank + 1))
+	if row.mod and row.mod.kind == "spell" then
+		local spell = self.includes.Spells["Spells.h"]:ByName(row.mod.spell)
+		if spell then
+			self.includes.Spells["Spells.h"]:Learn(player, spell.id)
+		end
+	end
 	self.includes.Entities["EntityPlayer.h"]:ApplyStats(player)
 	self:Sync(player)
 end
@@ -208,6 +218,14 @@ function module:Reset(player: Player): boolean
 		return false
 	end
 	self.includes.Entities["EntityPlayer.h"]:AddMoney(player, -cost)
+	local Spells = self.includes.Spells["Spells.h"]
+	for id in c.Talents do
+		local row = self:DB():Get("talent", id)
+		local spell = row and row.mod and row.mod.kind == "spell" and Spells:ByName(row.mod.spell)
+		if spell then
+			Spells:Unlearn(player, spell.id)
+		end
+	end
 	c.Talents = {}
 	c.TalentResets = (c.TalentResets or 0) + 1
 	self.includes.Database["WorldDatabase.h"]:Commit(player)
@@ -278,8 +296,8 @@ function module:Start()
 					local row = existing[class .. "/" .. r.name]
 					if not row then
 						DB:Insert("talent", { class = class, tab = tab, tier = tier, col = r.col, name = r.name, description = describe(r.mod), max_rank = r.max, mod = r.mod })
-					elseif row.col ~= r.col or row.max_rank ~= r.max then
-						DB:Update("talent", row.id, { col = r.col, max_rank = r.max })
+					elseif row.col ~= r.col or row.max_rank ~= r.max or (row.mod and row.mod.kind) ~= r.mod.kind then
+						DB:Update("talent", row.id, { col = r.col, max_rank = r.max, mod = r.mod, description = describe(r.mod) })
 					end
 				end
 			end
@@ -297,4 +315,5 @@ return Base(module, {
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
+	{ Path = "World/Spells", Imports = "Spells.h" },
 })

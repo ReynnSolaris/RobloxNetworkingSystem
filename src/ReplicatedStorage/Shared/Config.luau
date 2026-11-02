@@ -37,13 +37,34 @@ return table.freeze({
 	QuestLogSize = 25,
 	BuybackSlots = 12,
 
-	-- What a new character owns on first login: { item name, count }; gear is worn.
+	-- What a new character owns on first login, WotLK style: a set by class
+	-- (worn), food by race, and the same few things for everyone.
 	StarterGear = {
-		Default = { { "Recruit's Tunic" }, { "Recruit's Pants" }, { "Recruit's Boots" }, { "Worn Shortsword" }, { "Hearthstone" }, { "Tough Jerky", 5 }, { "Linen Bag" } },
+		Everyone = { { "Hearthstone" }, { "Linen Bag" } },
+		Class = {
+			Warrior = { { "Recruit's Tunic" }, { "Recruit's Pants" }, { "Recruit's Boots" }, { "Worn Shortsword" } },
+			Paladin = { { "Squire's Shirt" }, { "Squire's Pants" }, { "Squire's Boots" }, { "Worn Mace" } },
+			Hunter = { { "Trapper's Shirt" }, { "Trapper's Pants" }, { "Trapper's Boots" }, { "Worn Shortbow" } },
+			Rogue = { { "Thug's Shirt" }, { "Thug's Pants" }, { "Thug's Boots" }, { "Worn Dagger" } },
+			Priest = { { "Neophyte's Shirt" }, { "Neophyte's Pants" }, { "Neophyte's Boots" }, { "Neophyte's Staff" } },
+			["Death Knight"] = { { "Acherus Knight's Tunic" }, { "Acherus Knight's Legplates" }, { "Acherus Knight's Boots" }, { "Rusted Runeblade" } },
+			Shaman = { { "Primitive Mantle" }, { "Primitive Kilt" }, { "Primitive Boots" }, { "Worn Mace" } },
+			Mage = { { "Apprentice's Robe" }, { "Apprentice's Pants" }, { "Apprentice's Boots" }, { "Apprentice's Staff" } },
+			Warlock = { { "Acolyte's Robe" }, { "Acolyte's Pants" }, { "Acolyte's Boots" }, { "Acolyte's Staff" } },
+			Druid = { { "Novice's Robe" }, { "Novice's Pants" }, { "Novice's Boots" }, { "Novice's Staff" } },
+		},
+		Race = {
+			Human = { { "Tough Hunk of Bread", 5 } }, Dwarf = { { "Darnassian Bleu", 5 } }, ["Night Elf"] = { { "Shiny Red Apple", 5 } }, Gnome = { { "Tough Hunk of Bread", 5 } },
+			Orc = { { "Tough Jerky", 5 } }, Undead = { { "Forsaken Hardbread", 5 } }, Tauren = { { "Darnassian Bleu", 5 } }, Troll = { { "Shiny Red Apple", 5 } },
+		},
 	},
-	-- Equipment slots, in character sheet order; the last four hold bags.
-	Slots = { "head", "chest", "legs", "feet", "mainhand", "ring", "trinket", "bag1", "bag2", "bag3", "bag4" },
+	-- Equipment slots, WoW's paper doll: left column, right column, weapons.
+	Slots = { "head", "neck", "shoulders", "back", "chest", "wrist", "hands", "waist", "legs", "feet", "ring", "ring2", "trinket", "trinket2", "mainhand", "offhand" },
+	-- an item slot that may fill either of two paper-doll slots
+	PairedSlots = { ring = { "ring", "ring2" }, trinket = { "trinket", "trinket2" } },
 	BagSlotNames = { "bag1", "bag2", "bag3", "bag4" },
+	-- Item score weights per stat point, times the quality factor, shown in tooltips.
+	ItemScore = { Weights = { Armor = 0.3, Damage = 2, Health = 0.1, Strength = 1, Agility = 1, Stamina = 1, Intellect = 1, Spirit = 0.8, SpellPower = 1 }, Quality = { [0] = 0.5, [1] = 1, [2] = 1.3, [3] = 1.7, [4] = 2.2, [5] = 3 } },
 	-- Durability points for armor and weapons, loss on death as a fraction, repair price per point.
 	Durability = { Armor = 40, Weapon = 60, DeathLoss = 0.1, HitLoss = 0.025, HitChance = 0.15, CostPerPoint = 4 },
 	VendorRange = 12,

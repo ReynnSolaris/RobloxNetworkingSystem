@@ -70,7 +70,7 @@ local function tile(scope, slot: number)
 			hovered:set(true)
 			local s = peek(stack)
 			if s and not Drag.active() then
-				Ui.showTip(Ui.itemTooltip(s) .. '\n<font color="#AAAAAA">Right-click to withdraw</font>', Ui.itemBorder(s))
+				Ui.showItemTip(s, "Right-click to withdraw")
 			end
 		end,
 		[OnEvent "MouseLeave"] = function()

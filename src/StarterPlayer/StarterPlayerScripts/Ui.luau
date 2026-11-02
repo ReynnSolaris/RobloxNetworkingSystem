@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local player = Players.LocalPlayer
 
@@ -36,7 +37,9 @@ function Ui.itemName(item): string
 	return ('<font color="%s">[%s]</font>%s'):format(Ui.quality(item.Quality), item.Name or "?", count)
 end
 
-local SLOT_NAMES = { head = "Head", chest = "Chest", legs = "Legs", feet = "Feet", mainhand = "Main Hand", ring = "Finger", trinket = "Trinket", bag = "Bag", bag1 = "Bag", bag2 = "Bag", bag3 = "Bag", bag4 = "Bag" }
+local SLOT_NAMES = { head = "Head", neck = "Neck", shoulders = "Shoulder", back = "Back", chest = "Chest", wrist = "Wrist", hands = "Hands", waist = "Waist", legs = "Legs", feet = "Feet",
+	mainhand = "Main Hand", offhand = "Off Hand", ring = "Finger", ring2 = "Finger", trinket = "Trinket", trinket2 = "Trinket", bag = "Bag", bag1 = "Bag", bag2 = "Bag", bag3 = "Bag", bag4 = "Bag" }
+Ui.SLOT_NAMES = SLOT_NAMES
 local CLASS_NAMES = { armor = "Armor", weapon = "Weapon", consumable = "Consumable", misc = "Miscellaneous", container = "Bag", reagent = "Trade Goods" }
 
 -- WoW item tooltip: name in quality colour, binding, slot and type, armor, green
@@ -73,6 +76,9 @@ function Ui.itemTooltip(item, price: string?): string
 	end
 	if item.Flavor then table.insert(lines, ('<font color="#FFD100"><i>"%s"</i></font>'):format(item.Flavor)) end
 	if (item.Stack or 1) > 1 then table.insert(lines, ('<font color="#AAAAAA">Max Stack: %d</font>'):format(item.Stack)) end
+	if item.Slot then
+		table.insert(lines, ('<font color="#AAAAAA">Item Score %d</font>'):format(Ui.itemScore(item)))
+	end
 	if price then
 		white(price)
 	elseif (item.Sell or 0) > 0 then
@@ -84,6 +90,51 @@ end
 -- Border colour for an item's tooltip.
 function Ui.itemBorder(item): Color3
 	return Color3.fromHex(Ui.quality(item.Quality))
+end
+
+local STAT_KEYS = { "Armor", "Damage", "Health", "Strength", "Agility", "Stamina", "Intellect", "Spirit", "SpellPower" }
+
+-- Item score: weighted stats times a quality factor, like a gear score.
+function Ui.itemScore(item): number
+	if not item or not item.Slot then
+		return 0
+	end
+	local total = 0
+	for _, key in STAT_KEYS do
+		total += (item[key] or 0) * (Config.ItemScore.Weights[key] or 0)
+	end
+	return math.floor(total * (Config.ItemScore.Quality[item.Quality or 1] or 1) * 10 + 0.5)
+end
+
+-- What is worn in the paper-doll slot(s) an item would fill.
+function Ui.wornFor(item): { any }
+	if not item or not item.Slot then
+		return {}
+	end
+	local ok, worn = pcall(HttpService.JSONDecode, HttpService, player:GetAttribute("Equipment") or "{}")
+	worn = if ok and typeof(worn) == "table" then worn else {}
+	local slots = Config.PairedSlots[item.Slot] or { item.Slot }
+	local out = {}
+	for _, slot in slots do
+		table.insert(out, worn[slot] or false)
+	end
+	return out
+end
+
+-- Lines of stat differences against a worn item, WoW green and red.
+function Ui.itemDiff(item, worn): string
+	local lines = {}
+	for _, key in STAT_KEYS do
+		local delta = (item[key] or 0) - (worn and worn[key] or 0)
+		if delta ~= 0 then
+			table.insert(lines, ('<font color="%s">%s%d %s</font>'):format(if delta > 0 then "#1EFF00" else "#FF2020", if delta > 0 then "+" else "", delta, if key == "SpellPower" then "Spell Power" else key))
+		end
+	end
+	local score = Ui.itemScore(item) - (if worn then Ui.itemScore(worn) else 0)
+	if score ~= 0 then
+		table.insert(lines, ('<font color="%s">%s%d Item Score</font>'):format(if score > 0 then "#1EFF00" else "#FF2020", if score > 0 then "+" else "", score))
+	end
+	return table.concat(lines, "\n")
 end
 
 -- One tooltip for everything. Like WoW's GameTooltip it does not follow the
@@ -127,6 +178,13 @@ size.MinSize = Vector2.new(180, 0)
 size.MaxSize = Vector2.new(340, math.huge)
 tipText.TextWrapped = true
 tipGui.Parent = player:WaitForChild("PlayerGui")
+
+-- A second frame for "Currently Equipped" comparisons, left of the main one.
+local cmp = tip:Clone()
+cmp.Name = "Compare"
+cmp.Parent = tipGui
+local cmpText = cmp:FindFirstChildOfClass("TextLabel")
+local cmpStroke = cmp:FindFirstChildOfClass("UIStroke")
 
 local function clamp(x: number, y: number, w: number, h: number): UDim2
 	local view = workspace.CurrentCamera.ViewportSize
@@ -198,9 +256,77 @@ function Ui.showTip(text: string, border: Color3?, anchor: GuiObject | boolean |
 	task.defer(place, anchor) -- once more after AutomaticSize has settled
 end
 
+local currentItem, currentHint, currentAnchor = nil, nil, nil
+
+local function compareHeld(): (boolean, number)
+	if UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) or UserInputService:IsKeyDown(Enum.KeyCode.RightAlt) then
+		return true, 2
+	elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift) then
+		return true, 1
+	end
+	return false, 1
+end
+
+-- The item tooltip with everything: hint line, and while Shift (first slot) or
+-- Alt (second slot of a pair) is held, the worn item beside it with the
+-- differences. Re-rendered when the item under the mouse changes.
+function Ui.showItemTip(item, hint: string?, anchor: GuiObject | boolean | nil)
+	currentItem, currentHint, currentAnchor = item, hint, anchor
+	local text = Ui.itemTooltip(item)
+	local held, which = compareHeld()
+	local worn = Ui.wornFor(item)
+	local target = held and item.Slot and worn[which]
+	if held and item.Slot and (#worn > 0) then
+		local diff = Ui.itemDiff(item, target or nil)
+		if diff ~= "" then
+			text ..= '\n<font color="#AAAAAA">Compared to equipped:</font>\n' .. diff
+		end
+	end
+	if hint then
+		text ..= '\n<font color="#AAAAAA">' .. hint .. "</font>"
+	elseif item.Slot and not held then
+		text ..= '\n<font color="#666666">Shift to compare</font>'
+	end
+	Ui.showTip(text, Ui.itemBorder(item), anchor)
+	if target then
+		cmpText.Text = '<font color="#AAAAAA">Currently Equipped</font>\n' .. Ui.itemTooltip(target)
+		cmpStroke.Color = Ui.itemBorder(target)
+		cmp.Visible = true
+		task.defer(function()
+			if cmp.Visible then
+				local view = workspace.CurrentCamera.ViewportSize
+				local x = tip.AbsolutePosition.X - cmp.AbsoluteSize.X - 6
+				if x < 6 then
+					x = tip.AbsolutePosition.X + tip.AbsoluteSize.X + 6
+				end
+				cmp.Position = clamp(x, tip.AbsolutePosition.Y, cmp.AbsoluteSize.X, cmp.AbsoluteSize.Y)
+				if x + cmp.AbsoluteSize.X > view.X then
+					cmp.Position = clamp(6, tip.AbsolutePosition.Y, cmp.AbsoluteSize.X, cmp.AbsoluteSize.Y)
+				end
+			end
+		end)
+	else
+		cmp.Visible = false
+	end
+end
+
 function Ui.hideTip()
 	tip.Visible = false
+	cmp.Visible = false
+	currentItem = nil
 end
+
+-- modifiers change the item tooltip while it shows
+UserInputService.InputBegan:Connect(function(input)
+	if currentItem and tip.Visible and (input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightShift or input.KeyCode == Enum.KeyCode.RightAlt) then
+		Ui.showItemTip(currentItem, currentHint, currentAnchor)
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if currentItem and tip.Visible and (input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightShift or input.KeyCode == Enum.KeyCode.RightAlt) then
+		Ui.showItemTip(currentItem, currentHint, currentAnchor)
+	end
+end)
 
 -- Mouseover tooltip for creatures and players in the world, WoW style in the
 -- corner; UI under the mouse wins.
