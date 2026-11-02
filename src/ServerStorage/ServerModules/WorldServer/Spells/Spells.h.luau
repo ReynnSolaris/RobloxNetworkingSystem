@@ -239,14 +239,23 @@ function module:Cast(player: Player, id, guid, item)
 	end
 	local target = player
 	if spell.target == "enemy" then
-		local creature = self.includes.Content["Creatures.h"]:State(guid)
-		if not creature or creature.Dead or not creature.Hostile then
-			return self:Fail(player, "Invalid target.")
+		local opponent = self.includes.Combat["Duel.h"]:Opponent(player)
+		if opponent and guid == nil then
+			local oroot = opponent.Character and opponent.Character:FindFirstChild("HumanoidRootPart")
+			if not oroot or (oroot.Position - root.Position).Magnitude > (spell.range or 0) then
+				return self:Fail(player, "Out of range.")
+			end
+			target = opponent
+		else
+			local creature = self.includes.Content["Creatures.h"]:State(guid)
+			if not creature or creature.Dead or not creature.Hostile then
+				return self:Fail(player, "Invalid target.")
+			end
+			if (creature.Root.Position - root.Position).Magnitude > (spell.range or 0) then
+				return self:Fail(player, "Out of range.")
+			end
+			target = tostring(guid)
 		end
-		if (creature.Root.Position - root.Position).Magnitude > (spell.range or 0) then
-			return self:Fail(player, "Out of range.")
-		end
-		target = tostring(guid)
 	end
 	s.Gcd = now + Config.Spells.GlobalCooldown
 	if (spell.cast_time or 0) > 0 then
@@ -271,7 +280,13 @@ function module:Apply(player: Player, spell, target, item)
 		Packet:Send(player, Opcodes.SMSG_SPELL_COOLDOWN, { Id = spell.id, Seconds = spell.cooldown })
 	end
 	local targetName = player:GetAttribute("CharacterName") or player.Name
-	if spell.effect == "damage" then
+	if spell.effect == "damage" and typeof(target) == "Instance" then
+		if self.includes.Combat["Duel.h"]:Opponent(player) == target then
+			Effects:Play(EFFECT[spell.school] or "Hit", target, 10)
+			self.includes.Combat["Duel.h"]:Hit(player, target, amount, "Your " .. spell.name)
+			targetName = target:GetAttribute("CharacterName") or target.Name
+		end
+	elseif spell.effect == "damage" then
 		local Creatures = self.includes.Content["Creatures.h"]
 		local creature = Creatures:State(target)
 		if not creature or creature.Dead then
@@ -479,7 +494,7 @@ return Base(module, {
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
 	{ Path = "World/Content", Imports = "Creatures.h" },
-	{ Path = "World/Combat", Imports = "Combat.h" },
+	{ Path = "World/Combat", Imports = "Combat.h|Duel.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 	{ Path = "Global/System", Imports = "Effects.h" },
 })

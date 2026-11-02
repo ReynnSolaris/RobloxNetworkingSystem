@@ -15,8 +15,13 @@ end
 
 function module:Swing(player: Player, state)
 	local Creatures = self.includes.Content["Creatures.h"]
-	local creature = Creatures:State(state.Target)
-	if not creature or creature.Dead or not creature.Hostile then
+	local Duel = self.includes.Combat["Duel.h"]
+	local creature = state.Target and Creatures:State(state.Target)
+	local opponent = state.TargetPlayer and Duel:Opponent(player)
+	if opponent and (opponent:GetAttribute("CharacterName") or opponent.Name) ~= state.TargetPlayer then
+		opponent = nil
+	end
+	if (not creature or creature.Dead or not creature.Hostile) and not opponent then
 		state.Attacking = false
 		return
 	end
@@ -27,7 +32,8 @@ function module:Swing(player: Player, state)
 		state.Attacking = false
 		return
 	end
-	if (root.Position - creature.Root.Position).Magnitude > Config.Combat.Range then
+	local targetRoot = if opponent then opponent.Character and opponent.Character:FindFirstChild("HumanoidRootPart") else creature.Root
+	if not targetRoot or (root.Position - targetRoot.Position).Magnitude > Config.Combat.Range then
 		return
 	end
 	if os.clock() < state.NextSwing then
@@ -37,6 +43,10 @@ function module:Swing(player: Player, state)
 	local level = player:GetAttribute("CharacterLevel") or 1
 	local bonus = self.includes.Entities["EntityPlayer.h"]:Stats(player).Damage
 	local damage = math.max(1, math.round((Config.Combat.Damage(level) + bonus) * (0.8 + math.random() * 0.4)))
+	if opponent then
+		Duel:Hit(player, opponent, damage, "Your attack")
+		return
+	end
 	creature.Humanoid:TakeDamage(damage)
 	self.includes.System["Effects.h"]:Play("Hit", state.Target, 6)
 	Creatures:Aggro(state.Target, player)
@@ -56,11 +66,12 @@ function module:Start()
 	Packet:On(Opcodes.CMSG_SET_TARGET, function(player, data)
 		local s = state(player)
 		s.Target = if typeof(data) == "table" and data.Guid ~= nil then tostring(data.Guid) else nil
+		s.TargetPlayer = if typeof(data) == "table" and typeof(data.Player) == "string" then data.Player else nil
 		s.Attacking = false
 	end)
 	Packet:On(Opcodes.CMSG_ATTACK, function(player, data)
 		local s = state(player)
-		s.Attacking = typeof(data) == "table" and data.On == true and s.Target ~= nil
+		s.Attacking = typeof(data) == "table" and data.On == true and (s.Target ~= nil or s.TargetPlayer ~= nil)
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		self.information[player] = nil
@@ -80,6 +91,7 @@ end
 return Base(module, {
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "World/Content", Imports = "Creatures.h" },
+	{ Path = "World/Combat", Imports = "Duel.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Global/System", Imports = "Effects.h" },
 })

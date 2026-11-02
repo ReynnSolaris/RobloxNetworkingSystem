@@ -32,7 +32,7 @@ src/ServerStorage/ServerModules/
   WorldServer/Zones/               Zones (which zone each player stands in)
   WorldServer/Movement/            Anticheat (movement validation)
   WorldServer/Content/             Creatures (spawns, AI, loot), GameObjects, Items, Vendors, Teleports
-  WorldServer/Combat/              Combat (player melee, combat log), Loot (corpse loot), Death (release, ghosts, corpses)
+  WorldServer/Combat/              Combat (player melee, combat log), Loot (corpse loot), Death (release, ghosts, corpses), Duel
   WorldServer/Quests/              Quests (templates, questgivers, objectives, rewards)
   WorldServer/Spells/              Spells (templates, casting, mana, cooldowns, trainers, item use)
   WorldServer/Mail/                Mail (letters with money and items, mailboxes)
@@ -46,6 +46,7 @@ src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), 
                                                    QuestGiverFrame, QuestLogFrame (log on L, ! and ? markers),
                                                    ActionBar (1-9 0 - =, cast bar), SpellBook (P), TrainerFrame, SpellUi,
                                                    MailFrame (mailbox prompt), FriendsFrame (O: friends, ignore, guild), BankFrame,
+                                                   Preview (ViewportFrame character previews),
                                                    ZoneBanner, PartyFrame, Drag (drag and drop),
                                                    Ui (theme, tooltip), Components (Fusion panels, lists, buttons)
 src/Workspace/Zones/                               demo zone parts
@@ -97,6 +98,7 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | CMSG_WHO / SMSG_WHO / CMSG_PLAYED_TIME / SMSG_PLAYED_TIME | both | who is in the world (`Filter`); seconds played |
 | CMSG_GUILD / SMSG_GUILD_ROSTER / SMSG_GUILD_INVITE / SMSG_GUILD_EVENT | both | `{ Action, Target?, Text? }`; roster with ranks and online state; invite; green guild lines |
 | SMSG_SHOW_BANK / CMSG_BANK_DEPOSIT / CMSG_BANK_WITHDRAW / CMSG_BANK_SWAP | both | bank stacks; `{ Bag, Bank? }`, `{ Bank, Bag? }`, `{ From, To }` |
+| CMSG_DUEL / SMSG_DUEL_REQUESTED / SMSG_DUEL_UPDATE | both | `{ Action = request|accept|decline|cancel, Target? }`; challenge; `{ Opponent? }` |
 | SMSG_QUESTGIVER_STATUS_MULTIPLE | server | `{ Statuses = { [guid] = available|complete|incomplete|none } }` for the markers |
 | SMSG_VENDOR_LIST | server | `{ Guid, Items }` opens the vendor window |
 | CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
@@ -455,6 +457,27 @@ A creature with `creature_template.banker` (the seeded Banker) offers "I would
 like to check my deposit box." and opens the bank: `Config.BankSlots` slots on
 the character's `Bank`. Drag from the bag to deposit, onto the bag to withdraw,
 between bank slots to move; right-click withdraws.
+
+## Characters, duels, rest
+
+Character creation picks a faction and race (four Alliance, four Horde, in
+`Config.Races` with the classes each allows, like WoW's race and class table),
+gender, class, and a name, with a random name button and descriptions for the
+race and class. A turning preview shows the result; the same race scale and skin
+and class tunic are applied to the Roblox body on spawn through the Humanoid scale
+values and part colours. Character select shows the chosen character the same way.
+
+`/duel <name>` (or with a player targeted) challenges; `/duel accept` starts a
+three second countdown, then melee and damage spells land on the opponent until
+one would drop below 1 health, which ends the duel with "X has defeated Y in a
+duel." heard in yell range. Nobody dies; walking `Config.Duel.FleeRange` studs
+from the flag, logging out or dying to something else forfeits. Click a player to
+target them; the target frame shows "(Duel)" while they are your opponent.
+
+Standing near an innkeeper or in a zone with `Inn = true` is resting: "zzz" on
+the player frame and rested XP banking at `Config.Rested.PerTick` of the level
+every tick, up to one and a half levels. Kill XP is doubled from that pool, shown
+as "(+N exp Rested bonus)".
 
 ## Tooltips
 

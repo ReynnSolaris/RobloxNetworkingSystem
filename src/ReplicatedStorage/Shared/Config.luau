@@ -107,17 +107,46 @@ return table.freeze({
 	-- Characters per account and the classes they can be, in Blizzard class colours.
 	MaxCharacters = 3,
 	Classes = {
-		{ Name = "Warrior", Color = "#C79C6E" },
-		{ Name = "Paladin", Color = "#F58CBA" },
-		{ Name = "Hunter", Color = "#ABD473" },
-		{ Name = "Rogue", Color = "#FFF569" },
-		{ Name = "Priest", Color = "#FFFFFF" },
-		{ Name = "Death Knight", Color = "#C41F3B" },
-		{ Name = "Shaman", Color = "#0070DE" },
-		{ Name = "Mage", Color = "#69CCF0" },
-		{ Name = "Warlock", Color = "#9482C9" },
-		{ Name = "Druid", Color = "#FF7D0A" },
+		{ Name = "Warrior", Color = "#C79C6E", Role = "Tank, Melee", Description = "Warriors live for the thrill of battle, wearing the heaviest armor and wielding any weapon they can lift." },
+		{ Name = "Paladin", Color = "#F58CBA", Role = "Tank, Healer, Melee", Description = "Holy warriors who protect the weak, heal the wounded and smite the wicked in plate armor." },
+		{ Name = "Hunter", Color = "#ABD473", Role = "Ranged", Description = "Masters of the wild who strike from range and track their prey across any terrain." },
+		{ Name = "Rogue", Color = "#FFF569", Role = "Melee", Description = "Rogues strike from the shadows, quick and deadly, and are gone before the alarm is raised." },
+		{ Name = "Priest", Color = "#FFFFFF", Role = "Healer, Ranged", Description = "Priests mend the broken with the Light and punish the faithless with holy fire." },
+		{ Name = "Death Knight", Color = "#C41F3B", Role = "Tank, Melee", Description = "Risen champions wielding frost, blood and unholy power against the living." },
+		{ Name = "Shaman", Color = "#0070DE", Role = "Healer, Melee, Ranged", Description = "Shaman call upon the elements to heal their allies and strike down their foes." },
+		{ Name = "Mage", Color = "#69CCF0", Role = "Ranged", Description = "Scholars of the arcane who hurl fire, frost and raw magic from a safe distance." },
+		{ Name = "Warlock", Color = "#9482C9", Role = "Ranged", Description = "Warlocks bargain with dark powers for shadow and flame, and pay the price gladly." },
+		{ Name = "Druid", Color = "#FF7D0A", Role = "Healer, Ranged", Description = "Keepers of the natural balance who heal with the power of life and strike with nature's wrath." },
 	},
+	Factions = {
+		Alliance = { Color = "#1E90FF" },
+		Horde = { Color = "#C41F3B" },
+	},
+	Genders = { "Male", "Female" },
+	-- Races pick a faction, the classes they can be, and how the Roblox body is
+	-- shaped and coloured: Scale is height, Width the body width, Skin the body colour.
+	Races = {
+		{ Name = "Human", Faction = "Alliance", Scale = 1, Width = 1, Skin = { 0.86, 0.68, 0.55 }, Classes = { "Warrior", "Paladin", "Rogue", "Priest", "Mage", "Warlock", "Death Knight" },
+			Description = "Resilient and ambitious, the humans of Stormwind have rebuilt their kingdom from the ashes and stand at the heart of the Alliance." },
+		{ Name = "Dwarf", Faction = "Alliance", Scale = 0.82, Width = 1.25, Skin = { 0.8, 0.62, 0.5 }, Classes = { "Warrior", "Paladin", "Hunter", "Rogue", "Priest", "Death Knight" },
+			Description = "Stout and stubborn, the dwarves of Ironforge are famed for their craftsmanship, their ale and their love of a good fight." },
+		{ Name = "Night Elf", Faction = "Alliance", Scale = 1.12, Width = 0.95, Skin = { 0.62, 0.52, 0.8 }, Classes = { "Warrior", "Hunter", "Rogue", "Priest", "Druid", "Death Knight" },
+			Description = "Ancient guardians of the forests, the night elves move unseen beneath the moon and keep the old ways." },
+		{ Name = "Gnome", Faction = "Alliance", Scale = 0.62, Width = 1, Skin = { 0.92, 0.76, 0.66 }, Classes = { "Warrior", "Rogue", "Mage", "Warlock", "Death Knight" },
+			Description = "Small in stature and vast in intellect, gnomes build what others only dream of, and occasionally what nobody should." },
+		{ Name = "Orc", Faction = "Horde", Scale = 1.1, Width = 1.2, Skin = { 0.36, 0.56, 0.3 }, Classes = { "Warrior", "Hunter", "Rogue", "Shaman", "Warlock", "Death Knight" },
+			Description = "Honor-bound and fierce, the orcs of Orgrimmar have shed their demonic past to forge a new home in Durotar." },
+		{ Name = "Undead", Faction = "Horde", Scale = 0.96, Width = 0.9, Skin = { 0.62, 0.68, 0.62 }, Classes = { "Warrior", "Rogue", "Priest", "Mage", "Warlock", "Death Knight" },
+			Description = "Freed from the Lich King's will, the Forsaken serve their Dark Lady and owe the living nothing." },
+		{ Name = "Tauren", Faction = "Horde", Scale = 1.25, Width = 1.3, Skin = { 0.42, 0.27, 0.16 }, Classes = { "Warrior", "Hunter", "Shaman", "Druid", "Death Knight" },
+			Description = "Peaceful by nature and terrible when roused, the tauren of Mulgore walk in step with the Earth Mother." },
+		{ Name = "Troll", Faction = "Horde", Scale = 1.15, Width = 0.9, Skin = { 0.3, 0.6, 0.65 }, Classes = { "Warrior", "Hunter", "Rogue", "Priest", "Shaman", "Mage", "Death Knight" },
+			Description = "Cunning and regenerative, the Darkspear trolls keep their ancient ways and their loyalty to the Horde." },
+	},
+	Duel = { Range = 30, FleeRange = 60, Countdown = 3, RequestSeconds = 30 },
+	-- Rested: resting near an innkeeper or in a zone with Inn = true banks a share
+	-- of the level's XP every tick; kill XP is doubled from that pool.
+	Rested = { Range = 15, TickSeconds = 5, PerTick = 0.01, Cap = 1.5 },
 
 	-- Server-side movement check. Allowed distance per sample is
 	-- WalkSpeed * dt * Tolerance + Slack; over it snaps back and counts a strike.

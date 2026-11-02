@@ -209,7 +209,7 @@ function module:OnDeath(state)
 		Combat:Log(killer, ("%s dies."):format(state.Template.name), Config.Chat.Colors.HIT)
 		local xp = Config.Combat.KillXp(killer:GetAttribute("CharacterLevel") or 1, state.Level)
 		if xp > 0 then
-			Entities:GrantXp(killer, xp, state.Template.name .. " slain")
+			Entities:GrantXp(killer, xp, state.Template.name .. " slain", true)
 		end
 		self.includes.Quests["Quests.h"]:OnKill(killer, state.Row.id, state.Root.Position)
 	end

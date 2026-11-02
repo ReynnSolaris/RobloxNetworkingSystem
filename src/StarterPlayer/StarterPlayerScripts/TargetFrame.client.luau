@@ -1,4 +1,5 @@
 local Players = game:GetService("Players")
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Fusion = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Fusion"))
@@ -17,10 +18,23 @@ local Children, peek = Fusion.Children, Fusion.peek
 local target = scope:Value(nil :: Model?)
 local attacking = scope:Value(false)
 local health, maxHealth = scope:Value(0), scope:Value(1)
+local duelOpponent = Components.attribute(scope, player, "DuelOpponent", nil)
+local function playerOf(model: Model?): Player?
+	local other = model and Players:GetPlayerFromCharacter(model)
+	return if other and other ~= player then other else nil
+end
 local hostile = scope:Computed(function(use)
 	local model = use(target)
+	local other = playerOf(model)
+	if other then
+		return use(duelOpponent) ~= nil and use(duelOpponent) == (other:GetAttribute("CharacterName") or other.Name)
+	end
 	return model ~= nil and model:GetAttribute("Faction") == "hostile"
 end)
+local classColor: { [string]: Color3 } = {}
+for _, class in Config.Classes do
+	classColor[class.Name] = Color3.fromHex(class.Color)
+end
 
 local TargetEvent = Instance.new("BindableEvent")
 TargetEvent.Name = "Target"
@@ -34,7 +48,9 @@ end
 local function setTarget(model: Model?)
 	target:set(model)
 	setAttacking(false)
-	netSend:Fire(Opcodes.CMSG_SET_TARGET, { Guid = model and model:GetAttribute("Guid") })
+	local other = playerOf(model)
+	netSend:Fire(Opcodes.CMSG_SET_TARGET, { Guid = model and model:GetAttribute("Guid"), Player = other and (other:GetAttribute("CharacterName") or other.Name) })
+	player:SetAttribute("TargetName", if other then other:GetAttribute("CharacterName") or other.Name elseif model then model.Name else nil)
 	TargetEvent:Fire(model)
 end
 
@@ -50,13 +66,22 @@ scope:New "ScreenGui" {
 		Size = UDim2.fromOffset(260, 68),
 		Title = scope:Computed(function(use)
 			local model = use(target)
-			return if model then model.Name else ""
+			local other = playerOf(model)
+			return if other then other:GetAttribute("CharacterName") or other.DisplayName elseif model then model.Name else ""
 		end),
 		TitleColor = scope:Computed(function(use)
+			local other = playerOf(use(target))
+			if other then
+				return classColor[other:GetAttribute("CharacterClass") or ""] or Color3.new(1, 1, 1)
+			end
 			return if use(hostile) then Color3.fromRGB(255, 90, 90) else Color3.fromRGB(90, 220, 90)
 		end),
 		Info = scope:Computed(function(use)
 			local model = use(target)
+			local other = playerOf(model)
+			if other then
+				return ("Level %d %s%s"):format(other:GetAttribute("CharacterLevel") or 1, other:GetAttribute("CharacterClass") or "", if use(hostile) then "  (Duel)" else "")
+			end
 			return if model then ("Level %s %s"):format(tostring(model:GetAttribute("Level") or "?"), if use(hostile) then "Hostile" else "Friendly") else ""
 		end),
 		Right = scope:Computed(function(use)
@@ -71,7 +96,7 @@ scope:New "ScreenGui" {
 local function creatureFrom(part: Instance?): Model?
 	local creatures = workspace:FindFirstChild("Creatures")
 	while part and part ~= workspace do
-		if part:IsA("Model") and part:GetAttribute("Guid") and part.Parent == creatures then
+		if part:IsA("Model") and ((part:GetAttribute("Guid") and part.Parent == creatures) or playerOf(part)) then
 			return part
 		end
 		part = part.Parent

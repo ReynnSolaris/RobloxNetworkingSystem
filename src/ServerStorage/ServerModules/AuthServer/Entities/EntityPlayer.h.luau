@@ -91,14 +91,81 @@ function module:SetLevel(player: Player, level: number)
 end
 
 -- Adds experience, levelling as many times as it takes. reason is shown to the player.
-function module:GrantXp(player: Player, amount: number, reason: string?)
+-- Race shapes and colours the Roblox body: height and width through the
+-- Humanoid scale values, skin on head and arms, a tunic in the class colour.
+local BODY = { Head = true, LeftUpperArm = true, LeftLowerArm = true, LeftHand = true, RightUpperArm = true, RightLowerArm = true, RightHand = true }
+local LEGS = { LeftUpperLeg = true, LeftLowerLeg = true, LeftFoot = true, RightUpperLeg = true, RightLowerLeg = true, RightFoot = true }
+function module.Dress(character: Model, char)
+	local race, class
+	for _, r in Config.Races do
+		if r.Name == (char.Race or "Human") then
+			race = r
+		end
+	end
+	for _, c in Config.Classes do
+		if c.Name == char.Class then
+			class = c
+		end
+	end
+	race = race or Config.Races[1]
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		for name, value in { BodyHeightScale = race.Scale, BodyWidthScale = race.Width, BodyDepthScale = race.Width, HeadScale = race.Scale } do
+			local scale = humanoid:FindFirstChild(name)
+			if scale and scale:IsA("NumberValue") then
+				scale.Value = value
+			end
+		end
+	end
+	local skin = Color3.new(table.unpack(race.Skin))
+	local tunic = if class then Color3.fromHex(class.Color):Lerp(Color3.new(0, 0, 0), 0.45) else Color3.fromRGB(80, 70, 60)
+	for _, part in character:GetChildren() do
+		if part:IsA("BasePart") then
+			if BODY[part.Name] then
+				part.Color = skin
+			elseif LEGS[part.Name] then
+				part.Color = Color3.fromRGB(45, 38, 32)
+			elseif part.Name == "UpperTorso" or part.Name == "LowerTorso" then
+				part.Color = tunic
+			end
+		elseif part:IsA("Shirt") or part:IsA("Pants") or part:IsA("ShirtGraphic") then
+			part:Destroy()
+		end
+	end
+end
+
+-- Resting near an innkeeper or in an Inn zone banks rested XP.
+function module:IsResting(player: Player): boolean
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return false
+	end
+	local zone = self.includes.Zones["Zones.h"]:Current(player)
+	if zone and zone:GetAttribute("Inn") == true then
+		return true
+	end
+	for _, state in self.includes.Content["Creatures.h"].information do
+		if state.Template.innkeeper and not state.Dead and (state.Root.Position - root.Position).Magnitude <= Config.Rested.Range then
+			return true
+		end
+	end
+	return false
+end
+
+function module:GrantXp(player: Player, amount: number, reason: string?, fromKill: boolean?)
 	local entity = self.information[player]
 	local char = entity and entity.Active
 	if not char or amount <= 0 or char.Level >= Config.Xp.MaxLevel then
 		return
 	end
+	local rested = 0
+	if fromKill and (char.Rested or 0) > 0 then
+		rested = math.min(math.floor(amount), math.floor(char.Rested))
+		char.Rested -= rested
+		amount += rested
+	end
 	char.Xp += math.floor(amount)
-	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_XP_GAIN, { Amount = math.floor(amount), Reason = reason })
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_XP_GAIN, { Amount = math.floor(amount), Reason = reason, Rested = if rested > 0 then rested else nil })
 	while char.Level < Config.Xp.MaxLevel and char.Xp >= Config.Xp.ForLevel(char.Level) do
 		char.Xp -= Config.Xp.ForLevel(char.Level)
 		char.Level += 1
@@ -511,6 +578,7 @@ function module:Spawn(player: Player, at: CFrame?, ghost: boolean?)
 
 	local humanoid = character:WaitForChild("Humanoid") :: Humanoid
 	humanoid.DisplayName = saved.Name
+	module.Dress(character, saved)
 	self:ApplyStats(player)
 	humanoid.Health = humanoid.MaxHealth
 	self.includes.Spells["Spells.h"]:Reset(player)
@@ -662,5 +730,7 @@ return Base(module, {
 	{ Path = "World/Combat", Imports = "Death.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h" },
+	{ Path = "World/Zones", Imports = "Zones.h" },
+	{ Path = "World/Content", Imports = "Creatures.h" },
 	{ Path = "Global/System", Imports = "Effects.h" },
 })

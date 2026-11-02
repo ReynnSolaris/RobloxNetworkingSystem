@@ -28,6 +28,7 @@ local class = attr("CharacterClass", "")
 local level = attr("CharacterLevel", 1)
 local health, maxHealth = attr("Health", 0), attr("MaxHealth", 100)
 local latency = attr("Latency", nil)
+local resting = attr("Resting", false)
 local color = scope:Computed(function(use)
 	return classColor[use(class)] or Color3.fromRGB(200, 200, 200)
 end)
@@ -55,7 +56,7 @@ scope:New "ScreenGui" {
 		end),
 		Corner = scope:Computed(function(use)
 			local ms = use(latency)
-			return if ms then ms .. " ms" else ""
+			return (if use(resting) then '<font color="#7070FF">zzz</font>  ' else "") .. (if ms then ms .. " ms" else "")
 		end),
 		Health = health,
 		MaxHealth = maxHealth,

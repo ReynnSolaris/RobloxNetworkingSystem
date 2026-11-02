@@ -195,7 +195,18 @@ handlers[Opcodes.SMSG_XP_GAIN] = function(d)
 	if d.Reason then
 		text = ("%s: %d experience gained."):format(d.Reason, d.Amount or 0)
 	end
+	if d.Rested then
+		text ..= (" (+%d exp Rested bonus)"):format(d.Rested)
+	end
 	notice(tint(Colors.XP, esc(text)))
+end
+
+handlers[Opcodes.SMSG_DUEL_REQUESTED] = function(d)
+	system(("%s has challenged you to a duel. /duel accept or /duel decline"):format(tostring(d.From)))
+end
+
+handlers[Opcodes.SMSG_DUEL_UPDATE] = function(d)
+	player:SetAttribute("DuelOpponent", d.Opponent)
 end
 
 handlers[Opcodes.SMSG_LEVELUP] = function(d)
@@ -592,6 +603,14 @@ local function parse(text: string)
 		return { Kind = "INVENTORY" }
 	elseif prefix == "friend" or prefix == "unfriend" or prefix == "removefriend" or prefix == "ignore" or prefix == "unignore" then
 		return { Kind = "SOCIAL", Action = prefix, Target = rest:match("^(%S+)") }
+	elseif prefix == "duel" then
+		local word = rest:match("^(%S+)")
+		if word == "accept" or word == "decline" then
+			return { Kind = "DUEL", Action = word }
+		end
+		return { Kind = "DUEL", Action = "request", Target = word or player:GetAttribute("TargetName") }
+	elseif prefix == "yield" or prefix == "forfeit" then
+		return { Kind = "DUEL", Action = "cancel" }
 	elseif prefix == "who" then
 		return { Kind = "WHO", Filter = rest }
 	elseif prefix == "played" then
@@ -640,6 +659,8 @@ local function dispatch(p)
 	elseif p.Kind == "SOCIAL" then
 		local opcode = ({ friend = Opcodes.CMSG_ADD_FRIEND, unfriend = Opcodes.CMSG_DEL_FRIEND, removefriend = Opcodes.CMSG_DEL_FRIEND, ignore = Opcodes.CMSG_ADD_IGNORE, unignore = Opcodes.CMSG_DEL_IGNORE })[p.Action]
 		send(opcode, { Name = p.Target })
+	elseif p.Kind == "DUEL" then
+		send(Opcodes.CMSG_DUEL, { Action = p.Action, Target = p.Target })
 	elseif p.Kind == "WHO" then
 		send(Opcodes.CMSG_WHO, { Filter = p.Filter })
 	elseif p.Kind == "PLAYED" then

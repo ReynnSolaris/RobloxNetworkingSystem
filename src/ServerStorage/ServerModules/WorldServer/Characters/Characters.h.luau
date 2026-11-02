@@ -18,6 +18,15 @@ local function classByName(name: string?)
 	return nil
 end
 
+local function raceByName(name: string?)
+	for _, race in Config.Races do
+		if race.Name == name then
+			return race
+		end
+	end
+	return nil
+end
+
 local function validName(name: any): (boolean, string?)
 	if typeof(name) ~= "string" or #name < 2 or #name > 12 or not name:match("^%a+$") then
 		return false, "Names are 2 to 12 letters."
@@ -29,7 +38,7 @@ function module:Enum(player: Player)
 	local record = self.includes.Database["WorldDatabase.h"]:Get(player)
 	local list = {}
 	for slot, char in (record and record.Characters or {}) do
-		list[slot] = { Slot = slot, Name = char.Name, Class = char.Class, Level = char.Level }
+		list[slot] = { Slot = slot, Name = char.Name, Class = char.Class, Level = char.Level, Race = char.Race or "Human", Faction = char.Faction or "Alliance", Gender = char.Gender or "Male" }
 	end
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_CHAR_ENUM, { Characters = list, Max = Config.MaxCharacters })
 end
@@ -56,17 +65,25 @@ function module:Create(player: Player, data)
 			return self:Result(player, false, "You already have a character with that name.")
 		end
 	end
+	local race = raceByName(data.Race)
+	if not race then
+		return self:Result(player, false, "Pick a race.")
+	end
 	local class = classByName(data.Class)
 	if not class then
 		return self:Result(player, false, "Pick a class.")
 	end
+	if not table.find(race.Classes, class.Name) then
+		return self:Result(player, false, ("%ss cannot be %ss."):format(race.Name, class.Name))
+	end
+	local gender = if table.find(Config.Genders, data.Gender) then data.Gender else Config.Genders[1]
 	local filtered = pcall(function()
 		return TextService:FilterStringAsync(name, player.UserId):GetNonChatStringForBroadcastAsync()
 	end)
 	if not filtered then
 		return self:Result(player, false, "That name is not allowed.")
 	end
-	table.insert(record.Characters, { Name = name, Class = class.Name, Level = 1, Created = os.time() })
+	table.insert(record.Characters, { Name = name, Class = class.Name, Race = race.Name, Faction = race.Faction, Gender = gender, Level = 1, Created = os.time() })
 	self.includes.Database["WorldDatabase.h"]:Commit(player)
 	self.includes.Database["WorldDatabase.h"]:Register(name, player.UserId)
 	self:Result(player, true)
@@ -116,6 +133,7 @@ function module:Logout(player: Player)
 	if not session or session.State ~= Session.STATE.IN_WORLD then
 		return
 	end
+	self.includes.Combat["Duel.h"]:Forfeit(player)
 	self.includes.Combat["Death.h"]:Forget(player)
 	self.includes.Social["Social.h"]:OnLogout(player)
 	self.includes.Social["Guild.h"]:OnLogout(player)
@@ -126,6 +144,16 @@ end
 
 function module:Start()
 	local Packet = self.includes.Security["Packet.h"]
+	-- a bare R15 rig the client dresses up for previews
+	task.spawn(function()
+		local ok, rig = pcall(function()
+			return game:GetService("Players"):CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), Enum.HumanoidRigType.R15)
+		end)
+		if ok and rig then
+			rig.Name = "PreviewRig"
+			rig.Parent = ReplicatedStorage:WaitForChild("Assets")
+		end
+	end)
 	Packet:On(Opcodes.CMSG_CHAR_ENUM, function(player)
 		self:Enum(player)
 	end)
@@ -154,7 +182,7 @@ return Base(module, {
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "World/Database", Imports = "WorldDatabase.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
-	{ Path = "World/Combat", Imports = "Death.h" },
+	{ Path = "World/Combat", Imports = "Death.h|Duel.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
 	{ Path = "World/Spells", Imports = "Spells.h" },
 	{ Path = "World/Mail", Imports = "Mail.h" },

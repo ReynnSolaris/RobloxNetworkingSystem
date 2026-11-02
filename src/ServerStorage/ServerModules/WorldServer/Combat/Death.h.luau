@@ -59,6 +59,7 @@ end
 
 -- Called by EntityPlayer when a character's humanoid dies.
 function module:OnDeath(player: Player, at: CFrame)
+	self.includes.Combat["Duel.h"]:Forfeit(player)
 	local state = { At = at, Marker = nil, Ghost = false }
 	self.information[player] = state
 	remember(self, player, state)
@@ -170,6 +171,7 @@ function module:Start()
 end
 
 return Base(module, {
+	{ Path = "World/Combat", Imports = "Duel.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Chat", Imports = "Chat.h" },

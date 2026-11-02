@@ -63,6 +63,7 @@ local Spells = World.Spells["Spells.h"]
 local Mail = World.Mail["Mail.h"]
 local Social = Auth.Social["Social.h"]
 local Guild = Auth.Social["Guild.h"]
+local Duel = World.Combat["Duel.h"]
 local Bus = Global.System["Global.h"]
 local Database = Global.Database["Database.h"]
 
@@ -89,6 +90,7 @@ Spells:Start()
 Mail:Start()
 Social:Start()
 Guild:Start()
+Duel:Start()
 Session:OnAuthed(function(player)
 	Characters:Enum(player)
 	Commands:SyncState(player)

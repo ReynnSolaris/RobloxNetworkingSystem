@@ -54,6 +54,27 @@ function module:Start()
 			end
 		end
 	end)
+	task.spawn(function()
+		local Entities = self.includes.Entities["EntityPlayer.h"]
+		while true do
+			task.wait(Config.Rested.TickSeconds)
+			for _, player in Players:GetPlayers() do
+				local entity = Entities:Get(player)
+				local char = entity and entity.Active
+				if char then
+					local resting = Entities:IsResting(player)
+					if resting then
+						local cap = Config.Xp.ForLevel(char.Level or 1) * Config.Rested.Cap
+						char.Rested = math.min(cap, (char.Rested or 0) + Config.Xp.ForLevel(char.Level or 1) * Config.Rested.PerTick)
+					end
+					if player:GetAttribute("Resting") ~= resting then
+						player:SetAttribute("Resting", resting)
+					end
+					player:SetAttribute("RestedXp", math.floor(char.Rested or 0))
+				end
+			end
+		end
+	end)
 	Players.PlayerRemoving:Connect(function(player)
 		self.information[player] = nil
 	end)
