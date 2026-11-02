@@ -1,0 +1,90 @@
+{
+  "className": "ParticleEmitter",
+  "properties": {
+    "Texture": "rbxasset://textures/particles/fire_main.dds",
+    "Color": {
+      "ColorSequence": {
+        "keypoints": [
+          {
+            "time": 0,
+            "color": [
+              1,
+              0.55,
+              0.1
+            ]
+          },
+          {
+            "time": 1,
+            "color": [
+              0.8,
+              0.1,
+              0.0
+            ]
+          }
+        ]
+      }
+    },
+    "Size": {
+      "NumberSequence": {
+        "keypoints": [
+          {
+            "time": 0,
+            "value": 0.8,
+            "envelope": 0
+          },
+          {
+            "time": 1,
+            "value": 0.2,
+            "envelope": 0
+          }
+        ]
+      }
+    },
+    "Transparency": {
+      "NumberSequence": {
+        "keypoints": [
+          {
+            "time": 0,
+            "value": 0.1,
+            "envelope": 0
+          },
+          {
+            "time": 1,
+            "value": 1,
+            "envelope": 0
+          }
+        ]
+      }
+    },
+    "Lifetime": {
+      "NumberRange": [
+        0.4,
+        0.8
+      ]
+    },
+    "Rate": 0,
+    "Speed": {
+      "NumberRange": [
+        2,
+        5
+      ]
+    },
+    "SpreadAngle": [
+      360,
+      360
+    ],
+    "Acceleration": [
+      0,
+      0,
+      0
+    ],
+    "RotSpeed": {
+      "NumberRange": [
+        -90,
+        90
+      ]
+    },
+    "LightEmission": 0.8,
+    "Enabled": false
+  }
+}

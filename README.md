@@ -34,6 +34,7 @@ src/ServerStorage/ServerModules/
   WorldServer/Content/             Creatures (spawns, AI, loot), GameObjects, Items, Vendors, Teleports
   WorldServer/Combat/              Combat (player melee, combat log), Loot (corpse loot), Death (release, ghosts, corpses)
   WorldServer/Quests/              Quests (templates, questgivers, objectives, rewards)
+  WorldServer/Spells/              Spells (templates, casting, mana, cooldowns, trainers)
 src/ServerStorage/ObjectTemplates/                 models .gobject can place
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus), Effects (particles)
@@ -41,6 +42,7 @@ src/ReplicatedStorage/Assets/Particles/            ParticleEmitters on Roblox's 
 src/StarterPlayer/StarterPlayerScripts/            NetClient (the client half), CharacterSelect, PlayerFrame, TargetFrame,
                                                    ChatFrame, VendorFrame, BagFrame, CharacterSheet, LootFrame, DeathFrame,
                                                    QuestGiverFrame, QuestLogFrame (log on L, ! and ? markers),
+                                                   ActionBar (1-9 0 - =, cast bar), SpellBook (P), TrainerFrame, SpellUi,
                                                    ZoneBanner, PartyFrame, Drag (drag and drop),
                                                    Ui (theme, tooltip), Components (Fusion panels, lists, buttons)
 src/Workspace/Zones/                               demo zone parts
@@ -81,6 +83,10 @@ bucket in `Config.RateLimit`. Before the session is authenticated only
 | CMSG_QUESTGIVER_QUERY_QUEST / SMSG_QUESTGIVER_QUEST_DETAILS | both | one quest's text, objectives and rewards |
 | CMSG_QUESTGIVER_ACCEPT_QUEST / CMSG_QUESTGIVER_COMPLETE_QUEST / CMSG_QUESTLOG_REMOVE_QUEST | client | `{ Guid, Quest }` |
 | SMSG_QUESTLOG / SMSG_QUESTUPDATE_ADD_KILL / SMSG_QUESTUPDATE_COMPLETE / SMSG_QUESTGIVER_QUEST_COMPLETE | server | log, "X slain: 3/5", "(Complete)", rewards given |
+| CMSG_CAST_SPELL / CMSG_CANCEL_CAST | client | `{ Spell, Guid? }`; stop the current cast |
+| SMSG_SPELL_START / SMSG_SPELL_GO / SMSG_SPELL_FAILURE / SMSG_SPELL_COOLDOWN | server | cast bar, landed (`Target`, `Amount`), `{ Reason }`, `{ Id, Seconds }` |
+| SMSG_INITIAL_SPELLS / SMSG_LEARNED_SPELL / SMSG_ACTION_BUTTONS / CMSG_SET_ACTION_BUTTON | both | known spells, a new one, `{ Buttons = { [slot] = spell } }`, `{ Slot, Spell? }` |
+| SMSG_TRAINER_LIST / CMSG_TRAINER_BUY_SPELL | both | trainer's spells with `Price`, `ReqLevel`, `Known`; `{ Guid, Spell }` |
 | SMSG_QUESTGIVER_STATUS_MULTIPLE | server | `{ Statuses = { [guid] = available|complete|incomplete|none } }` for the markers |
 | SMSG_VENDOR_LIST | server | `{ Guid, Items }` opens the vendor window |
 | CMSG_VENDOR_BUY / CMSG_VENDOR_SELL | client | `{ Guid, Entry, Count }` |
@@ -162,6 +168,7 @@ GAMEMASTER  .buff <all|player> <speed|jump> <multiplier> <seconds>
             .gobject add <entry> [yaw] [scale] | delete [guid] | move [guid] | turn [guid] <deg> | near
             .gobject template add <name> <modelid> [size] | template list
             .quest add|complete|remove <id> [player] | .quest template list
+            .learn <spell id|all> [player] | .unlearn <spell id> [player]
             .npc add <entry> | delete [guid] | move [guid] | kill [guid] | say [guid] <text> | info [guid] | near
             .loot template add <creatureEntry> <itemEntry> <chance> [min] [max] | template list [entry]
             .npc template add <name> [modelid] [subname] | template set <entry> <field> <value> | template list
@@ -249,6 +256,9 @@ placing something on one server sees it appear on all of them. Tables and keys:
 | game_graveyard | id | name, x, y, z, o |
 | quest_template | id | title, details, objectives, minlevel, level, reward_xp, reward_money, reward_items, req_creature, req_item |
 | creature_queststarter / creature_questender | id | entry (creature), quest |
+| spell_template | id | name, description, class, school, effect, base, per_level, cost, cast_time, cooldown, range, target, buff, mult, duration, icon |
+| playercreateinfo_spell | id | class, spell |
+| npc_trainer | id | entry (creature), spell, cost, reqlevel |
 | item_template | entry | name, quality 0-5, stack, class, slot, health, damage, armor, buyprice, sellprice, level |
 | npc_vendor | id | entry (creature), item |
 
@@ -371,6 +381,25 @@ party members within 100 studs, "Kobold Vermin slain: 3/5") and items to bring
 `reward_xp`, `reward_money` and `reward_items`. The quest log on **L** holds up to
 `Config.QuestLogSize`; right-click abandons. Two quests seed on the Town Guard and
 the Innkeeper.
+
+## Spells
+
+`spell_template` holds the spells: school (physical, holy, fire, nature, frost,
+shadow, arcane), effect (`damage` on a hostile target, `heal` on yourself, `buff`
+through the entity buffs), amount as `base + per_level`, mana cost, cast time,
+cooldown and range. Every class starts with the spells in `playercreateinfo_spell`
+and buys the rest from a creature with `npc_trainer` rows (the seeded Class
+Trainer; place one with `.npc add`). Mana is `Config.Spells.ManaForLevel` and
+regenerates `ManaRegen` of max per second; the player frame shows it under
+health.
+
+The action bar has twelve buttons on 1-9, 0, - and =. Learning a spell drops it
+on the first free button; drag from the spellbook (**P**) to place, between buttons
+to swap, off the bar to clear. A cast shows a cast bar and breaks if you move more
+than `InterruptDistance` studs; Escape cancels. Cooldowns sweep over the button
+with the seconds left, and there is a 1.5 second global cooldown. Failures
+("Out of range.", "Not enough mana.") flash in red and go to the Log tab. Spell
+hits play the school's particle from `Assets/Particles`.
 
 ## Saving
 

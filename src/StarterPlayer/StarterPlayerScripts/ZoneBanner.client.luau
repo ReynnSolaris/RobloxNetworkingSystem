@@ -1,54 +1,62 @@
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Fusion = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Fusion"))
+local Components = require(script.Parent:WaitForChild("Components"))
 local player = Players.LocalPlayer
 
--- WoW-style zone banner: big name, small subtitle, fades in and out when the
--- "Zone" attribute changes (set by NetClient from SMSG_ZONE_UPDATE).
+-- Zone banner: big name and subtitle that fade in when the Zone attribute
+-- changes and out three seconds later. Level-ups use the same banner.
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "ZoneBanner"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
+local scope = Fusion.scoped(Fusion)
+local Children = Fusion.Children
 
-local function label(size: number, y: number, color: Color3): TextLabel
-	local l = Instance.new("TextLabel")
-	l.AnchorPoint = Vector2.new(0.5, 0)
-	l.Position = UDim2.fromScale(0.5, y)
-	l.Size = UDim2.fromScale(0.8, size)
-	l.BackgroundTransparency = 1
-	l.Font = Enum.Font.Garamond
-	l.TextScaled = true
-	l.TextColor3 = color
-	l.TextStrokeColor3 = Color3.new(0, 0, 0)
-	l.TextStrokeTransparency = 1
-	l.TextTransparency = 1
-	l.Parent = gui
-	return l
+local title, subtitle = scope:Value(""), scope:Value("")
+local hidden = scope:Value(1)
+local info = scope:Value(TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+local alpha = scope:Tween(hidden, info)
+local stroke = scope:Computed(function(use)
+	return 0.4 + use(alpha) * 0.6
+end)
+
+local function line(size: number, y: number, text, color: Color3)
+	return scope:New "TextLabel" {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, y),
+		Size = UDim2.fromScale(0.8, size),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.Garamond,
+		TextScaled = true,
+		TextColor3 = color,
+		TextStrokeColor3 = Color3.new(0, 0, 0),
+		TextStrokeTransparency = stroke,
+		TextTransparency = alpha,
+		Text = text,
+	}
 end
 
-local title = label(0.09, 0.14, Color3.fromRGB(255, 220, 120))
-local subtitle = label(0.04, 0.235, Color3.fromRGB(230, 230, 230))
-gui.Parent = player:WaitForChild("PlayerGui")
+scope:New "ScreenGui" {
+	Name = "ZoneBanner",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	Parent = player:WaitForChild("PlayerGui"),
+	[Children] = {
+		line(0.09, 0.14, title, Color3.fromRGB(255, 220, 120)),
+		line(0.04, 0.235, subtitle, Color3.fromRGB(230, 230, 230)),
+	},
+}
 
-local fadeIn = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local fadeOut = TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local showing = 0
-
-local function fade(l: TextLabel, info: TweenInfo, transparency: number)
-	TweenService:Create(l, info, { TextTransparency = transparency, TextStrokeTransparency = 0.4 + transparency * 0.6 }):Play()
-end
-
 local function show(main: string, sub: string)
 	showing += 1
 	local token = showing
-	title.Text = main
-	subtitle.Text = sub
-	fade(title, fadeIn, 0)
-	fade(subtitle, fadeIn, 0)
+	title:set(main)
+	subtitle:set(sub)
+	info:set(TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+	hidden:set(0)
 	task.delay(3, function()
 		if token == showing then
-			fade(title, fadeOut, 1)
-			fade(subtitle, fadeOut, 1)
+			info:set(TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In))
+			hidden:set(1)
 		end
 	end)
 end
@@ -59,7 +67,6 @@ player:GetAttributeChangedSignal("Zone"):Connect(function()
 		show(name, player:GetAttribute("ZoneKind") or "")
 	end
 end)
-
 player:GetAttributeChangedSignal("LevelUp"):Connect(function()
 	local level = player:GetAttribute("LevelUp")
 	if level then

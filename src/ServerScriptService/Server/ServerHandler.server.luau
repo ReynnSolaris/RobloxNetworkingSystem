@@ -59,6 +59,7 @@ local Vendors = World.Content["Vendors.h"]
 local Loot = World.Combat["Loot.h"]
 local Death = World.Combat["Death.h"]
 local Quests = World.Quests["Quests.h"]
+local Spells = World.Spells["Spells.h"]
 local Bus = Global.System["Global.h"]
 local Database = Global.Database["Database.h"]
 
@@ -81,6 +82,7 @@ Vendors:Start()
 Loot:Start()
 Death:Start()
 Quests:Start()
+Spells:Start()
 Session:OnAuthed(function(player)
 	Characters:Enum(player)
 	Commands:SyncState(player)

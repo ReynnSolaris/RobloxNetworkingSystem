@@ -16,6 +16,7 @@ local module = {}
 local SEED = {
 	{ name = "Innkeeper", subname = "Innkeeper", modelid = "default", scale = 1, gossip = "Welcome, traveler. Rest your feet a while.", faction = "friendly" },
 	{ name = "Town Guard", subname = "Guard", modelid = "default", scale = 1.05, gossip = "Move along, citizen.", faction = "friendly" },
+	{ name = "Class Trainer", subname = "Trainer", modelid = "default", scale = 1, gossip = "What would you like to learn?", faction = "friendly" },
 	{ name = "General Goods", subname = "Vendor", modelid = "default", scale = 1, gossip = "Fine wares, fair prices.", faction = "friendly" },
 	{ name = "Kobold Vermin", modelid = "default", scale = 0.85, faction = "hostile", minlevel = 1, maxlevel = 2, health = 40, dmgmin = 2, dmgmax = 4, aggro = 15, speed = 12, mingold = 1, maxgold = 5 },
 	{ name = "Young Wolf", modelid = "default", scale = 0.9, faction = "hostile", minlevel = 2, maxlevel = 3, health = 55, dmgmin = 3, dmgmax = 5, aggro = 18, speed = 14, mingold = 0, maxgold = 3 },
@@ -144,9 +145,11 @@ function module:Spawn(row)
 		prompt.RequiresLineOfSight = false
 		prompt.Parent = root
 		prompt.Triggered:Connect(function(player)
-			local Quests = self.includes.Quests["Quests.h"]
+			local Quests, Spells = self.includes.Quests["Quests.h"], self.includes.Spells["Spells.h"]
 			if Quests:IsQuestgiver(row.id) then
 				Quests:Hello(player, row.guid)
+			elseif Spells:IsTrainer(row.id) then
+				Spells:TrainerList(player, row.guid)
 			else
 				self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_MESSAGECHAT,
 					{ Channel = "SAY", Sender = template.name, Text = template.gossip or "Greetings, traveler." })
@@ -397,4 +400,5 @@ return Base(module, {
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "World/Content", Imports = "Vendors.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
+	{ Path = "World/Spells", Imports = "Spells.h" },
 })

@@ -18,6 +18,9 @@ local TABLES = {
 	quest_template = "id",
 	creature_queststarter = "id",
 	creature_questender = "id",
+	spell_template = "id",
+	npc_trainer = "id",
+	playercreateinfo_spell = "id",
 }
 module.TABLES = TABLES
 

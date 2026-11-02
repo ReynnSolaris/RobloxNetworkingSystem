@@ -300,8 +300,8 @@ end
 
 add("lookup", 1, ".lookup creature|object|item|tele <name>", function(self, caller, args)
 	local what, needle = args[1], (table.concat(args, " ", 2)):lower()
-	local tableName = ({ creature = "creature_template", object = "gameobject_template", item = "item_template", tele = "game_tele", quest = "quest_template" })[what]
-	assert(tableName, "expected creature, object, item, quest or tele")
+	local tableName = ({ creature = "creature_template", object = "gameobject_template", item = "item_template", tele = "game_tele", quest = "quest_template", spell = "spell_template" })[what]
+	assert(tableName, "expected creature, object, item, quest, spell or tele")
 	local DB = self.includes.Database["WorldDB.h"]
 	local pk = DB.TABLES[tableName]
 	local hits = 0
@@ -504,6 +504,31 @@ add("quest", 2, ".quest add <id> [player] | .quest complete <id> [player] | .que
 	end
 	self.includes.Database["WorldDatabase.h"]:Commit(target)
 	Quests:Refresh(target, id)
+	self:Reply(caller, "Done.")
+end)
+
+add("learn", 2, ".learn <spell id|all> [player] | .unlearn <spell id> [player]", function(self, caller, args)
+	local Spells = self.includes.Spells["Spells.h"]
+	local target = targetOrSelf(args, 2, caller)
+	if args[1] == "all" then
+		local class = target:GetAttribute("CharacterClass")
+		for _, row in self.includes.Database["WorldDB.h"]:Select("spell_template") do
+			if row.class == nil or row.class == class then
+				Spells:Learn(target, row.id, true)
+			end
+		end
+		Spells:SendSpells(target)
+	else
+		local id = assert(tonumber(args[1]), "expected a spell id or all")
+		assert(Spells:Template(id), "no such spell")
+		Spells:Learn(target, id)
+	end
+	self:Reply(caller, "Done.")
+end)
+
+add("unlearn", 2, ".unlearn <spell id> [player]", function(self, caller, args)
+	local id = assert(tonumber(args[1]), "expected a spell id")
+	self.includes.Spells["Spells.h"]:Unlearn(targetOrSelf(args, 2, caller), id)
 	self:Reply(caller, "Done.")
 end)
 
@@ -835,6 +860,7 @@ return Base(module, {
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
 	{ Path = "World/Combat", Imports = "Death.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
+	{ Path = "World/Spells", Imports = "Spells.h" },
 	{ Path = "World/Content", Imports = "Teleports.h|GameObjects.h|Creatures.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 	{ Path = "Global/Database", Imports = "Database.h" },

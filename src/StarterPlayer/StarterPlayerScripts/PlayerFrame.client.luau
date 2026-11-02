@@ -2,153 +2,80 @@ local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Fusion = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Fusion"))
 local Config = require(ReplicatedStorage.Shared.Config)
+local Components = require(script.Parent:WaitForChild("Components"))
 local player = Players.LocalPlayer
 
--- Nothing of the game UI exists until a character is in the world: chat, core
--- GUI and this WoW-style player frame all follow the InWorld attribute.
+-- Player frame top-left: portrait, name in class colour, level, health, XP and
+-- latency. Nothing of the game UI exists until InWorld; the Roblox core GUI and
+-- chat are switched off with it (ChatFrame draws chat).
+
+local scope = Fusion.scoped(Fusion)
+local Children = Fusion.Children
+local function attr(name, default)
+	return Components.attribute(scope, player, name, default)
+end
 
 local classColor: { [string]: Color3 } = {}
 for _, class in Config.Classes do
 	classColor[class.Name] = Color3.fromHex(class.Color)
 end
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "PlayerFrame"
-gui.ResetOnSpawn = false
-gui.Enabled = false
+local inWorld = attr("InWorld", false)
+local name = attr("CharacterName", player.DisplayName)
+local class = attr("CharacterClass", "")
+local level = attr("CharacterLevel", 1)
+local health, maxHealth = attr("Health", 0), attr("MaxHealth", 100)
+local latency = attr("Latency", nil)
+local color = scope:Computed(function(use)
+	return classColor[use(class)] or Color3.fromRGB(200, 200, 200)
+end)
 
-local frame = Instance.new("Frame")
-frame.Position = UDim2.fromOffset(16, 16)
-frame.Size = UDim2.fromOffset(280, 68)
-frame.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
-frame.BackgroundTransparency = 0.2
-frame.BorderSizePixel = 0
-frame.Parent = gui
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
-local stroke = Instance.new("UIStroke", frame)
-stroke.Color = Color3.fromRGB(120, 95, 40)
-
-local portrait = Instance.new("TextLabel")
-portrait.Size = UDim2.fromOffset(52, 52)
-portrait.Position = UDim2.fromOffset(8, 8)
-portrait.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-portrait.BorderSizePixel = 0
-portrait.Font = Enum.Font.Garamond
-portrait.TextSize = 34
-portrait.TextColor3 = Color3.fromRGB(10, 10, 14)
-portrait.Text = "?"
-portrait.Parent = frame
-Instance.new("UICorner", portrait).CornerRadius = UDim.new(0, 4)
-
-local function label(y: number, size: number, color: Color3): TextLabel
-	local l = Instance.new("TextLabel")
-	l.Position = UDim2.fromOffset(68, y)
-	l.Size = UDim2.new(1, -76, 0, size + 4)
-	l.BackgroundTransparency = 1
-	l.TextXAlignment = Enum.TextXAlignment.Left
-	l.Font = Enum.Font.GothamBold
-	l.TextSize = size
-	l.TextColor3 = color
-	l.Parent = frame
-	return l
-end
-
-local nameLabel = label(8, 16, Color3.new(1, 1, 1))
-local infoLabel = label(27, 12, Color3.fromRGB(190, 190, 200))
-infoLabel.Font = Enum.Font.Gotham
-
-local back = Instance.new("Frame")
-back.Position = UDim2.fromOffset(68, 46)
-back.Size = UDim2.new(1, -76, 0, 14)
-back.BackgroundColor3 = Color3.fromRGB(50, 16, 16)
-back.BorderSizePixel = 0
-back.Parent = frame
-Instance.new("UICorner", back).CornerRadius = UDim.new(0, 3)
-local bar = Instance.new("Frame")
-bar.Size = UDim2.fromScale(1, 1)
-bar.BackgroundColor3 = Color3.fromRGB(60, 200, 80)
-bar.BorderSizePixel = 0
-bar.Parent = back
-Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 3)
-local healthText = Instance.new("TextLabel")
-healthText.Size = UDim2.fromScale(1, 1)
-healthText.BackgroundTransparency = 1
-healthText.Font = Enum.Font.GothamBold
-healthText.TextSize = 11
-healthText.TextColor3 = Color3.new(1, 1, 1)
-healthText.Parent = back
-
-local xpBack = Instance.new("Frame")
-xpBack.Position = UDim2.fromOffset(68, 61)
-xpBack.Size = UDim2.new(1, -76, 0, 4)
-xpBack.BackgroundColor3 = Color3.fromRGB(30, 30, 60)
-xpBack.BorderSizePixel = 0
-xpBack.Parent = frame
-local xpBar = Instance.new("Frame")
-xpBar.Size = UDim2.fromScale(0, 1)
-xpBar.BackgroundColor3 = Color3.fromRGB(110, 70, 220)
-xpBar.BorderSizePixel = 0
-xpBar.Parent = xpBack
-
-local latency = Instance.new("TextLabel")
-latency.AnchorPoint = Vector2.new(1, 0)
-latency.Position = UDim2.new(1, -8, 0, 6)
-latency.Size = UDim2.fromOffset(60, 14)
-latency.BackgroundTransparency = 1
-latency.TextXAlignment = Enum.TextXAlignment.Right
-latency.Font = Enum.Font.Gotham
-latency.TextSize = 11
-latency.TextColor3 = Color3.fromRGB(140, 140, 150)
-latency.Parent = frame
-
-gui.Parent = player:WaitForChild("PlayerGui")
+scope:New "ScreenGui" {
+	Name = "PlayerFrame",
+	ResetOnSpawn = false,
+	Enabled = scope:Computed(function(use)
+		return use(inWorld) == true
+	end),
+	Parent = player:WaitForChild("PlayerGui"),
+	[Children] = Components.UnitFrame(scope, {
+		Position = UDim2.fromOffset(16, 16),
+		Size = UDim2.fromOffset(280, 80),
+		Power = attr("Mana", 0),
+		MaxPower = attr("MaxMana", 1),
+		Portrait = scope:Computed(function(use)
+			return tostring(use(name)):sub(1, 1):upper()
+		end),
+		PortraitColor = color,
+		Title = name,
+		TitleColor = color,
+		Info = scope:Computed(function(use)
+			return ("Level %d %s"):format(use(level), use(class) or "")
+		end),
+		Corner = scope:Computed(function(use)
+			local ms = use(latency)
+			return if ms then ms .. " ms" else ""
+		end),
+		Health = health,
+		MaxHealth = maxHealth,
+		HealthColor = scope:Computed(function(use)
+			return if (use(health) or 0) > 0 then Color3.fromRGB(60, 200, 80) else Color3.fromRGB(120, 120, 120)
+		end),
+		Xp = attr("CharacterXp", 0),
+		XpMax = attr("CharacterXpNext", 1),
+	}),
+}
 
 local function setCoreUi(on: boolean)
-	pcall(function()
-		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, on)
-	end)
-	local window = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
-	local inputBar = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
-	if window then
-		window.Enabled = false -- ChatFrame draws chat
-	end
-	if inputBar then
-		inputBar.Enabled = false -- ChatFrame has its own box
+	pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.All, on)
+	for _, class in { "ChatWindowConfiguration", "ChatInputBarConfiguration" } do
+		local config = TextChatService:FindFirstChildOfClass(class)
+		if config then
+			config.Enabled = false
+		end
 	end
 end
-
-local function refresh()
-	local inWorld = player:GetAttribute("InWorld") == true
-	gui.Enabled = inWorld
-	setCoreUi(inWorld)
-	local name = player:GetAttribute("CharacterName") or player.DisplayName
-	local class = player:GetAttribute("CharacterClass")
-	local color = class and classColor[class] or Color3.fromRGB(200, 200, 200)
-	nameLabel.Text = name
-	nameLabel.TextColor3 = color
-	portrait.Text = name:sub(1, 1):upper()
-	portrait.BackgroundColor3 = color
-	infoLabel.Text = ("Level %d %s"):format(player:GetAttribute("CharacterLevel") or 1, class or "")
-	local xp, next_ = player:GetAttribute("CharacterXp") or 0, math.max(player:GetAttribute("CharacterXpNext") or 1, 1)
-	xpBar.Size = UDim2.fromScale(math.clamp(xp / next_, 0, 1), 1)
-end
-
-local function health()
-	local hp = player:GetAttribute("Health") or 0
-	local max = math.max(player:GetAttribute("MaxHealth") or 100, 1)
-	bar.Size = UDim2.fromScale(math.clamp(hp / max, 0, 1), 1)
-	bar.BackgroundColor3 = if hp > 0 then Color3.fromRGB(60, 200, 80) else Color3.fromRGB(120, 120, 120)
-	healthText.Text = ("%d / %d"):format(hp, max)
-	local ms = player:GetAttribute("Latency")
-	latency.Text = if ms then ms .. " ms" else ""
-end
-
-for _, attribute in { "InWorld", "CharacterName", "CharacterClass", "CharacterLevel", "CharacterXp", "CharacterXpNext" } do
-	player:GetAttributeChangedSignal(attribute):Connect(refresh)
-end
-for _, attribute in { "Health", "MaxHealth", "Latency" } do
-	player:GetAttributeChangedSignal(attribute):Connect(health)
-end
-refresh()
-health()
+scope:Observer(inWorld):onBind(function()
+	setCoreUi(Fusion.peek(inWorld) == true)
+end)

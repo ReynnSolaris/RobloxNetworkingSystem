@@ -61,6 +61,18 @@ return table.freeze({
 		GhostSpeed = 24,
 	},
 
+	-- Spells: twelve action buttons, a shared global cooldown, mana by level
+	-- and regeneration as a fraction of max per second.
+	Spells = {
+		ActionButtons = 12,
+		GlobalCooldown = 1.5,
+		ManaRegen = 0.02,
+		InterruptDistance = 1.5,
+		ManaForLevel = function(level: number): number
+			return 60 + (level - 1) * 12
+		end,
+	},
+
 	Xp = {
 		MaxLevel = 80,
 		Explore = 60, -- first visit to a zone, times the character's level

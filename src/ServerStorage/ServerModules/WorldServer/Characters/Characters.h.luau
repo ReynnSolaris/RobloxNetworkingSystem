@@ -101,6 +101,7 @@ function module:Login(player: Player, data)
 	end
 	self.includes.Chat["Chat.h"]:System(player, ("Welcome to %s, %s."):format(Config.RealmName, record.Characters[slot].Name))
 	self.includes.Quests["Quests.h"]:Refresh(player)
+	self.includes.Spells["Spells.h"]:OnLogin(player)
 end
 
 function module:Logout(player: Player)
@@ -147,4 +148,5 @@ return Base(module, {
 	{ Path = "Auth/Chat", Imports = "Chat.h" },
 	{ Path = "World/Combat", Imports = "Death.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
+	{ Path = "World/Spells", Imports = "Spells.h" },
 })

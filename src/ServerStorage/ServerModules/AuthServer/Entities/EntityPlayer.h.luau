@@ -417,6 +417,7 @@ function module:Spawn(player: Player, at: CFrame?, ghost: boolean?)
 	humanoid.DisplayName = saved.Name
 	self:ApplyStats(player)
 	humanoid.Health = humanoid.MaxHealth
+	self.includes.Spells["Spells.h"]:Reset(player)
 	if saved.Health and not ghost then
 		humanoid.Health = math.clamp(saved.Health, 1, humanoid.MaxHealth)
 		saved.Health = nil
@@ -560,5 +561,6 @@ return Base(module, {
 	{ Path = "World/Movement", Imports = "Anticheat.h" },
 	{ Path = "World/Combat", Imports = "Death.h" },
 	{ Path = "World/Quests", Imports = "Quests.h" },
+	{ Path = "World/Spells", Imports = "Spells.h" },
 	{ Path = "Global/System", Imports = "Effects.h" },
 })

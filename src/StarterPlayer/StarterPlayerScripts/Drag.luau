@@ -10,6 +10,7 @@ local Drag = {}
 
 local payload = nil
 local targets: { { Gui: GuiObject, OnDrop: (any) -> () } } = {}
+local misses: { (any) -> () } = {}
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "DragGhost"
@@ -43,6 +44,11 @@ end
 
 function Drag.active()
 	return payload
+end
+
+-- Called with the payload when a drag ends over no target (WoW drops it).
+function Drag.onMiss(handler: (any) -> ())
+	table.insert(misses, handler)
 end
 
 function Drag.target(target: GuiObject, onDrop: (any) -> ())
@@ -103,6 +109,10 @@ UserInputService.InputEnded:Connect(function(input)
 	local target = under(UserInputService:GetMouseLocation())
 	if target then
 		target.OnDrop(data)
+	else
+		for _, handler in misses do
+			handler(data)
+		end
 	end
 end)
 

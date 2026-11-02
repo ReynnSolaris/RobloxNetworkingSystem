@@ -33,6 +33,12 @@ function Components.Text(scope, props)
 	return scope:New "TextLabel" {
 		Size = props.Size,
 		Position = props.Position,
+		AnchorPoint = props.AnchorPoint,
+		LayoutOrder = props.LayoutOrder,
+		Visible = props.Visible,
+		TextWrapped = props.Wrapped,
+		TextYAlignment = props.VAlign,
+		AutomaticSize = props.AutomaticSize,
 		BackgroundTransparency = 1,
 		Font = props.Font or Enum.Font.Gotham,
 		TextSize = props.TextSize or 14,
@@ -49,8 +55,10 @@ function Components.Button(scope, props)
 		Size = props.Size,
 		Position = props.Position,
 		LayoutOrder = props.LayoutOrder,
+		Visible = props.Visible,
+		AnchorPoint = props.AnchorPoint,
 		BackgroundColor3 = scope:Computed(function(use)
-			return if use(hovered) then Ui.ROW_HOVER else Ui.ROW
+			return if use(hovered) or (props.Active and use(props.Active)) then Ui.ROW_HOVER else Ui.ROW
 		end),
 		AutoButtonColor = false,
 		BorderSizePixel = 0,
@@ -193,6 +201,75 @@ function Components.Panel(scope, props)
 	end
 	return gui
 end
+-- Filled bar with "x / y" text; Value and Max are states.
+function Components.Bar(scope, props)
+	return scope:New "Frame" {
+		Position = props.Position,
+		Size = props.Size,
+		BackgroundColor3 = props.Back or Color3.fromRGB(50, 16, 16),
+		BorderSizePixel = 0,
+		[Children] = {
+			scope:New "UICorner" { CornerRadius = UDim.new(0, 3) },
+			scope:New "Frame" {
+				Size = scope:Computed(function(use)
+					return UDim2.fromScale(math.clamp((use(props.Value) or 0) / math.max(use(props.Max) or 1, 1), 0, 1), 1)
+				end),
+				BackgroundColor3 = props.Color or Color3.fromRGB(60, 200, 80),
+				BorderSizePixel = 0,
+				[Children] = scope:New "UICorner" { CornerRadius = UDim.new(0, 3) },
+			},
+			if props.Text == false then nil else scope:New "TextLabel" {
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				Font = Enum.Font.GothamBold,
+				TextSize = 11,
+				TextColor3 = Color3.new(1, 1, 1),
+				Text = scope:Computed(function(use)
+					return ("%d / %d"):format(use(props.Value) or 0, use(props.Max) or 0)
+				end),
+			},
+		},
+	}
+end
+
+-- WoW unit frame: optional portrait letter, name, info line, right text, health
+-- bar and optional XP bar. Every text and number prop may be a state.
+function Components.UnitFrame(scope, props)
+	local left = if props.Portrait then 68 else 10
+	local power = props.Power ~= nil
+	return scope:New "Frame" {
+		Name = props.Name,
+		Position = props.Position,
+		Size = props.Size or UDim2.fromOffset(280, 68),
+		BackgroundColor3 = Color3.fromRGB(16, 16, 24),
+		BackgroundTransparency = 0.2,
+		BorderSizePixel = 0,
+		LayoutOrder = props.LayoutOrder,
+		[Children] = {
+			scope:New "UICorner" { CornerRadius = UDim.new(0, 6) },
+			scope:New "UIStroke" { Color = Ui.BORDER },
+			if props.Portrait then scope:New "TextLabel" {
+				Size = UDim2.fromOffset(52, 52),
+				Position = UDim2.fromOffset(8, 8),
+				BackgroundColor3 = props.PortraitColor or Color3.fromRGB(60, 60, 70),
+				BorderSizePixel = 0,
+				Font = Enum.Font.Garamond,
+				TextSize = 34,
+				TextColor3 = Color3.fromRGB(10, 10, 14),
+				Text = props.Portrait,
+				[Children] = scope:New "UICorner" { CornerRadius = UDim.new(0, 4) },
+			} else nil,
+			Components.Text(scope, { Position = UDim2.fromOffset(left, 8), Size = UDim2.new(1, -left - 8, 0, 20), Text = props.Title, Font = Enum.Font.GothamBold, TextSize = 16, Color = props.TitleColor }),
+			Components.Text(scope, { Position = UDim2.fromOffset(left, 27), Size = UDim2.new(1, -left - 8, 0, 16), Text = props.Info, TextSize = 12, Color = Color3.fromRGB(190, 190, 200) }),
+			if props.Right then Components.Text(scope, { Position = UDim2.fromOffset(left, 27), Size = UDim2.new(1, -left - 8, 0, 16), Text = props.Right, Font = Enum.Font.GothamBold, TextSize = 12, Color = props.RightColor or Color3.fromRGB(255, 90, 90), Align = Enum.TextXAlignment.Right }) else nil,
+			if props.Corner then Components.Text(scope, { Position = UDim2.new(1, -68, 0, 6), Size = UDim2.fromOffset(60, 14), Text = props.Corner, TextSize = 11, Color = Color3.fromRGB(140, 140, 150), Align = Enum.TextXAlignment.Right }) else nil,
+			Components.Bar(scope, { Position = UDim2.fromOffset(left, 46), Size = UDim2.new(1, -left - 8, 0, if power then 12 else 14), Value = props.Health, Max = props.MaxHealth, Color = props.HealthColor }),
+			if power then Components.Bar(scope, { Position = UDim2.fromOffset(left, 60), Size = UDim2.new(1, -left - 8, 0, 8), Value = props.Power, Max = props.MaxPower, Back = Color3.fromRGB(14, 16, 50), Color = Color3.fromRGB(40, 100, 230), Text = false }) else nil,
+			if props.Xp then Components.Bar(scope, { Position = UDim2.fromOffset(left, if power then 71 else 61), Size = UDim2.new(1, -left - 8, 0, 4), Value = props.Xp, Max = props.XpMax, Back = Color3.fromRGB(30, 30, 60), Color = Color3.fromRGB(110, 70, 220), Text = false }) else nil,
+		},
+	}
+end
+
 -- A Value kept in step with a player attribute.
 function Components.attribute(scope, player: Player, name: string, default)
 	local value = scope:Value(player:GetAttribute(name) or default)

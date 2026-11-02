@@ -360,6 +360,48 @@ handlers[Opcodes.SMSG_QUESTUPDATE_COMPLETE] = function(d)
 	notice(tint(Colors.QUEST, esc((d.Title or "Quest") .. " (Complete)")))
 end
 
+-- Spells: known list, action bar, cooldowns and the current cast ride on
+-- attributes; the trainer window opens on an event.
+local trainerOpen = Instance.new("BindableEvent")
+trainerOpen.Name = "TrainerOpen"
+trainerOpen.Parent = script.Parent
+local cooldowns: { [string]: number } = {}
+
+handlers[Opcodes.SMSG_INITIAL_SPELLS] = function(d)
+	player:SetAttribute("Spells", HttpService:JSONEncode(d.Spells or {}))
+end
+
+handlers[Opcodes.SMSG_ACTION_BUTTONS] = function(d)
+	player:SetAttribute("ActionBar", HttpService:JSONEncode(d.Buttons or {}))
+end
+
+handlers[Opcodes.SMSG_LEARNED_SPELL] = function(d)
+	notice(tint(Colors.SYSTEM, esc("You have learned a new spell: " .. (d.Name or "?"))))
+end
+
+handlers[Opcodes.SMSG_SPELL_START] = function(d)
+	player:SetAttribute("Casting", HttpService:JSONEncode({ Id = d.Id, Name = d.Name, Start = os.clock(), Ends = os.clock() + (d.CastTime or 0) }))
+end
+
+handlers[Opcodes.SMSG_SPELL_GO] = function()
+	player:SetAttribute("Casting", nil)
+end
+
+handlers[Opcodes.SMSG_SPELL_FAILURE] = function(d)
+	player:SetAttribute("Casting", nil)
+	player:SetAttribute("CastError", (d.Reason or "Interrupted.") .. " " .. os.clock())
+	display(tint(Colors.YELL, esc(d.Reason or "Interrupted.")), "Log")
+end
+
+handlers[Opcodes.SMSG_SPELL_COOLDOWN] = function(d)
+	cooldowns[tostring(d.Id)] = os.clock() + (d.Seconds or 0)
+	player:SetAttribute("Cooldowns", HttpService:JSONEncode(cooldowns))
+end
+
+handlers[Opcodes.SMSG_TRAINER_LIST] = function(d)
+	trainerOpen:Fire(d)
+end
+
 handlers[Opcodes.SMSG_QUESTGIVER_QUEST_COMPLETE] = function(d)
 	notice(tint(Colors.QUEST, esc("Quest completed: " .. (d.Title or "?"))))
 	questList:Fire(nil)
