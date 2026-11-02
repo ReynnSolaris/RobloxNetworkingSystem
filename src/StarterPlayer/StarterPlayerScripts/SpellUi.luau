@@ -55,7 +55,7 @@ function SpellUi.tooltip(spell, extra: string?): string
 	if cost or range then
 		table.insert(lines, ('<font color="#FFFFFF">%s</font>%s'):format(cost or "", if cost and range then ("   " .. range) else (range or "")))
 	end
-	local cast = if (spell.CastTime or 0) > 0 then ("%.1f sec cast"):format(spell.CastTime) else "Instant"
+	local cast = if spell.Effect == "passive" then "Passive" elseif (spell.CastTime or 0) > 0 then ("%.1f sec cast"):format(spell.CastTime) else "Instant"
 	table.insert(lines, ('<font color="#FFFFFF">%s</font>%s'):format(cast, if (spell.Cooldown or 0) > 0 then ("   %d sec cooldown"):format(spell.Cooldown) else ""))
 	if spell.Class then
 		table.insert(lines, ('<font color="#AAAAAA">%s</font>'):format(spell.Class))

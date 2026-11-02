@@ -657,6 +657,9 @@ end
 
 handlers[Opcodes.SMSG_GM_STATE] = function(d)
 	gmState[d.Name] = { Gm = d.Gm == true, Invisible = d.Invisible == true }
+	if d.Name == player.Name then
+		player:SetAttribute("GmMode", if d.Gm then true else nil)
+	end
 	local other = Players:FindFirstChild(d.Name)
 	if other and other.Character then
 		applyVisibility(other.Character, d.Invisible == true)

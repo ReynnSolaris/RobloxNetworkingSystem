@@ -211,6 +211,7 @@ GAMEMASTER  .buff <all|player> <speed|jump> <multiplier> <seconds>
             .taxi node add <name> [cost] | .taxi path <from> <to> [cost] | .taxi list | .taxi learn all [player]
             .npc wp add [guid] [wait] | .npc wp clear [guid]
             .event list | .event info <id> | .pet <creature entry> [player] | .pet dismiss [player]
+            .gm gear | .gm testarea [clear]
             .bg create <name> [minlevel] | .bg spawn <id> Alliance|Horde | .bg flag <id> Alliance|Horde | .bg list | .bg leave [player]
             .npc add <entry> | delete [guid] | move [guid] | kill [guid] | say [guid] <text> | info [guid] | near
             .loot template add <creatureEntry> <itemEntry> <chance> [min] [max] | template list [entry]
@@ -658,6 +659,29 @@ order: name in quality colour, binding, slot and type, armor, green stats, level
 requirement in red when too low, Use line, max stack, sell price in coin colours.
 Spells show cost and range, cast time and cooldown, rank, class, description and
 what the aura does. Items list primary stats and spell power.
+
+## Factions, guards, equip rules, spirit healers, GM tools
+
+Hostility is TC's: `creature_template.faction` is `hostile` (everyone), an
+`Alliance` or `Horde` team (friendly to its own, attackable by the other, and
+with `guard = true` it fights the enemy faction on sight), or, with a
+`faction_id`, whatever the player's standing says (Unfriendly or worse is
+hostile). Town Guards and Orgrimmar Grunts seed as elite guards. In GM mode
+every creature is neutral to you and the world treats you as a player again
+when it is off.
+
+Equipping follows class proficiencies (`Config.Classes[].Weapons` and `Armor`
+by item `subclass` and `armor` type): a weapon in the off hand needs the Dual
+Wield passive (Rogues and Death Knights start with it, Warriors, Hunters and
+Shaman train it), a two-hander sends the off hand back to the bag unless you
+know Titan's Grip, and shields count as a weapon type. Passives show as such
+in the spellbook and cannot be cast.
+
+Spirit healers stand at every graveyard, seen only by ghosts and GMs; a ghost
+asks one to return them to life for a quarter of their durability and, from
+level 10, ten minutes of Resurrection Sickness. `.gm gear` dresses you in the
+gamemaster's set; `.gm testarea` lines up every creature and object template
+around you (on GM Island, say) and `.gm testarea clear` removes them.
 
 ## Paper doll, tooltips, starter sets
 

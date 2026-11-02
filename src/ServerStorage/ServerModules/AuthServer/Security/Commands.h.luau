@@ -219,11 +219,66 @@ end)
 
 -- gm mode and visibility
 
-add("gm", 1, ".gm on|off | .gm invis on|off | .gm list", function(self, caller, args)
+-- The GM Island test area: every creature and object template in rows around the caller.
+local function testArea(self, caller: Player, clear: boolean)
+	local DB = self.includes.Database["WorldDB.h"]
+	local Creatures = self.includes.Content["Creatures.h"]
+	local GameObjects = self.includes.Content["GameObjects.h"]
+	if clear then
+		local n = 0
+		for _, row in DB:Select("creature") do
+			if row.testarea then Creatures:Delete(row.guid) n += 1 end
+		end
+		for _, row in DB:Select("gameobject") do
+			if row.testarea then GameObjects:Delete(row.guid) n += 1 end
+		end
+		return n
+	end
+	local origin = assert(caller.Character, "you have no character"):GetPivot()
+	local n = 0
+	local creatures = DB:Select("creature_template")
+	for i, template in creatures do
+		if template.faction ~= "pet" then
+			local ground = origin * CFrame.new(-20 + (i - 1) % 10 * 5, 0, -12 - (i - 1) // 10 * 6)
+			local row = Creatures:Add(template.entry, ground, caller)
+			DB:Update("creature", row.guid, { testarea = true, spawntimesecs = 20 })
+			n += 1
+		end
+	end
+	local objects = DB:Select("gameobject_template")
+	for i, template in objects do
+		local ground = origin * CFrame.new(-20 + (i - 1) % 10 * 5, 0, 12 + (i - 1) // 10 * 6)
+		local row = GameObjects:Add(template.entry, ground, 1, caller)
+		DB:Update("gameobject", row.guid, { testarea = true, spawntimesecs = 20 })
+		n += 1
+	end
+	return n
+end
+
+add("gm", 1, ".gm on|off | .gm invis on|off | .gm list | .gm gear | .gm testarea [clear]", function(self, caller, args)
 	local Session = self.includes.Security["Session.h"]
 	local session = assert(Session:Get(caller), "no session")
 	local sub = args[1]
-	if sub == "list" then
+	if sub == "gear" then
+		local Entities = self.includes.Entities["EntityPlayer.h"]
+		local Items = self.includes.Content["Items.h"]
+		for _, name in { "Gamemaster's Hood", "Gamemaster's Robe", "Gamemaster's Leggings", "Gamemaster's Boots", "Gamemaster's Blade", "Gamemaster's Shield", "Gamemaster's Band", "Gamemaster's Band" } do
+			local item = Items:ByName(name)
+			if item and Entities:AddItem(caller, item.entry, 1, true) then
+				for slot = 1, Entities:BagSize(caller) do
+					local stack = Entities:StackAt(caller, slot)
+					if stack and stack.entry == item.entry then
+						Entities:Equip(caller, slot)
+						break
+					end
+				end
+			end
+		end
+		return self:Reply(caller, "You are wearing the gamemaster's set.")
+	elseif sub == "testarea" then
+		local n = testArea(self, caller, args[2] == "clear")
+		return self:Reply(caller, if args[2] == "clear" then ("Removed %d test spawns."):format(n) else ("Placed %d test spawns around you. .gm testarea clear removes them."):format(n))
+	elseif sub == "list" then
 		for _, player in Players:GetPlayers() do
 			local other = Session:Get(player)
 			if other and other.Gm then
@@ -235,7 +290,7 @@ add("gm", 1, ".gm on|off | .gm invis on|off | .gm list", function(self, caller, 
 		self:Reply(caller, if session.Invisible then "You are now invisible to players." else "You are now visible.")
 	else
 		session.Gm = toggle(sub)
-		self:Reply(caller, if session.Gm then "GM mode on." else "GM mode off.")
+		self:Reply(caller, if session.Gm then "GM mode on. Creatures are neutral to you and you see what ghosts see." else "GM mode off. You are a player to the world again.")
 	end
 	self:BroadcastState(caller)
 end)

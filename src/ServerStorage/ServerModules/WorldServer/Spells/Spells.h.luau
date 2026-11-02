@@ -137,6 +137,15 @@ local SEED = {
 	stat("Druid", "Moonkin Form", "arcane", "SpellPower", 6, 2, 25, 1800, "MK", "Take the form of a moonkin, increasing spell power for 30 min."),
 	stat("Druid", "Heart of the Wild", "nature", "Stamina", 6, 2, 20, 1800, "HW", "Increases Stamina for 30 min."),
 	stat("Druid", "Tree of Life", "nature", "SpellPower", 6, 2, 25, 1800, "TL", "Take the form of a tree, increasing spell power for 30 min."),
+	-- passives: skills checked by name, never cast
+	{ class = "Rogue", name = "Dual Wield", school = "physical", effect = "passive", target = "self", icon = "DW", description = "Allows a one-handed weapon in your off hand.", starter = true },
+	{ class = "Death Knight", name = "Dual Wield", school = "physical", effect = "passive", target = "self", icon = "DW", description = "Allows a one-handed weapon in your off hand.", starter = true },
+	{ class = "Warrior", name = "Dual Wield", school = "physical", effect = "passive", target = "self", icon = "DW", description = "Allows a one-handed weapon in your off hand.", trainlevel = 10 },
+	{ class = "Hunter", name = "Dual Wield", school = "physical", effect = "passive", target = "self", icon = "DW", description = "Allows a one-handed weapon in your off hand.", trainlevel = 20 },
+	{ class = "Shaman", name = "Dual Wield", school = "physical", effect = "passive", target = "self", icon = "DW", description = "Allows a one-handed weapon in your off hand.", trainlevel = 40 },
+	{ class = "Warrior", name = "Titan's Grip", school = "physical", effect = "passive", target = "self", icon = "TG", description = "Allows you to wield two-handed axes, maces and swords in one hand.", trainlevel = 60 },
+	{ name = "Resurrection Sickness", school = "shadow", effect = "aura", target = "self", cost = 0, cast_time = 0, cooldown = 0, range = 0, icon = "RS", description = "Your stats are reduced by a quarter after a spirit healer brought you back.",
+		aura = { kind = "stats", pct = -0.25, duration = 600, harmful = true } },
 	-- item spells: no class, never trained
 	{ name = "Hearthstone", school = "arcane", effect = "hearth", cost = 0, cast_time = 10, cooldown = 60, range = 0, target = "self", icon = "HS", description = "Returns you to your home. Speak to an innkeeper to change your home." },
 	{ name = "Food", school = "physical", effect = "heal", base = 15, per_level = 3, cost = 0, cast_time = 0, cooldown = 5, range = 0, target = "self", icon = "FD", description = "Restores health." },
@@ -170,13 +179,17 @@ function module:Template(id)
 	return self:DB():Get("spell_template", id)
 end
 
-function module:ByName(name: string)
+function module:ByName(name: string, class: string?)
+	local first
 	for _, row in self:DB():Select("spell_template") do
 		if row.name == name then
-			return row
+			if class == nil or row.class == class then
+				return row
+			end
+			first = first or row
 		end
 	end
-	return nil
+	return first
 end
 
 local function char(self, player: Player)
@@ -424,6 +437,9 @@ function module:Cast(player: Player, id, guid, item)
 	local root = Combat:Root(player)
 	if not c or not spell or not root or spell.npc or (not item and not c.Spells[tostring(spell.id)]) then
 		return
+	end
+	if spell.effect == "passive" then
+		return self:Fail(player, "That is a passive skill.")
 	end
 	if spell.effect == "hearth" and not c.Home then
 		return self:Fail(player, "You have no home set. Speak to an innkeeper.")
@@ -675,8 +691,11 @@ end
 function module:Start()
 	local DB = self:DB()
 	local byName = {}
+	local function keyOf(row)
+		return if row.effect == "passive" and row.class then row.class .. "/" .. row.name else row.name
+	end
 	for _, row in DB:Select("spell_template") do
-		byName[row.name] = row
+		byName[keyOf(row)] = row
 	end
 	local fresh = next(byName) == nil
 	local trainer
@@ -687,27 +706,30 @@ function module:Start()
 	end
 	local HttpService = game:GetService("HttpService")
 	for _, seed in SEED do
-		local existing = byName[seed.name]
+		local key = keyOf(seed)
+		local existing = byName[key]
 		if existing and seed.aura and HttpService:JSONEncode(existing.aura or {}) ~= HttpService:JSONEncode(seed.aura) then
 			DB:Update("spell_template", existing.id, { aura = seed.aura, description = seed.description })
 		end
-		if not byName[seed.name] then
+		if not existing then
 			local row = table.clone(seed)
-			row.starter = nil
-			byName[seed.name] = DB:Insert("spell_template", row)
-			-- new class spells reach old databases through the trainer
-			if not fresh and trainer and seed.class and not seed.starter and not seed.talent then
-				DB:Insert("npc_trainer", { entry = trainer.entry, spell = byName[seed.name].id, cost = 100, reqlevel = 2 })
+			row.starter, row.trainlevel = nil, nil
+			byName[key] = DB:Insert("spell_template", row)
+			-- new class spells reach old databases through the trainer; new starters are learned at login
+			if not fresh and seed.starter and seed.class then
+				DB:Insert("playercreateinfo_spell", { class = seed.class, spell = byName[key].id })
+			elseif not fresh and trainer and seed.class and not seed.starter and not seed.talent then
+				DB:Insert("npc_trainer", { entry = trainer.entry, spell = byName[key].id, cost = 100, reqlevel = seed.trainlevel or 2 })
 			end
 		end
 	end
 	if fresh then
 		for _, seed in SEED do
-			local spell = byName[seed.name]
+			local spell = byName[keyOf(seed)]
 			if seed.starter then
 				DB:Insert("playercreateinfo_spell", { class = seed.class, spell = spell.id })
 			elseif trainer and seed.class and not seed.talent then
-				DB:Insert("npc_trainer", { entry = trainer.entry, spell = spell.id, cost = 100, reqlevel = 2 })
+				DB:Insert("npc_trainer", { entry = trainer.entry, spell = spell.id, cost = 100, reqlevel = seed.trainlevel or 2 })
 			end
 		end
 	end

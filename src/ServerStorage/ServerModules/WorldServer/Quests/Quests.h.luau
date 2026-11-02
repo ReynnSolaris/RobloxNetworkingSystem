@@ -227,6 +227,20 @@ function module:Gossip(player: Player, guid)
 	end
 	local entry, template = creature.Row.id, creature.Template
 	local options = {}
+	local Death = self.includes.Combat["Death.h"]
+	if template.spirithealer then
+		if Death:IsDead(player) then
+			table.insert(options, { Id = "spirithealer", Text = "Return me to life. (I accept the sickness and the wear on my gear.)" })
+			return self:Hello(player, guid, options)
+		end
+		return
+	end
+	if Death:IsDead(player) then
+		return
+	end
+	if self.includes.Content["Creatures.h"]:IsHostileTo(creature, player) then
+		return self.includes.Chat["Chat.h"]:System(player, ("%s has nothing to say to you."):format(template.name))
+	end
 	if self.includes.Spells["Spells.h"]:IsTrainer(entry) then
 		table.insert(options, { Id = "train", Text = "I seek training." })
 	end
@@ -290,6 +304,8 @@ function module:Select(player: Player, guid, option)
 		self.includes.Entities["EntityPlayer.h"]:SendBank(player, true)
 	elseif option == "guildbank" and template.banker then
 		self.includes.Social["Guild.h"]:SendBank(player, true)
+	elseif option == "spirithealer" and template.spirithealer then
+		self.includes.Combat["Death.h"]:SpiritHeal(player, guid)
 	elseif option == "repair" and template.repair then
 		self.includes.Entities["EntityPlayer.h"]:Repair(player)
 	elseif option == "profession" and template.trainer_skill then
@@ -547,6 +563,6 @@ return Base(module, {
 	{ Path = "World/Content", Imports = "Creatures.h|Vendors.h|Items.h|Taxi.h|Auction.h" },
 	{ Path = "World/Spells", Imports = "Spells.h|Talents.h|Skills.h" },
 	{ Path = "World/Zones", Imports = "Zones.h" },
-	{ Path = "World/Combat", Imports = "Battleground.h" },
+	{ Path = "World/Combat", Imports = "Battleground.h|Death.h" },
 	{ Path = "World/Database", Imports = "WorldDB.h|WorldDatabase.h" },
 })

@@ -207,6 +207,56 @@ function module:Forget(player: Player)
 	player:SetAttribute("Ghost", nil)
 end
 
+-- A spirit healer brings a ghost back at the graveyard: half health, a quarter
+-- of durability gone, and resurrection sickness from SicknessLevel.
+function module:SpiritHeal(player: Player, guid)
+	local state = self.information[player]
+	local creature = self.includes.Content["Creatures.h"]:State(guid)
+	if not state or not state.Ghost or not creature or not creature.Template.spirithealer then
+		return
+	end
+	local Entities = self.includes.Entities["EntityPlayer.h"]
+	self:Resurrect(player, creature.Root.CFrame * CFrame.new(3, 0, 3))
+	Entities:Wear(player, Config.SpiritHealer.DurabilityLoss)
+	if (player:GetAttribute("CharacterLevel") or 1) >= Config.SpiritHealer.SicknessLevel then
+		local spell = self.includes.Spells["Spells.h"]:ByName("Resurrection Sickness")
+		if spell then
+			self.includes.Spells["Auras.h"]:Apply(nil, player, spell, 0)
+		end
+	end
+	self.includes.Chat["Chat.h"]:System(player, "The spirit healer returns you to life.")
+end
+
+-- Every graveyard gets a spirit healer standing by it.
+function module:PlaceHealers()
+	local Creatures = self.includes.Content["Creatures.h"]
+	local template = Creatures:ByName("Spirit Healer")
+	if not template then
+		return
+	end
+	local DB = self.includes.Database["WorldDB.h"]
+	local spawns = {}
+	for _, row in DB:Select("creature") do
+		if tostring(row.id) == tostring(template.entry) then
+			table.insert(spawns, Vector3.new(row.x, row.y, row.z))
+		end
+	end
+	for _, yard in DB:Select("game_graveyard") do
+		local at = Vector3.new(yard.x, yard.y, yard.z)
+		local placed = false
+		for _, p in spawns do
+			if (p - at).Magnitude < 15 then
+				placed = true
+			end
+		end
+		if not placed then
+			local row = DB.ToRow(DB.ToCFrame(yard) * CFrame.new(4, 0, 0))
+			row.id = template.entry
+			Creatures:Spawn(DB:Insert("creature", row))
+		end
+	end
+end
+
 function module:Start()
 	local DB = self.includes.Database["WorldDB.h"]
 	if #DB:Select("game_graveyard") == 0 then
@@ -214,6 +264,7 @@ function module:Start()
 			DB:Insert("game_graveyard", table.clone(row))
 		end
 	end
+	self:PlaceHealers()
 	local Packet = self.includes.Security["Packet.h"]
 	Packet:On(Opcodes.CMSG_REPOP_REQUEST, function(player)
 		self:Repop(player)
@@ -232,6 +283,7 @@ end
 return Base(module, {
 	{ Path = "World/Content", Imports = "Creatures.h" },
 	{ Path = "World/Combat", Imports = "Battleground.h" },
+	{ Path = "World/Spells", Imports = "Spells.h|Auras.h" },
 	{ Path = "World/Combat", Imports = "Duel.h" },
 	{ Path = "Auth/Security", Imports = "Packet.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },

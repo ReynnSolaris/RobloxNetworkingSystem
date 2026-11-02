@@ -84,7 +84,8 @@ function module:ApplyStats(player: Player)
 	end
 	local mods = self.includes.Spells["Auras.h"]:Mods(player)
 	for _, name in S.Names do
-		stats[name] += mods[name] or 0
+		stats[name] += (mods[name] or 0) + (mods.Stats[name] or 0)
+		stats[name] = math.max(0, stats[name] * (1 + (mods.Pct or 0)))
 	end
 	stats.Health += (mods.Health or 0) + stats.Stamina * S.HealthPerStamina
 	stats.Mana += (mods.Mana or 0) + stats.Intellect * S.ManaPerIntellect
@@ -507,6 +508,10 @@ function module:Equip(player: Player, slot: number): (boolean, string?)
 	end
 	char.Equipment = char.Equipment or {}
 	char.Durability = char.Durability or {}
+	local allowed, why = self:MayEquip(player, item)
+	if not allowed then
+		return false, why
+	end
 	local slotName = item.slot
 	if slotName == "bag" then
 		slotName = nil
@@ -546,6 +551,57 @@ function module:Equip(player: Player, slot: number): (boolean, string?)
 	end
 	self:SendInventory(player, false)
 	self:ApplyStats(player)
+	return true
+end
+
+-- Does the character know a passive spell by name (Dual Wield, Titan's Grip)?
+function module:Knows(player: Player, spellName: string): boolean
+	local char = self.information[player] and self.information[player].Active
+	local DB = self.includes.Database["WorldDB.h"]
+	for id in (char and char.Spells or {}) do
+		local spell = DB:Get("spell_template", id)
+		if spell and spell.name == spellName then
+			return true
+		end
+	end
+	return false
+end
+
+-- TC's equip rules: class proficiencies for weapon subclass and armor type,
+-- shields and weapons in the off hand, two-handers.
+function module:MayEquip(player: Player, item): (boolean, string?)
+	local char = self.information[player] and self.information[player].Active
+	local class
+	for _, c in Config.Classes do
+		if c.Name == (char and char.Class) then
+			class = c
+		end
+	end
+	if not class then
+		return true
+	end
+	if item.subclass and not table.find(class.Weapons, item.subclass) then
+		return false, ("%ss cannot use %s weapons."):format(class.Name, if item.subclass == "shield" then "shields as" else item.subclass)
+	end
+	if item.armor and not table.find(class.Armor, item.armor) then
+		return false, ("%ss cannot wear %s."):format(class.Name, item.armor)
+	end
+	local DB = self.includes.Database["WorldDB.h"]
+	local main = char.Equipment and char.Equipment.mainhand and DB:Get("item_template", char.Equipment.mainhand)
+	local off = char.Equipment and char.Equipment.offhand and DB:Get("item_template", char.Equipment.offhand)
+	if item.slot == "offhand" then
+		if item.class == "weapon" and not self:Knows(player, Config.Equip.DualWield) then
+			return false, "You need the Dual Wield skill to hold a weapon in your off hand."
+		end
+		if main and (main.hands or 1) == 2 and not self:Knows(player, Config.Equip.TitansGrip) then
+			return false, "You cannot use an off hand with a two-handed weapon."
+		end
+	elseif item.slot == "mainhand" and (item.hands or 1) == 2 and off and not self:Knows(player, Config.Equip.TitansGrip) then
+		-- a two-hander pushes the off hand back to the bag
+		if not self:Unequip(player, "offhand") then
+			return false, "Free a bag slot for your off hand first."
+		end
+	end
 	return true
 end
 

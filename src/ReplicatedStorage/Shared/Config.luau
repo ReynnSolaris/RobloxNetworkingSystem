@@ -170,18 +170,34 @@ return table.freeze({
 
 	-- Characters per account and the classes they can be, in Blizzard class colours.
 	MaxCharacters = 3,
+	-- Weapons and Armor are what the class may equip, TC's item subclasses.
 	Classes = {
-		{ Name = "Warrior", Color = "#C79C6E", Role = "Tank, Melee", Description = "Warriors live for the thrill of battle, wearing the heaviest armor and wielding any weapon they can lift." },
-		{ Name = "Paladin", Color = "#F58CBA", Role = "Tank, Healer, Melee", Description = "Holy warriors who protect the weak, heal the wounded and smite the wicked in plate armor." },
-		{ Name = "Hunter", Color = "#ABD473", Role = "Ranged", Description = "Masters of the wild who strike from range and track their prey across any terrain." },
-		{ Name = "Rogue", Color = "#FFF569", Role = "Melee", Description = "Rogues strike from the shadows, quick and deadly, and are gone before the alarm is raised." },
-		{ Name = "Priest", Color = "#FFFFFF", Role = "Healer, Ranged", Description = "Priests mend the broken with the Light and punish the faithless with holy fire." },
-		{ Name = "Death Knight", Color = "#C41F3B", Role = "Tank, Melee", Description = "Risen champions wielding frost, blood and unholy power against the living." },
-		{ Name = "Shaman", Color = "#0070DE", Role = "Healer, Melee, Ranged", Description = "Shaman call upon the elements to heal their allies and strike down their foes." },
-		{ Name = "Mage", Color = "#69CCF0", Role = "Ranged", Description = "Scholars of the arcane who hurl fire, frost and raw magic from a safe distance." },
-		{ Name = "Warlock", Color = "#9482C9", Role = "Ranged", Description = "Warlocks bargain with dark powers for shadow and flame, and pay the price gladly." },
-		{ Name = "Druid", Color = "#FF7D0A", Role = "Healer, Ranged", Description = "Keepers of the natural balance who heal with the power of life and strike with nature's wrath." },
+		{ Name = "Warrior", Color = "#C79C6E", Role = "Tank, Melee", Weapons = { "sword", "axe", "mace", "dagger", "polearm", "staff", "fist", "bow", "gun", "crossbow", "thrown", "shield" }, Armor = { "cloth", "leather", "mail", "plate" },
+			Description = "Warriors live for the thrill of battle, wearing the heaviest armor and wielding any weapon they can lift." },
+		{ Name = "Paladin", Color = "#F58CBA", Role = "Tank, Healer, Melee", Weapons = { "sword", "axe", "mace", "polearm", "shield" }, Armor = { "cloth", "leather", "mail", "plate" },
+			Description = "Holy warriors who protect the weak, heal the wounded and smite the wicked in plate armor." },
+		{ Name = "Hunter", Color = "#ABD473", Role = "Ranged", Weapons = { "sword", "axe", "dagger", "polearm", "staff", "fist", "bow", "gun", "crossbow", "thrown" }, Armor = { "cloth", "leather", "mail" },
+			Description = "Masters of the wild who strike from range and track their prey across any terrain." },
+		{ Name = "Rogue", Color = "#FFF569", Role = "Melee", Weapons = { "sword", "axe", "mace", "dagger", "fist", "bow", "gun", "crossbow", "thrown" }, Armor = { "cloth", "leather" },
+			Description = "Rogues strike from the shadows, quick and deadly, and are gone before the alarm is raised." },
+		{ Name = "Priest", Color = "#FFFFFF", Role = "Healer, Ranged", Weapons = { "mace", "dagger", "staff", "wand" }, Armor = { "cloth" },
+			Description = "Priests mend the broken with the Light and punish the faithless with holy fire." },
+		{ Name = "Death Knight", Color = "#C41F3B", Role = "Tank, Melee", Weapons = { "sword", "axe", "mace", "polearm" }, Armor = { "cloth", "leather", "mail", "plate" },
+			Description = "Risen champions wielding frost, blood and unholy power against the living." },
+		{ Name = "Shaman", Color = "#0070DE", Role = "Healer, Melee, Ranged", Weapons = { "axe", "mace", "dagger", "staff", "fist", "shield" }, Armor = { "cloth", "leather", "mail" },
+			Description = "Shaman call upon the elements to heal their allies and strike down their foes." },
+		{ Name = "Mage", Color = "#69CCF0", Role = "Ranged", Weapons = { "sword", "dagger", "staff", "wand" }, Armor = { "cloth" },
+			Description = "Scholars of the arcane who hurl fire, frost and raw magic from a safe distance." },
+		{ Name = "Warlock", Color = "#9482C9", Role = "Ranged", Weapons = { "sword", "dagger", "staff", "wand" }, Armor = { "cloth" },
+			Description = "Warlocks bargain with dark powers for shadow and flame, and pay the price gladly." },
+		{ Name = "Druid", Color = "#FF7D0A", Role = "Healer, Ranged", Weapons = { "mace", "dagger", "staff", "polearm", "fist" }, Armor = { "cloth", "leather" },
+			Description = "Keepers of the natural balance who heal with the power of life and strike with nature's wrath." },
 	},
+	-- Equip rules: a weapon in the off hand needs the Dual Wield passive, two
+	-- two-handers need Titan's Grip, shields need the shield "weapon" skill.
+	Equip = { DualWield = "Dual Wield", TitansGrip = "Titan's Grip" },
+	-- Death at a spirit healer: durability loss and resurrection sickness from this level.
+	SpiritHealer = { DurabilityLoss = 0.25, SicknessLevel = 10, SicknessSeconds = 600 },
 	Factions = {
 		Alliance = { Color = "#1E90FF" },
 		Horde = { Color = "#C41F3B" },

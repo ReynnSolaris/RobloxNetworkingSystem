@@ -52,10 +52,15 @@ end
 
 -- Sum of stat modifiers and the movement multiplier from every aura.
 function module:Mods(unit)
-	local mods = { Health = 0, Damage = 0, Armor = 0, Mana = 0, Speed = 1, Jump = 1, Stun = false, Stamina = 0, Strength = 0, Agility = 0, Intellect = 0, Spirit = 0 }
+	local mods = { Health = 0, Damage = 0, Armor = 0, Mana = 0, Speed = 1, Jump = 1, Stun = false, Stamina = 0, Strength = 0, Agility = 0, Intellect = 0, Spirit = 0, Pct = 0, Stats = {} }
 	for _, aura in self:List(unit) do
 		if aura.Kind == "stat" and aura.Stat then
 			mods[aura.Stat] = (mods[aura.Stat] or 0) + (aura.Amount or 0)
+		elseif aura.Kind == "stats" then
+			mods.Pct += aura.Pct or 0
+			for stat, value in (aura.Stats or {}) do
+				mods.Stats[stat] = (mods.Stats[stat] or 0) + value
+			end
 		elseif aura.Kind == "speed" or aura.Kind == "mount" then
 			mods.Speed *= aura.Mult or 1
 		elseif aura.Kind == "jump" then
@@ -115,6 +120,15 @@ function module:Apply(caster, unit, spell, amount: number?)
 	local now = os.clock()
 	aura.Name, aura.Icon, aura.School, aura.Description = spell.name, spell.icon, spell.school, spell.description
 	aura.Kind, aura.Stat, aura.Mult = spec.kind, spec.stat, spec.mult
+	aura.Pct, aura.Stats, aura.Form, aura.Group = spec.pct, spec.stats, spec.form, spec.group
+	-- one of a group at a time: stances, aspects, presences, forms
+	if spec.group then
+		for _, other in table.clone(list) do
+			if other ~= aura and other.Group == spec.group then
+				self:Remove(unit, other.Id, true)
+			end
+		end
+	end
 	aura.Amount = amount or spec.amount or 0
 	aura.Interval = spec.interval or 3
 	aura.Duration = spec.duration or 0

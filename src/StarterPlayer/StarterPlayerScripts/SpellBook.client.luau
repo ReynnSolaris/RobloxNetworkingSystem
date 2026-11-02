@@ -63,7 +63,7 @@ Components.Panel(scope, {
 						}),
 						Components.Text(scope, { Position = UDim2.fromOffset(54, 4), Size = UDim2.new(1, -60, 0, 20), Text = spell.Name or "?", Font = Enum.Font.GothamBold, TextSize = 15, Color = SpellUi.color(spell) }),
 						Components.Text(scope, { Position = UDim2.fromOffset(54, 24), Size = UDim2.new(1, -60, 0, 18), TextSize = 12, Color = Color3.fromRGB(170, 170, 180),
-							Text = ("%s%s"):format(if (spell.CastTime or 0) > 0 then ("%.1f sec cast"):format(spell.CastTime) else "Instant", if (spell.Cost or 0) > 0 then ("   %d mana"):format(spell.Cost) else "") }),
+							Text = if spell.Effect == "passive" then "Passive" else ("%s%s"):format(if (spell.CastTime or 0) > 0 then ("%.1f sec cast"):format(spell.CastTime) else "Instant", if (spell.Cost or 0) > 0 then ("   %d mana"):format(spell.Cost) else "") }),
 					},
 				}
 			end),

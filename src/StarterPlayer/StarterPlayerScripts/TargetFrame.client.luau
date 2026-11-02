@@ -44,7 +44,8 @@ local hostile = scope:Computed(function(use)
 		local enemy = other:GetAttribute("CharacterFaction") ~= nil and other:GetAttribute("CharacterFaction") ~= use(myFaction)
 		return enemy and (use(zoneKind) == "Contested Territory" or other:GetAttribute("PvpFlag") == true)
 	end
-	return model ~= nil and model:GetAttribute("Faction") == "hostile"
+	local faction = model and model:GetAttribute("Faction")
+	return faction == "hostile" or ((faction == "Alliance" or faction == "Horde") and faction ~= use(myFaction))
 end)
 local classColor: { [string]: Color3 } = {}
 for _, class in Config.Classes do

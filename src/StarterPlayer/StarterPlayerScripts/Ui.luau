@@ -54,7 +54,11 @@ function Ui.itemTooltip(item, price: string?): string
 		white("Binds when picked up")
 	elseif item.Slot then
 		white("Binds when equipped")
-		white(("%s%s"):format(SLOT_NAMES[item.Slot] or item.Slot, if item.Class then ('<font color="#AAAAAA">   %s</font>'):format(CLASS_NAMES[item.Class] or item.Class) else ""))
+	end
+	if item.Slot then
+		local kind = if item.Subclass then (item.Subclass:sub(1, 1):upper() .. item.Subclass:sub(2)) elseif item.ArmorType then (item.ArmorType:sub(1, 1):upper() .. item.ArmorType:sub(2)) elseif item.Class then (CLASS_NAMES[item.Class] or item.Class) else nil
+		local hands = if (item.Hands or 1) == 2 then "Two-Hand" elseif item.Slot == "mainhand" and item.Class == "weapon" then "One-Hand" else nil
+		white(("%s%s"):format(hands or SLOT_NAMES[item.Slot] or item.Slot, if kind then ('<font color="#AAAAAA">   %s</font>'):format(kind) else ""))
 	elseif item.Class and item.Class ~= "misc" then
 		white(CLASS_NAMES[item.Class] or item.Class)
 	end
@@ -342,14 +346,15 @@ task.spawn(function()
 			local creatures = workspace:FindFirstChild("Creatures")
 			local other = Players:GetPlayerFromCharacter(model)
 			if model.Parent == creatures and model:GetAttribute("Guid") then
-				local hostile = model:GetAttribute("Faction") == "hostile"
+				local faction = model:GetAttribute("Faction")
+				local hostile = faction == "hostile" or ((faction == "Alliance" or faction == "Horde") and faction ~= (player:GetAttribute("CharacterFaction") or "Alliance"))
 				local humanoid = model:FindFirstChildOfClass("Humanoid")
 				local rank = model:GetAttribute("Rank")
 				local rankText = if rank == "boss" then " Boss" elseif rank == "elite" then " Elite" elseif rank == "rare" then " Rare" else ""
 				show = ('<font size="16" color="%s"><b>%s</b></font>%s\n<font color="#FFFFFF">Level %s%s %s</font>%s'):format(
 					if rank == "boss" or rank == "elite" then "#FFD100" elseif rank == "rare" then "#C0C0FF" elseif hostile then "#FF5A5A" else "#5ADC5A", model.Name,
 					if model:GetAttribute("Subname") then ('\n<font color="#AAAAAA">&lt;%s&gt;</font>'):format(model:GetAttribute("Subname")) else "",
-					tostring(model:GetAttribute("Level") or "?"), rankText, if hostile then "Hostile" elseif model:GetAttribute("Faction") == "pet" then "Pet" else "Friendly",
+					tostring(model:GetAttribute("Level") or "?"), rankText, if hostile then "Hostile" elseif faction == "pet" then "Pet" elseif faction == "Alliance" or faction == "Horde" then faction else "Friendly",
 					if humanoid and humanoid.Health <= 0 then '\n<font color="#AAAAAA">Dead</font>' else "")
 			elseif other and other ~= player then
 				local class = other:GetAttribute("CharacterClass")

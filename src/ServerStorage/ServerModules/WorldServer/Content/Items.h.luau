@@ -94,8 +94,49 @@ local SEED = {
 	{ name = "Trainee's Arcane Staff", quality = 2, stack = 1, class = "weapon", slot = "mainhand", damage = 3, spellpower = 5, intellect = 1, buyprice = 800, level = 3 },
 	{ name = "Trainee's Shadow Staff", quality = 2, stack = 1, class = "weapon", slot = "mainhand", damage = 3, spellpower = 5, stamina = 1, buyprice = 800, level = 3 },
 	{ name = "Trainee's Wild Staff", quality = 2, stack = 1, class = "weapon", slot = "mainhand", damage = 3, spellpower = 4, spirit = 2, buyprice = 800, level = 3 },
+	-- the gamemaster's set, from .gm gear
+	{ name = "Gamemaster's Hood", quality = 5, stack = 1, class = "armor", slot = "head", armor = 500, stamina = 200, strength = 100, intellect = 100, buyprice = 0, level = 1, bind = "pickup", flavor = "Whatever you say goes." },
+	{ name = "Gamemaster's Robe", quality = 5, stack = 1, class = "armor", slot = "chest", armor = 800, stamina = 300, strength = 100, intellect = 100, spirit = 100, buyprice = 0, level = 1, bind = "pickup" },
+	{ name = "Gamemaster's Leggings", quality = 5, stack = 1, class = "armor", slot = "legs", armor = 700, stamina = 250, agility = 100, buyprice = 0, level = 1, bind = "pickup" },
+	{ name = "Gamemaster's Boots", quality = 5, stack = 1, class = "armor", slot = "feet", armor = 400, stamina = 150, agility = 100, buyprice = 0, level = 1, bind = "pickup" },
+	{ name = "Gamemaster's Blade", quality = 5, stack = 1, class = "weapon", slot = "mainhand", damage = 500, spellpower = 500, buyprice = 0, level = 1, bind = "pickup", flavor = "One swing is usually enough." },
+	{ name = "Gamemaster's Shield", quality = 5, stack = 1, class = "armor", slot = "offhand", armor = 900, stamina = 200, buyprice = 0, level = 1, bind = "pickup" },
+	{ name = "Gamemaster's Band", quality = 5, stack = 1, class = "armor", slot = "ring", stamina = 100, intellect = 100, strength = 100, agility = 100, spirit = 100, buyprice = 0, level = 1, bind = "pickup" },
 	{ name = "Gryphon Reins", quality = 3, stack = 1, class = "misc", buyprice = 5000000, level = 30, use = "Summon Gryphon", flavor = "The skies of Azeroth await." },
 }
+
+-- Item subclasses (TC's weapon and armor types) and hands by name, applied to
+-- every seed and to old rows missing them.
+local KIND = {
+	["Worn Shortsword"] = { "sword", 1 }, ["Rough Copper Sword"] = { "sword", 1 }, ["Trainee's Broadsword"] = { "sword", 2 }, ["Rusted Runeblade"] = { "sword", 2 }, ["Trainee's Runeblade"] = { "sword", 2 },
+	["Worn Mace"] = { "mace", 1 }, ["Trainee's Hammer"] = { "mace", 2 }, ["Trainee's Totem Mace"] = { "mace", 1 },
+	["Worn Dagger"] = { "dagger", 1 }, ["Trainee's Dirk"] = { "dagger", 1 },
+	["Worn Shortbow"] = { "bow", 2 }, ["Trainee's Bow"] = { "bow", 2 },
+	["Neophyte's Staff"] = { "staff", 2 }, ["Apprentice's Staff"] = { "staff", 2 }, ["Acolyte's Staff"] = { "staff", 2 }, ["Novice's Staff"] = { "staff", 2 },
+	["Trainee's Holy Staff"] = { "staff", 2 }, ["Trainee's Arcane Staff"] = { "staff", 2 }, ["Trainee's Shadow Staff"] = { "staff", 2 }, ["Trainee's Wild Staff"] = { "staff", 2 },
+	["Rough Wooden Shield"] = { "shield", 1 },
+	["Gamemaster's Blade"] = { "sword", 1 }, ["Gamemaster's Shield"] = { "shield", 1 },
+}
+local ARMOR_KIND = {
+	plate = { "Acherus Knight's Tunic", "Acherus Knight's Legplates", "Acherus Knight's Boots", "Gamemaster's Hood", "Gamemaster's Robe", "Gamemaster's Leggings", "Gamemaster's Boots" },
+	mail = { "Squire's Shirt", "Squire's Pants", "Squire's Boots", "Primitive Mantle", "Primitive Kilt", "Primitive Boots", "Copper Chain Belt", "Kobold Mining Helm" },
+	leather = { "Trapper's Shirt", "Trapper's Pants", "Trapper's Boots", "Thug's Shirt", "Thug's Pants", "Thug's Boots", "Novice's Robe", "Novice's Pants", "Novice's Boots" },
+	cloth = { "Recruit's Tunic", "Recruit's Pants", "Recruit's Boots", "Neophyte's Shirt", "Neophyte's Pants", "Neophyte's Boots", "Apprentice's Robe", "Apprentice's Pants", "Apprentice's Boots",
+		"Acolyte's Robe", "Acolyte's Pants", "Acolyte's Boots", "Recruit's Gloves", "Recruit's Belt", "Recruit's Bracers", "Recruit's Shoulderpads", "Linen Cloak" },
+}
+local function kindOf(item)
+	local out = {}
+	local k = KIND[item.name]
+	if k then
+		out.subclass, out.hands = k[1], k[2]
+	end
+	for armor, names in ARMOR_KIND do
+		if table.find(names, item.name) then
+			out.armor = armor
+		end
+	end
+	return out
+end
 
 function module:DB()
 	return self.includes.Database["WorldDB.h"]
@@ -126,7 +167,7 @@ function module:Describe(item, extra)
 	local out = { Entry = template.entry, Name = template.name or "?", Quality = template.quality or 1, Stack = template.stack, Slot = template.slot,
 		Class = template.class, Level = template.level, Health = template.health, Damage = template.damage, Armor = template.armor,
 		Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Use = spell and spell.description, Flavor = template.flavor,
-		Bind = template.bind, Recipe = template.recipe, Mount = template.mount, Container = template.container }
+		Bind = template.bind, Recipe = template.recipe, Mount = template.mount, Container = template.container, Subclass = template.subclass, Hands = template.hands, ArmorType = template.armor }
 	for _, stat in STATS do
 		out[stat:sub(1, 1):upper() .. stat:sub(2)] = template[stat]
 	end
@@ -143,6 +184,9 @@ function module:Start()
 		byName[row.name] = row
 	end
 	for _, item in SEED do
+		for key, value in kindOf(item) do
+			item[key] = value
+		end
 		local existing = byName[item.name]
 		if not existing then
 			byName[item.name] = DB:Insert("item_template", table.clone(item))

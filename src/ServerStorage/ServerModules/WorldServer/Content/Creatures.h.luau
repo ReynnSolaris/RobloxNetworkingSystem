@@ -21,7 +21,9 @@ local module = {}
 
 local SEED = {
 	{ name = "Innkeeper", subname = "Innkeeper", modelid = "default", scale = 1, gossip = "Welcome, traveler. Rest your feet a while.", faction = "friendly", innkeeper = true },
-	{ name = "Town Guard", subname = "Guard", modelid = "default", scale = 1.05, gossip = "Move along, citizen.", faction = "friendly" },
+	{ name = "Town Guard", subname = "Guard", modelid = "default", scale = 1.05, gossip = "Move along, citizen.", faction = "Alliance", guard = true, rank = "elite", minlevel = 10, maxlevel = 10, health = 300, dmgmin = 12, dmgmax = 18, aggro = 20, speed = 16 },
+	{ name = "Orgrimmar Grunt", subname = "Guard", modelid = "default", scale = 1.1, gossip = "Lok'tar, friend.", faction = "Horde", guard = true, rank = "elite", minlevel = 10, maxlevel = 10, health = 300, dmgmin = 12, dmgmax = 18, aggro = 20, speed = 16 },
+	{ name = "Spirit Healer", subname = "", modelid = "default", scale = 1.2, gossip = "Rest now, and rise.", faction = "friendly", spirithealer = true, ghostonly = true },
 	{ name = "Banker", subname = "Banker", modelid = "default", scale = 1, gossip = "Your deposits are safe with us.", faction = "friendly", banker = true },
 	{ name = "Class Trainer", subname = "Trainer", modelid = "default", scale = 1, gossip = "What would you like to learn?", faction = "friendly" },
 	{ name = "General Goods", subname = "Vendor", modelid = "default", scale = 1, gossip = "Fine wares, fair prices.", faction = "friendly", repair = true },
@@ -132,6 +134,33 @@ function module:State(guid)
 	return self.information[tostring(guid)]
 end
 
+-- Faction, TC style. faction = "hostile" hates everyone; "Alliance" or
+-- "Horde" is friendly to its team and attackable by the other; a template with
+-- faction_id follows the player's standing (Unfriendly or worse is hostile).
+-- GM mode makes everything neutral.
+function module:IsHostileTo(state, player: Player): boolean
+	local session = self.includes.Security["Session.h"]:Get(player)
+	if session and session.Gm then
+		return false
+	end
+	local faction = state.Template.faction
+	if faction == "hostile" then
+		return true
+	end
+	if faction == "Alliance" or faction == "Horde" then
+		return (player:GetAttribute("CharacterFaction") or "Alliance") ~= faction
+	end
+	if state.Template.faction_id and faction ~= "pet" then
+		return self.includes.Social["Reputation.h"]:Value(player, state.Template.faction_id) < 0
+	end
+	return false
+end
+
+-- Would this creature start a fight with the player on sight?
+function module:Aggressive(state, player: Player): boolean
+	return (state.Hostile or state.Template.guard == true) and self:IsHostileTo(state, player)
+end
+
 function module:Find(guid): Model?
 	local state = self:State(guid)
 	return state and state.Model
@@ -179,7 +208,8 @@ function module:Spawn(row)
 		return nil
 	end
 	local hostile = template.faction == "hostile"
-	local moves = hostile or (row.waypoints and #row.waypoints > 0) or (template.wander or 0) > 0
+	local guard = template.guard == true
+	local moves = hostile or guard or (row.waypoints and #row.waypoints > 0) or (template.wander or 0) > 0
 	local level = math.random(template.minlevel or 1, math.max(template.maxlevel or 1, template.minlevel or 1))
 	local model = build(template.modelid or "default")
 	model.Name = template.name
@@ -188,6 +218,7 @@ function module:Spawn(row)
 	model:SetAttribute("Level", level)
 	model:SetAttribute("Subname", template.subname)
 	model:SetAttribute("Faction", template.faction or "friendly")
+	model:SetAttribute("GhostOnly", template.ghostonly == true or nil)
 	local humanoid = assert(model:FindFirstChildOfClass("Humanoid"), "creature model needs a Humanoid") :: Humanoid
 	local root = assert(model:FindFirstChild("HumanoidRootPart"), "creature model needs a HumanoidRootPart") :: BasePart
 	humanoid.DisplayName = template.name
@@ -198,11 +229,12 @@ function module:Spawn(row)
 	end
 	local rank = Config.Combat.Ranks[template.rank or "normal"] or Config.Combat.Ranks.normal
 	model:SetAttribute("Rank", template.rank or "normal")
-	if hostile then
+	if hostile or guard then
 		humanoid.MaxHealth = math.floor((template.health or 40) * (1 + 0.15 * (level - (template.minlevel or 1))) * rank.Health)
 		humanoid.Health = humanoid.MaxHealth
 		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
-	else
+	end
+	if not hostile then
 		root.Anchored = not moves
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Talk"
@@ -306,7 +338,7 @@ end
 -- the healed unit, a taunt jumps to the top. The target is whoever leads by
 -- Config.Combat.ThreatSwitch over the current one.
 function module:AddThreat(state, unit, amount: number)
-	if not state.Hostile or state.Dead or not unit then
+	if (not state.Hostile and not state.Template.guard) or state.Dead or not unit then
 		return
 	end
 	state.Threat[unit] = (state.Threat[unit] or 0) + math.max(0, amount)
@@ -333,7 +365,7 @@ end
 -- Healing threat: every creature with the healed unit on its table.
 function module:HealThreat(healer, healed, amount: number)
 	for _, state in self.information do
-		if state.Hostile and not state.Dead and state.Threat[healed] then
+		if (state.Hostile or state.Template.guard) and not state.Dead and state.Threat[healed] then
 			self:AddThreat(state, healer, amount * 0.5)
 		end
 	end
@@ -357,7 +389,7 @@ end
 -- Called when a unit hurts the creature. Nearby creatures of the same kind join in.
 function module:Aggro(guid, attacker, quiet: boolean?)
 	local state = self:State(guid)
-	if not state or not state.Hostile or state.Dead then
+	if not state or (not state.Hostile and not state.Template.guard) or state.Dead then
 		return
 	end
 	self:AddThreat(state, attacker, 0)
@@ -619,7 +651,7 @@ function module:Think(state)
 	if state.Owner then
 		return self.includes.Content["Pets.h"]:Think(state)
 	end
-	if not state.Hostile then
+	if not state.Hostile and not template.guard then
 		return idle(self, state)
 	end
 
@@ -649,9 +681,10 @@ function module:Think(state)
 		local nearest, best = nil, template.aggro or 15
 		for _, player in Players:GetPlayers() do
 			local r = Combat:Root(player)
-			if r and Combat:Alive(player) then
+			if r and Combat:Alive(player) and self:IsHostileTo(state, player) then
 				local d = (r.Position - here).Magnitude
-				if d < best then
+				local stealthed = Auras:Has(player, "stealth")
+				if d < best and (not stealthed or d < 6) then
 					nearest, best = player, d
 				end
 			end
@@ -758,10 +791,13 @@ function module:Start()
 			byName[template.name] = DB:Insert("creature_template", table.clone(template))
 		else
 			local fields = {}
-			for _, key in { "innkeeper", "banker", "spells", "wander", "beast", "rank", "script", "repair", "battlemaster" } do
+			for _, key in { "innkeeper", "banker", "spells", "wander", "beast", "rank", "script", "repair", "battlemaster", "guard", "spirithealer", "ghostonly", "minlevel", "maxlevel", "health", "dmgmin", "dmgmax", "aggro" } do
 				if template[key] ~= nil and existing[key] == nil then
 					fields[key] = template[key]
 				end
+			end
+			if template.guard and existing.faction ~= template.faction then
+				fields.faction = template.faction
 			end
 			if next(fields) then
 				DB:Update("creature_template", existing.entry, fields)
@@ -806,7 +842,7 @@ return Base(module, {
 	{ Path = "World/Database", Imports = "WorldDB.h" },
 	{ Path = "World/Combat", Imports = "Combat.h|Loot.h" },
 	{ Path = "Global/System", Imports = "Effects.h" },
-	{ Path = "Auth/Security", Imports = "Packet.h" },
+	{ Path = "Auth/Security", Imports = "Packet.h|Session.h" },
 	{ Path = "Auth/Entities", Imports = "EntityPlayer.h" },
 	{ Path = "Auth/Social", Imports = "Party.h|Reputation.h|Achievements.h" },
 	{ Path = "World/Content", Imports = "Vendors.h|Items.h|Pets.h" },

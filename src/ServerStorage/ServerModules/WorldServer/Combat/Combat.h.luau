@@ -114,7 +114,7 @@ function module:CanAttack(attacker, target): (boolean, string?)
 		end
 		return false, "You cannot attack that target."
 	end
-	return target.Hostile == true, "Invalid target."
+	return self.includes.Content["Creatures.h"]:IsHostileTo(target, attacker), "Invalid target."
 end
 
 -- Deals damage. source is "Your Fireball" or a creature's spell name; the log
@@ -127,6 +127,13 @@ function module:Damage(attacker, target, amount: number, school: string?, source
 	local Entities = self.includes.Entities["EntityPlayer.h"]
 	local Effects = self.includes.System["Effects.h"]
 	local Duel = self.includes.Combat["Duel.h"]
+	local Auras = self.includes.Spells["Auras.h"]
+	if attacker and self:IsPlayer(attacker) then
+		Auras:RemoveKind(attacker, "stealth")
+	end
+	if self:IsPlayer(target) then
+		Auras:RemoveKind(target, "stealth")
+	end
 	source = source or "attack"
 	if self:IsPlayer(target) then
 		self.includes.Spells["Auras.h"]:RemoveKind(target, "mount")
