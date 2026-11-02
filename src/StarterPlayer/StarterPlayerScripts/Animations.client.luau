@@ -70,6 +70,13 @@ local function watch(owner: Instance, model: () -> Model?)
 			end
 		end))
 	end
+	-- shapeshifting bursts; the form body animates below
+	table.insert(connections, owner:GetAttributeChangedSignal("Form"):Connect(function()
+		local m = model()
+		if m and owner:GetAttribute("Form") then
+			play(m, "release", 1.2)
+		end
+	end))
 	-- riding: sit on the mount; wings and legs animate below
 	table.insert(connections, owner:GetAttributeChangedSignal("Mounted"):Connect(function()
 		local m = model()
@@ -133,14 +140,14 @@ RunService.RenderStepped:Connect(function()
 	local t = os.clock()
 	for _, other in Players:GetPlayers() do
 		local character = other.Character
-		local mount = character and character:FindFirstChild("Mount")
-		if not mount then
+		local body = character and (character:FindFirstChild("Mount") or character:FindFirstChild("Form"))
+		if not body then
 			continue
 		end
 		local root = character:FindFirstChild("HumanoidRootPart")
 		local speed = if root then Vector3.new(root.AssemblyLinearVelocity.X, 0, root.AssemblyLinearVelocity.Z).Magnitude else 0
 		local flying = other:GetAttribute("FlightState") == "air"
-		for _, motor in mount:GetDescendants() do
+		for _, motor in body:GetDescendants() do
 			if motor:IsA("Motor6D") and motor.Name == "MountMotor" then
 				baseC0[motor] = baseC0[motor] or motor.C0
 				local kind, side, phase = motor:GetAttribute("Kind"), motor:GetAttribute("Side") or 1, motor:GetAttribute("Phase") or 0

@@ -102,6 +102,7 @@ local SEED = {
 	{ name = "Gamemaster's Blade", quality = 5, stack = 1, class = "weapon", slot = "mainhand", damage = 500, spellpower = 500, buyprice = 0, level = 1, bind = "pickup", flavor = "One swing is usually enough." },
 	{ name = "Gamemaster's Shield", quality = 5, stack = 1, class = "armor", slot = "offhand", armor = 900, stamina = 200, buyprice = 0, level = 1, bind = "pickup" },
 	{ name = "Gamemaster's Band", quality = 5, stack = 1, class = "armor", slot = "ring", stamina = 100, intellect = 100, strength = 100, agility = 100, spirit = 100, buyprice = 0, level = 1, bind = "pickup" },
+	{ name = "Pony Reins", quality = 2, stack = 1, class = "misc", buyprice = 50000, level = 10, use = "Summon Pony", flavor = "Built from the Pony mount template." },
 	{ name = "Gryphon Reins", quality = 3, stack = 1, class = "misc", buyprice = 5000000, level = 30, use = "Summon Gryphon", flavor = "The skies of Azeroth await." },
 }
 

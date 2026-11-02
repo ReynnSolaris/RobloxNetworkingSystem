@@ -1,5 +1,6 @@
 local Base = require(game:GetService("ServerStorage").ServerModules["Template.h"])
 local InsertService = game:GetService("InsertService")
+local ServerStorage = game:GetService("ServerStorage")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Opcodes = require(ReplicatedStorage.Shared.Opcodes)
@@ -885,10 +886,195 @@ function module:Buff(player: Player, effect: string, mult: number, seconds: numb
 	return true
 end
 
--- A mount is drawn as a horse or gryphon body welded under the character; the
--- speed comes from the aura, flight from the client's controller once
--- MountFlying is set.
-function module:Mount(player: Player, on: boolean, fly: boolean?)
+-- Attached bodies: mounts and shapeshift forms. A body is a list of parts
+-- { name, size, offset (from the rider's root), color, parent?, motor? }, or a
+-- Model under ServerStorage/MountTemplates or FormTemplates whose parts sit
+-- around the origin as the rider's root: attributes Parent (part name to hang
+-- on, default the first part), Motor ("leg" or "wing"), Side (-1 or 1), Phase
+-- and Pivot (hinge offset from the root). Clients animate every MountMotor.
+local function attachBody(character: Model, name: string, parts, root: BasePart): Model
+	local model = Instance.new("Model")
+	model.Name = name
+	local made: { [string]: BasePart } = {}
+	local first: BasePart? = nil
+	for _, spec in parts do
+		local p = Instance.new("Part")
+		p.Name = spec.name
+		p.Size = spec.size
+		p.Color = spec.color
+		p.Material = spec.material or Enum.Material.SmoothPlastic
+		p.CanCollide = false
+		p.Massless = true
+		p.CFrame = root.CFrame * spec.offset
+		local parent = (spec.parent and made[spec.parent]) or first or root
+		if spec.motor then
+			local m = Instance.new("Motor6D")
+			m.Name = "MountMotor"
+			m.Part0, m.Part1 = parent, p
+			local hinge = root.CFrame * spec.motor.pivot
+			m.C0 = parent.CFrame:ToObjectSpace(hinge)
+			m.C1 = p.CFrame:ToObjectSpace(hinge)
+			m:SetAttribute("Kind", spec.motor.kind)
+			m:SetAttribute("Side", spec.motor.side or 1)
+			m:SetAttribute("Phase", spec.motor.phase or 0)
+			m.Parent = p
+		else
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0, weld.Part1 = parent, p
+			weld.Parent = p
+		end
+		p.Parent = model
+		made[spec.name] = p
+		first = first or p
+	end
+	model.Parent = character
+	return model
+end
+
+-- Reads a template Model into the part list attachBody takes.
+local function templateParts(folderName: string, templateName: string)
+	local folder = ServerStorage:FindFirstChild(folderName)
+	local template = folder and folder:FindFirstChild(templateName)
+	if not template then
+		return nil
+	end
+	local parts = {}
+	for _, part in template:GetChildren() do
+		if part:IsA("BasePart") then
+			local spec = { name = part.Name, size = part.Size, offset = part.CFrame, color = part.Color, material = part.Material, parent = part:GetAttribute("Parent") }
+			local kind = part:GetAttribute("Motor")
+			if kind then
+				local pivot = part:GetAttribute("Pivot")
+				spec.motor = { kind = kind, side = part:GetAttribute("Side") or 1, phase = part:GetAttribute("Phase") or 0,
+					pivot = CFrame.new(if typeof(pivot) == "Vector3" then pivot else part.Position) }
+			end
+			table.insert(parts, spec)
+		end
+	end
+	-- the body first so the others can hang on it
+	table.sort(parts, function(a, b)
+		return (a.name == "Body" and b.name ~= "Body") or (a.name ~= "Body" and b.name ~= "Body" and a.name < b.name)
+	end)
+	return parts
+end
+
+local function legs(kind, y, zs, xs, color, size)
+	local out = {}
+	for _, x in xs do
+		for i, z in zs do
+			table.insert(out, { name = "Leg", size = size or Vector3.new(0.6, 2.6, 0.6), offset = CFrame.new(x, y, z), color = color, parent = "Body",
+				motor = { kind = kind, side = if x < 0 then -1 else 1, phase = if (i == 1) == (x > 0) then 0 else math.pi, pivot = CFrame.new(x, y + 1.1, z) } })
+		end
+	end
+	return out
+end
+
+local BODIES = {}
+function BODIES.horse()
+	local brown, dark, leather = Color3.fromRGB(96, 62, 36), Color3.fromRGB(40, 28, 18), Color3.fromRGB(70, 45, 28)
+	local parts = {
+		{ name = "Body", size = Vector3.new(2.2, 2, 5), offset = CFrame.new(0, -2.6, 0), color = brown },
+		{ name = "Saddle", size = Vector3.new(2.4, 0.5, 2), offset = CFrame.new(0, -1.5, 0), color = leather },
+		{ name = "Neck", size = Vector3.new(1.2, 2.4, 1.2), offset = CFrame.new(0, -1.4, -2.8) * CFrame.Angles(math.rad(-30), 0, 0), color = brown },
+		{ name = "Head", size = Vector3.new(1.1, 1.1, 2), offset = CFrame.new(0, -0.4, -3.9), color = brown },
+		{ name = "Mane", size = Vector3.new(0.4, 1.6, 1.6), offset = CFrame.new(0, -0.8, -2.6), color = dark },
+		{ name = "Tail", size = Vector3.new(0.5, 2, 0.5), offset = CFrame.new(0, -3, 2.8) * CFrame.Angles(math.rad(25), 0, 0), color = dark },
+	}
+	for _, leg in legs("leg", -4.8, { -1.8, 1.8 }, { -0.75, 0.75 }, dark) do table.insert(parts, leg) end
+	return parts
+end
+function BODIES.gryphon()
+	local feather, gold, leather = Color3.fromRGB(230, 232, 240), Color3.fromRGB(214, 170, 70), Color3.fromRGB(70, 45, 28)
+	local parts = {
+		{ name = "Body", size = Vector3.new(2.4, 2, 5.5), offset = CFrame.new(0, -2.6, 0.3), color = feather },
+		{ name = "Saddle", size = Vector3.new(2.6, 0.5, 2.2), offset = CFrame.new(0, -1.5, 0), color = leather },
+		{ name = "Neck", size = Vector3.new(1.4, 2.2, 1.4), offset = CFrame.new(0, -1.3, -2.8) * CFrame.Angles(math.rad(-25), 0, 0), color = feather },
+		{ name = "Head", size = Vector3.new(1.3, 1.2, 1.8), offset = CFrame.new(0, -0.3, -3.9), color = feather },
+		{ name = "Beak", size = Vector3.new(0.5, 0.5, 0.9), offset = CFrame.new(0, -0.5, -5.1), color = gold },
+		{ name = "Tail", size = Vector3.new(1.6, 0.3, 2.2), offset = CFrame.new(0, -2.4, 3.9), color = feather },
+	}
+	for _, side in { -1, 1 } do
+		table.insert(parts, { name = "Wing" .. side, size = Vector3.new(5, 0.3, 3), offset = CFrame.new(side * 3.6, -1.6, 0) * CFrame.Angles(0, 0, side * math.rad(18)), color = feather,
+			motor = { kind = "wing", side = side, pivot = CFrame.new(side * 1.2, -1.6, 0) } })
+		table.insert(parts, { name = "WingTip" .. side, size = Vector3.new(2.4, 0.25, 2), offset = CFrame.new(side * 7, -0.6, 0.3) * CFrame.Angles(0, 0, side * math.rad(32)), color = feather, parent = "Wing" .. side })
+	end
+	for _, leg in legs("leg", -4.7, { -1.8, 1.8 }, { -0.8, 0.8 }, gold, Vector3.new(0.6, 2.4, 0.6)) do table.insert(parts, leg) end
+	return parts
+end
+-- shapeshift forms stand where the body was
+local function quadruped(color, dark, size, headSize, tail)
+	local parts = {
+		{ name = "Body", size = size, offset = CFrame.new(0, -1.2, 0), color = color },
+		{ name = "Head", size = headSize, offset = CFrame.new(0, -0.6, -size.Z / 2 - headSize.Z / 2 + 0.3), color = color },
+		{ name = "Snout", size = Vector3.new(headSize.X * 0.5, headSize.Y * 0.5, 0.8), offset = CFrame.new(0, -0.8, -size.Z / 2 - headSize.Z + 0.1), color = dark },
+		{ name = "EarL", size = Vector3.new(0.4, 0.5, 0.2), offset = CFrame.new(-headSize.X / 3, headSize.Y / 2 - 0.6, -size.Z / 2 - headSize.Z / 2 + 0.3), color = dark },
+		{ name = "EarR", size = Vector3.new(0.4, 0.5, 0.2), offset = CFrame.new(headSize.X / 3, headSize.Y / 2 - 0.6, -size.Z / 2 - headSize.Z / 2 + 0.3), color = dark },
+	}
+	if tail then
+		table.insert(parts, { name = "Tail", size = Vector3.new(0.3, 0.3, 2), offset = CFrame.new(0, -1, size.Z / 2 + 0.9) * CFrame.Angles(math.rad(20), 0, 0), color = dark })
+	end
+	for _, leg in legs("leg", -2.4, { -size.Z / 2 + 0.6, size.Z / 2 - 0.6 }, { -size.X / 2 + 0.35, size.X / 2 - 0.35 }, dark, Vector3.new(0.55, 1.6, 0.55)) do table.insert(parts, leg) end
+	return parts
+end
+function BODIES.bear() return quadruped(Color3.fromRGB(80, 52, 30), Color3.fromRGB(45, 30, 18), Vector3.new(2.8, 2.2, 4.4), Vector3.new(1.6, 1.4, 1.6), false) end
+function BODIES.cat() return quadruped(Color3.fromRGB(190, 140, 70), Color3.fromRGB(110, 70, 30), Vector3.new(1.4, 1.2, 3.6), Vector3.new(1, 0.9, 1.1), true) end
+function BODIES.travel() return quadruped(Color3.fromRGB(210, 170, 90), Color3.fromRGB(120, 90, 40), Vector3.new(1.3, 1.1, 3.8), Vector3.new(0.9, 0.8, 1), true) end
+function BODIES.wolf() return quadruped(Color3.fromRGB(150, 160, 190), Color3.fromRGB(90, 100, 130), Vector3.new(1.6, 1.3, 3.8), Vector3.new(1, 0.9, 1.3), true) end
+function BODIES.moonkin()
+	local feather, dark = Color3.fromRGB(120, 90, 150), Color3.fromRGB(70, 50, 90)
+	local parts = {
+		{ name = "Body", size = Vector3.new(2.6, 3, 2.2), offset = CFrame.new(0, -0.6, 0), color = feather },
+		{ name = "Head", size = Vector3.new(2, 1.6, 1.8), offset = CFrame.new(0, 1.7, 0), color = feather },
+		{ name = "Beak", size = Vector3.new(0.5, 0.5, 0.6), offset = CFrame.new(0, 1.5, -1.1), color = Color3.fromRGB(214, 170, 70) },
+		{ name = "HornL", size = Vector3.new(0.3, 1, 0.3), offset = CFrame.new(-0.8, 2.6, 0) * CFrame.Angles(0, 0, math.rad(20)), color = dark },
+		{ name = "HornR", size = Vector3.new(0.3, 1, 0.3), offset = CFrame.new(0.8, 2.6, 0) * CFrame.Angles(0, 0, math.rad(-20)), color = dark },
+	}
+	for _, side in { -1, 1 } do
+		table.insert(parts, { name = "Wing" .. side, size = Vector3.new(2.4, 2, 0.4), offset = CFrame.new(side * 2.2, -0.4, 0), color = dark, motor = { kind = "wing", side = side, pivot = CFrame.new(side * 1.2, 0.4, 0) } })
+	end
+	for _, leg in legs("leg", -3, { 0 }, { -0.6, 0.6 }, dark, Vector3.new(0.6, 1.4, 0.6)) do table.insert(parts, leg) end
+	return parts
+end
+function BODIES.tree()
+	local bark, leaf = Color3.fromRGB(90, 60, 35), Color3.fromRGB(60, 130, 50)
+	return {
+		{ name = "Body", size = Vector3.new(1.8, 4.2, 1.8), offset = CFrame.new(0, 0, 0), color = bark, material = Enum.Material.Wood },
+		{ name = "Crown", size = Vector3.new(3.6, 2.2, 3.6), offset = CFrame.new(0, 2.8, 0), color = leaf, material = Enum.Material.Grass },
+		{ name = "BranchL", size = Vector3.new(2.4, 0.4, 0.4), offset = CFrame.new(-1.6, 1, 0) * CFrame.Angles(0, 0, math.rad(25)), color = bark },
+		{ name = "BranchR", size = Vector3.new(2.4, 0.4, 0.4), offset = CFrame.new(1.6, 1, 0) * CFrame.Angles(0, 0, math.rad(-25)), color = bark },
+		{ name = "RootL", size = Vector3.new(0.6, 1.2, 0.6), offset = CFrame.new(-0.6, -2.6, 0), color = bark, motor = { kind = "leg", side = -1, pivot = CFrame.new(-0.6, -2, 0) } },
+		{ name = "RootR", size = Vector3.new(0.6, 1.2, 0.6), offset = CFrame.new(0.6, -2.6, 0), color = bark, motor = { kind = "leg", side = 1, phase = math.pi, pivot = CFrame.new(0.6, -2, 0) } },
+	}
+end
+function BODIES.shadow()
+	return {}
+end
+
+local function hideBody(character: Model, hidden: boolean)
+	for _, part in character:GetChildren() do
+		if (part:IsA("BasePart") and part.Name ~= "HumanoidRootPart") or part:IsA("Accessory") then
+			local target = if part:IsA("Accessory") then part:FindFirstChildWhichIsA("BasePart") else part
+			if target then
+				if hidden and target:GetAttribute("ShownTransparency") == nil then
+					target:SetAttribute("ShownTransparency", target.Transparency)
+				end
+				target.Transparency = if hidden then 1 else (target:GetAttribute("ShownTransparency") or 0)
+				if not hidden then
+					target:SetAttribute("ShownTransparency", nil)
+				end
+				for _, decal in target:GetChildren() do
+					if decal:IsA("Decal") then
+						decal.Transparency = if hidden then 1 else 0
+					end
+				end
+			end
+		end
+	end
+end
+
+-- A mount: a template by name or a built-in body, saddle and all; flight from
+-- the client's controller once MountFlying is set.
+function module:Mount(player: Player, on: boolean, fly: boolean?, modelName: string?)
 	local entity = self.information[player]
 	local character = entity and entity.Character
 	if not character then
@@ -907,70 +1093,52 @@ function module:Mount(player: Player, on: boolean, fly: boolean?)
 	if not root then
 		return
 	end
-	local mount = Instance.new("Model")
-	mount.Name = "Mount"
-	-- parts weld to the root; wings and legs hang on Motor6Ds the clients animate
-	local function part(name, size, offset, color, parent, motor)
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Size = size
-		p.Color = color
-		p.Material = Enum.Material.SmoothPlastic
-		p.CanCollide = false
-		p.Massless = true
-		p.CFrame = root.CFrame * offset
-		if motor then
-			local m = Instance.new("Motor6D")
-			m.Name = "MountMotor"
-			m.Part0, m.Part1 = parent, p
-			m.C0 = parent.CFrame:ToObjectSpace(root.CFrame * motor.pivot)
-			m.C1 = p.CFrame:ToObjectSpace(root.CFrame * motor.pivot)
-			m:SetAttribute("Kind", motor.kind)
-			m:SetAttribute("Side", motor.side)
-			m:SetAttribute("Phase", motor.phase or 0)
-			m.Parent = p
-		else
-			local weld = Instance.new("WeldConstraint")
-			weld.Part0, weld.Part1 = parent, p
-			weld.Parent = p
-		end
-		p.Parent = mount
-		return p
+	local parts = (modelName and templateParts("MountTemplates", modelName)) or (if fly then BODIES.gryphon() else BODIES.horse())
+	attachBody(character, "Mount", parts, root)
+end
+
+-- Shapeshift: the body is hidden and a form body stands in its place; nil
+-- shifts back. Forms come from ServerStorage/FormTemplates/<form> or BODIES.
+function module:Shapeshift(player: Player, form: string?)
+	local entity = self.information[player]
+	local character = entity and entity.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not character or not root then
+		return
 	end
-	local leather = Color3.fromRGB(70, 45, 28)
-	if fly then
-		local feather, gold = Color3.fromRGB(230, 232, 240), Color3.fromRGB(214, 170, 70)
-		local body = part("Body", Vector3.new(2.4, 2, 5.5), CFrame.new(0, -2.6, 0.3), feather, root)
-		part("Saddle", Vector3.new(2.6, 0.5, 2.2), CFrame.new(0, -1.5, 0), leather, body)
-		part("Neck", Vector3.new(1.4, 2.2, 1.4), CFrame.new(0, -1.3, -2.8) * CFrame.Angles(math.rad(-25), 0, 0), feather, body)
-		part("Head", Vector3.new(1.3, 1.2, 1.8), CFrame.new(0, -0.3, -3.9), feather, body)
-		part("Beak", Vector3.new(0.5, 0.5, 0.9), CFrame.new(0, -0.5, -5.1), gold, body)
-		part("Tail", Vector3.new(1.6, 0.3, 2.2), CFrame.new(0, -2.4, 3.9), feather, body)
-		for _, side in { -1, 1 } do
-			local wing = part("Wing", Vector3.new(5, 0.3, 3), CFrame.new(side * 3.6, -1.6, 0) * CFrame.Angles(0, 0, side * math.rad(18)), feather, body,
-				{ kind = "wing", side = side, pivot = CFrame.new(side * 1.2, -1.6, 0) })
-			part("WingTip", Vector3.new(2.4, 0.25, 2), CFrame.new(side * 7, -0.6, 0.3) * CFrame.Angles(0, 0, side * math.rad(32)), feather, wing)
-			for i, z in { -1.8, 1.8 } do
-				part("Leg", Vector3.new(0.6, 2.4, 0.6), CFrame.new(side * 0.8, -4.7, z), gold, body,
-					{ kind = "leg", side = side, phase = if (i == 1) == (side == 1) then 0 else math.pi, pivot = CFrame.new(side * 0.8, -3.6, z) })
-			end
-		end
-	else
-		local brown, dark = Color3.fromRGB(96, 62, 36), Color3.fromRGB(40, 28, 18)
-		local body = part("Body", Vector3.new(2.2, 2, 5), CFrame.new(0, -2.6, 0), brown, root)
-		part("Saddle", Vector3.new(2.4, 0.5, 2), CFrame.new(0, -1.5, 0), leather, body)
-		part("Neck", Vector3.new(1.2, 2.4, 1.2), CFrame.new(0, -1.4, -2.8) * CFrame.Angles(math.rad(-30), 0, 0), brown, body)
-		part("Head", Vector3.new(1.1, 1.1, 2), CFrame.new(0, -0.4, -3.9), brown, body)
-		part("Mane", Vector3.new(0.4, 1.6, 1.6), CFrame.new(0, -0.8, -2.6), dark, body)
-		part("Tail", Vector3.new(0.5, 2, 0.5), CFrame.new(0, -3, 2.8) * CFrame.Angles(math.rad(25), 0, 0), dark, body)
-		for _, x in { -0.75, 0.75 } do
-			for i, z in { -1.8, 1.8 } do
-				part("Leg", Vector3.new(0.6, 2.6, 0.6), CFrame.new(x, -4.8, z), dark, body,
-					{ kind = "leg", side = if x < 0 then -1 else 1, phase = if (i == 1) == (x > 0) then 0 else math.pi, pivot = CFrame.new(x, -3.6, z) })
-			end
+	local existing = character:FindFirstChild("Form")
+	if existing then
+		existing:Destroy()
+	end
+	self.includes.System["Effects.h"]:Detach("Shadow", root)
+	hideBody(character, false)
+	player:SetAttribute("Form", form)
+	if not form then
+		return
+	end
+	self.includes.System["Effects.h"]:Play("Nature", player, 18)
+	if form == "shadow" then
+		self.includes.System["Effects.h"]:Attach("Shadow", root)
+		return
+	end
+	local parts = templateParts("FormTemplates", form) or (BODIES[form] and BODIES[form]()) or BODIES.cat()
+	hideBody(character, true)
+	attachBody(character, "Form", parts, root)
+end
+
+-- Stealth: translucent to everyone and marked for the creature brains.
+function module:Stealth(player: Player, on: boolean)
+	local entity = self.information[player]
+	local character = entity and entity.Character
+	if not character then
+		return
+	end
+	player:SetAttribute("Stealthed", if on then true else nil)
+	for _, part in character:GetDescendants() do
+		if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Transparency < 1 then
+			part.Transparency = if on then 0.75 else 0
 		end
 	end
-	mount.Parent = character
 end
 
 function module:GiveHat(player: Player, assetId: number): boolean

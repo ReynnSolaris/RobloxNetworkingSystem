@@ -47,12 +47,26 @@ end
 local function slow(class, name, school, mult, duration, cost, cd, range, icon, text)
 	return spell(class, name, school, "aura", "enemy", 0, 0, cost, 0, cd, range, icon, text, { aura = { kind = "speed", mult = mult, duration = duration, harmful = true } })
 end
+-- a form: visual, exclusive with other forms, stats per point of amount, speed
+local function form(class, name, school, formName, stats, mult, base, per, cost, icon, text, starter)
+	return spell(class, name, school, "aura", "self", base, per, cost, 0, 1, 0, icon, text,
+		{ aura = { kind = "form", form = formName, group = "form", stats = stats, mult = mult, duration = 0 }, starter = starter })
+end
+-- a stance, aura, aspect or presence: stats per point of amount, exclusive in its group
+local function stance(class, name, school, groupName, stats, mult, base, per, cost, icon, text, starter)
+	return spell(class, name, school, "aura", "self", base, per, cost, 0, 1, 0, icon, text,
+		{ aura = { kind = "stats", group = groupName, stats = stats, mult = mult, duration = 0 }, starter = starter })
+end
+
 local function stun(class, name, school, duration, cost, cd, range, icon, text)
 	return spell(class, name, school, "aura", "enemy", 0, 0, cost, 0, cd, range, icon, text, { aura = { kind = "stun", duration = duration, harmful = true } })
 end
 
 local SEED = {
 	dmg("Warrior", "Heroic Strike", "physical", 8, 2, 10, 0, 3, 8, "HS", "A strong attack that deals extra damage.", true),
+	stance("Warrior", "Battle Stance", "physical", "stance", { Strength = 1 }, nil, 2, 1, 0, "BS", "A balanced stance that increases Strength.", true),
+	stance("Warrior", "Defensive Stance", "physical", "stance", { Armor = 3, Stamina = 0.5 }, nil, 2, 1, 0, "DS", "A defensive stance that increases armor and Stamina."),
+	stance("Warrior", "Berserker Stance", "physical", "stance", { Agility = 1, Strength = 0.5 }, nil, 2, 1, 0, "ZS", "An aggressive stance that increases Agility and Strength."),
 	speed("Warrior", "Battle Shout", 1.25, 20, 15, 30, "BS", "Quickens your step for 20 sec."),
 	spell("Warrior", "Taunt", "physical", "taunt", "enemy", 0, 0, 5, 0, 8, 20, "TA", "Taunts the target to attack you, putting you at the top of its threat list."),
 	spell("Paladin", "Hand of Reckoning", "holy", "taunt", "enemy", 0, 0, 10, 0, 8, 30, "HR", "Taunts the target to attack you, putting you at the top of its threat list."),
@@ -61,6 +75,8 @@ local SEED = {
 	dot("Warrior", "Rend", "physical", 3, 1, 10, 0, 8, 3, 15, "RE", "Wounds the target, causing them to bleed."),
 	slow("Warrior", "Hamstring", "physical", 0.5, 15, 10, 0, 8, "HM", "Maims the enemy, reducing movement speed by 50% for 15 sec."),
 	dmg("Paladin", "Crusader Strike", "holy", 8, 2, 10, 0, 4, 8, "CS", "An instant strike that deals holy damage.", true),
+	stance("Paladin", "Devotion Aura", "holy", "paladinaura", { Armor = 3 }, nil, 2, 1, 0, "DA", "Gives armor to the paladin. Only one aura at a time.", true),
+	stance("Paladin", "Retribution Aura", "holy", "paladinaura", { Strength = 1 }, nil, 2, 1, 0, "RA", "Grants Strength to the paladin. Only one aura at a time."),
 	heal("Paladin", "Holy Light", 20, 5, 30, 2.5, "HL", "Heals a friendly target."),
 	spell("Paladin", "Redemption", "holy", "resurrect", "friend", 0, 0, 60, 10, 0, 30, "RD", "Brings a dead player back to life with half their health."),
 	stat("Paladin", "Blessing of Might", "holy", "Damage", 3, 1, 20, 600, "BM", "Places a Blessing on the friendly target, increasing melee damage for 10 min."),
@@ -69,11 +85,13 @@ local SEED = {
 	spell("Hunter", "Tame Beast", "nature", "tame", "enemy", 0, 0, 0, 6, 0, 20, "TB", "Begins taming a beast to be your companion. The beast must be your level or lower."),
 	spell("Hunter", "Call Pet", "nature", "callpet", "self", 0, 0, 0, 0, 5, 0, "CP", "Summons your pet to you."),
 	spell("Hunter", "Dismiss Pet", "nature", "dismiss", "self", 0, 0, 0, 0, 0, 0, "DP", "Dismisses your pet."),
-	speed("Hunter", "Aspect of the Cheetah", 1.3, 30, 20, 30, "AC", "Increases movement speed for 30 sec."),
+	stance("Hunter", "Aspect of the Cheetah", "nature", "aspect", {}, 1.3, 0, 0, 20, "AC", "The hunter takes on the aspects of a cheetah, increasing movement speed by 30%. Only one aspect at a time."),
+	stance("Hunter", "Aspect of the Hawk", "nature", "aspect", { Agility = 1 }, nil, 2, 1, 20, "AH", "The hunter takes on the aspects of a hawk, increasing Agility. Only one aspect at a time.", true),
 	dot("Hunter", "Serpent Sting", "nature", 4, 1, 15, 0, 35, 3, 15, "SS", "Stings the target, causing nature damage over 15 sec."),
 	slow("Hunter", "Concussive Shot", "physical", 0.5, 4, 10, 12, 35, "CO", "Dazes the target, slowing movement speed by 50% for 4 sec."),
 	dmg("Rogue", "Sinister Strike", "physical", 8, 2, 10, 0, 2, 8, "SS", "An instant strike that deals extra damage.", true),
 	speed("Rogue", "Sprint", 1.6, 15, 15, 60, "SP", "Greatly increases movement speed for 15 sec."),
+	spell("Rogue", "Stealth", "physical", "aura", "self", 0, 0, 0, 0, 10, 0, "ST", "Conceals you in the shadows. Movement is slowed; creatures notice you only up close. Any attack or damage breaks it.", { aura = { kind = "stealth", mult = 0.7, duration = 0 }, starter = true }),
 	dot("Rogue", "Rupture", "physical", 4, 1, 15, 0, 8, 2, 12, "RU", "Causes the target to bleed over 12 sec."),
 	stun("Rogue", "Gouge", "physical", 4, 15, 30, 8, "GO", "Stuns the target for 4 sec."),
 	dmg("Priest", "Smite", "holy", 14, 3, 18, 2, 0, 30, "SM", "Smites an enemy with holy damage.", true),
@@ -83,11 +101,15 @@ local SEED = {
 	stat("Priest", "Power Word: Fortitude", "holy", "Stamina", 3, 1, 25, 1800, "PF", "Increases the target's Stamina for 30 min."),
 	dot("Priest", "Shadow Word: Pain", "shadow", 4, 1, 20, 0, 30, 3, 18, "SW", "A word of darkness that causes shadow damage over 18 sec."),
 	dmg("Death Knight", "Icy Touch", "frost", 9, 2, 12, 0, 4, 20, "IT", "Chills the target for frost damage.", true),
+	stance("Death Knight", "Blood Presence", "shadow", "presence", { Stamina = 1 }, nil, 2, 1, 0, "BP", "Increases Stamina. Only one presence at a time.", true),
+	stance("Death Knight", "Frost Presence", "frost", "presence", { Armor = 3 }, nil, 2, 1, 0, "FP", "Increases armor. Only one presence at a time."),
+	stance("Death Knight", "Unholy Presence", "shadow", "presence", {}, 1.15, 0, 0, 0, "UP", "Increases movement speed by 15%. Only one presence at a time."),
 	dmg("Death Knight", "Death Coil", "shadow", 12, 3, 20, 0, 10, 30, "DC", "Fires a blast of unholy energy."),
 	dot("Death Knight", "Plague Strike", "shadow", 3, 1, 15, 0, 8, 3, 15, "PS", "A vicious strike that infects the target with Blood Plague."),
 	slow("Death Knight", "Chains of Ice", "frost", 0.3, 8, 15, 20, 20, "CI", "Shackles the target, reducing movement speed by 70% for 8 sec."),
 	dmg("Shaman", "Lightning Bolt", "nature", 14, 3, 18, 2.5, 0, 30, "LB", "Casts a bolt of lightning at the target.", true),
 	heal("Shaman", "Healing Wave", 24, 6, 30, 3, "HW", "Heals a friendly target."),
+	form("Shaman", "Ghost Wolf", "nature", "wolf", {}, 1.4, 0, 0, 15, "GW", "Turns the shaman into a ghost wolf, increasing movement speed by 40%."),
 	spell("Shaman", "Ancestral Spirit", "nature", "resurrect", "friend", 0, 0, 60, 10, 0, 30, "AN", "Returns the spirit to a dead player with half their health."),
 	dot("Shaman", "Flame Shock", "fire", 4, 1, 18, 6, 20, 3, 12, "FS", "Sears the target with fire, then burns it over 12 sec."),
 	dmg("Shaman", "Earth Shock", "nature", 12, 3, 20, 0, 6, 20, "ES", "Instantly shocks the target with concussive force."),
@@ -102,6 +124,9 @@ local SEED = {
 	dot("Warlock", "Corruption", "shadow", 4, 1, 15, 0, 30, 3, 18, "CR", "Corrupts the target, causing shadow damage over 18 sec."),
 	dmg("Druid", "Wrath", "nature", 14, 3, 18, 2, 0, 30, "WR", "Causes nature damage to the target.", true),
 	heal("Druid", "Healing Touch", 24, 6, 30, 3, "HT", "Heals a friendly target."),
+	form("Druid", "Bear Form", "nature", "bear", { Armor = 3, Stamina = 1 }, nil, 3, 1, 20, "BR", "Shapeshift into a bear, increasing armor and Stamina.", true),
+	form("Druid", "Cat Form", "nature", "cat", { Agility = 1.5 }, 1.3, 3, 1, 20, "CT", "Shapeshift into a cat, increasing Agility and movement speed by 30%."),
+	form("Druid", "Travel Form", "nature", "travel", {}, 1.4, 0, 0, 15, "TF", "Shapeshift into a swift form, increasing movement speed by 40%."),
 	spell("Druid", "Rebirth", "nature", "resurrect", "friend", 0, 0, 60, 10, 600, 30, "RB", "Returns the spirit to a dead player with half their health."),
 	hot("Druid", "Rejuvenation", 5, 1, 20, 3, 12, "RJ", "Heals the target over 12 sec."),
 	stat("Druid", "Mark of the Wild", "nature", "Armor", 2, 1, 25, 1800, "MW", "Increases the friendly target's armor for 30 min."),
@@ -121,7 +146,7 @@ local SEED = {
 	stat("Rogue", "Preparation", "physical", "Stamina", 6, 2, 20, 600, "PR", "Prepares you for battle, increasing Stamina for 10 min."),
 	stat("Priest", "Power Infusion", "holy", "SpellPower", 8, 3, 30, 15, "PI", "Infuses the target with power, increasing spell power for 15 sec."),
 	heal("Priest", "Circle of Healing", 30, 7, 40, 0, "CH", "Heals the target instantly."),
-	stat("Priest", "Shadowform", "shadow", "SpellPower", 6, 2, 25, 1800, "SF", "Assume a shadowy form, increasing spell power for 30 min."),
+	form("Priest", "Shadowform", "shadow", "shadow", { SpellPower = 1 }, nil, 6, 2, 25, "SF", "Assume a shadowy form, increasing spell power."),
 	stat("Death Knight", "Dancing Rune Weapon", "shadow", "Damage", 8, 2, 20, 12, "DR", "Summons the power of a rune weapon, increasing damage for 12 sec."),
 	dmg("Death Knight", "Howling Blast", "frost", 18, 4, 25, 0, 8, 20, "HB", "Blast the target with a frigid wind."),
 	dmg("Death Knight", "Summon Gargoyle", "shadow", 20, 5, 30, 0, 30, 30, "SG", "Calls a gargoyle's strike down upon the target."),
@@ -134,9 +159,9 @@ local SEED = {
 	dot("Warlock", "Unstable Affliction", "shadow", 6, 2, 25, 0, 30, 3, 15, "UA", "Shadow energy slowly destroys the target over 15 sec."),
 	stat("Warlock", "Demonic Sacrifice", "shadow", "Intellect", 8, 2, 20, 1800, "DS", "Sacrifices demonic power, increasing Intellect for 30 min."),
 	dmg("Warlock", "Conflagrate", "fire", 20, 5, 30, 0, 10, 30, "CF", "Ignites the target."),
-	stat("Druid", "Moonkin Form", "arcane", "SpellPower", 6, 2, 25, 1800, "MK", "Take the form of a moonkin, increasing spell power for 30 min."),
+	form("Druid", "Moonkin Form", "arcane", "moonkin", { SpellPower = 1 }, nil, 6, 2, 25, "MK", "Take the form of a moonkin, increasing spell power."),
 	stat("Druid", "Heart of the Wild", "nature", "Stamina", 6, 2, 20, 1800, "HW", "Increases Stamina for 30 min."),
-	stat("Druid", "Tree of Life", "nature", "SpellPower", 6, 2, 25, 1800, "TL", "Take the form of a tree, increasing spell power for 30 min."),
+	form("Druid", "Tree of Life", "nature", "tree", { SpellPower = 1, Spirit = 0.5 }, nil, 6, 2, 25, "TL", "Take the form of a tree, increasing spell power and Spirit."),
 	-- passives: skills checked by name, never cast
 	{ class = "Rogue", name = "Dual Wield", school = "physical", effect = "passive", target = "self", icon = "DW", description = "Allows a one-handed weapon in your off hand.", starter = true },
 	{ class = "Death Knight", name = "Dual Wield", school = "physical", effect = "passive", target = "self", icon = "DW", description = "Allows a one-handed weapon in your off hand.", starter = true },
@@ -152,6 +177,7 @@ local SEED = {
 	{ name = "Minor Healing Potion", school = "nature", effect = "heal", base = 40, per_level = 5, cost = 0, cast_time = 0, cooldown = 60, range = 0, target = "self", icon = "HP", description = "Restores health instantly." },
 	{ name = "Linen Bandage", school = "physical", effect = "aura", base = 8, per_level = 2, cost = 0, cast_time = 0, cooldown = 30, range = 0, target = "self", icon = "LB", description = "Heals over 6 sec.", aura = { kind = "periodic", interval = 2, duration = 6 } },
 	{ name = "Summon Brown Horse", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "BH", description = "Summons and dismisses a rideable Brown Horse. Increases movement speed by 60%. Taking damage dismounts you.", aura = { kind = "mount", mult = 1.6, duration = 0 } },
+	{ name = "Summon Pony", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "PN", description = "Summons and dismisses a rideable Pony from the Pony mount template.", aura = { kind = "mount", mult = 1.6, duration = 0, model = "Pony" } },
 	{ name = "Summon Gryphon", school = "physical", effect = "aura", cost = 0, cast_time = 3, cooldown = 3, range = 0, target = "self", icon = "GR", description = "Summons and dismisses a rideable Gryphon. This mount can fly: hold Space to rise and Shift to descend. Taking damage dismounts you.", aura = { kind = "mount", mult = 2.2, duration = 0, fly = true } },
 	-- creature spells: cast by brains, never learned
 	{ name = "Bite", npc = true, school = "physical", effect = "aura", target = "enemy", base = 2, per_level = 1, cost = 0, cast_time = 0, cooldown = 12, range = 6, icon = "BI", description = "A savage bite that leaves the victim bleeding.", aura = { kind = "periodic", interval = 3, duration = 9, harmful = true } },
@@ -451,6 +477,14 @@ function module:Cast(player: Player, id, guid, item)
 		elseif self.includes.Combat["Combat.h"]:InCombat(player) then
 			return self:Fail(player, "You can't mount while in combat.")
 		end
+		self.includes.Spells["Auras.h"]:RemoveKind(player, "form")
+	elseif spell.aura and (spell.aura.kind == "form" or spell.aura.kind == "stealth" or spell.aura.group) and self.includes.Spells["Auras.h"]:Find(player, spell.id) then
+		self.includes.Spells["Auras.h"]:Remove(player, spell.id)
+		return
+	elseif spell.aura and spell.aura.kind == "form" then
+		self.includes.Spells["Auras.h"]:RemoveKind(player, "mount")
+	elseif spell.aura and spell.aura.kind == "stealth" and self.includes.Combat["Combat.h"]:InCombat(player) then
+		return self:Fail(player, "You can't stealth while in combat.")
 	end
 	if not Combat:Alive(player) then
 		return self:Fail(player, "You can't do that while dead.")

@@ -56,12 +56,13 @@ function module:Mods(unit)
 	for _, aura in self:List(unit) do
 		if aura.Kind == "stat" and aura.Stat then
 			mods[aura.Stat] = (mods[aura.Stat] or 0) + (aura.Amount or 0)
-		elseif aura.Kind == "stats" then
+		elseif aura.Kind == "stats" or aura.Kind == "form" then
 			mods.Pct += aura.Pct or 0
 			for stat, value in (aura.Stats or {}) do
-				mods.Stats[stat] = (mods.Stats[stat] or 0) + value
+				mods.Stats[stat] = (mods.Stats[stat] or 0) + value * math.max(aura.Amount or 1, 1)
 			end
-		elseif aura.Kind == "speed" or aura.Kind == "mount" then
+			mods.Speed *= aura.Mult or 1
+		elseif aura.Kind == "speed" or aura.Kind == "mount" or aura.Kind == "stealth" then
 			mods.Speed *= aura.Mult or 1
 		elseif aura.Kind == "jump" then
 			mods.Jump *= aura.Mult or 1
@@ -136,7 +137,11 @@ function module:Apply(caster, unit, spell, amount: number?)
 	aura.NextTick = now + aura.Interval
 	aura.Harmful = spec.harmful == true or spec.kind == "stun" or ((spec.kind == "speed" or spec.kind == "jump") and (spec.mult or 1) < 1)
 	if spec.kind == "mount" then
-		self.includes.Entities["EntityPlayer.h"]:Mount(unit, true, spec.fly == true)
+		self.includes.Entities["EntityPlayer.h"]:Mount(unit, true, spec.fly == true, spec.model)
+	elseif spec.kind == "form" then
+		self.includes.Entities["EntityPlayer.h"]:Shapeshift(unit, spec.form)
+	elseif spec.kind == "stealth" then
+		self.includes.Entities["EntityPlayer.h"]:Stealth(unit, true)
 	end
 	aura.Caster = caster
 	aura.Stacks = math.min((aura.Stacks or 0) + 1, spec.stacks or 1)
@@ -166,6 +171,10 @@ function module:Remove(unit, id, quiet: boolean?)
 			table.remove(list, i)
 			if aura.Kind == "mount" then
 				self.includes.Entities["EntityPlayer.h"]:Mount(unit, false)
+			elseif aura.Kind == "form" then
+				self.includes.Entities["EntityPlayer.h"]:Shapeshift(unit, nil)
+			elseif aura.Kind == "stealth" then
+				self.includes.Entities["EntityPlayer.h"]:Stealth(unit, false)
 			end
 			self:Sync(unit)
 			local Combat = self.includes.Combat["Combat.h"]
@@ -181,8 +190,16 @@ end
 function module:Clear(unit)
 	local k = key(unit)
 	if self.information[k] then
-		if self.includes.Combat["Combat.h"]:IsPlayer(unit) and self:Has(unit, "mount") then
-			self.includes.Entities["EntityPlayer.h"]:Mount(unit, false)
+		if self.includes.Combat["Combat.h"]:IsPlayer(unit) then
+			if self:Has(unit, "mount") then
+				self.includes.Entities["EntityPlayer.h"]:Mount(unit, false)
+			end
+			if self:Has(unit, "form") then
+				self.includes.Entities["EntityPlayer.h"]:Shapeshift(unit, nil)
+			end
+			if self:Has(unit, "stealth") then
+				self.includes.Entities["EntityPlayer.h"]:Stealth(unit, false)
+			end
 		end
 		self.information[k].Auras = {}
 		self:Sync(unit)
@@ -241,6 +258,10 @@ function module:Start()
 						changed = true
 						if aura.Kind == "mount" then
 							self.includes.Entities["EntityPlayer.h"]:Mount(unit, false)
+						elseif aura.Kind == "form" then
+							self.includes.Entities["EntityPlayer.h"]:Shapeshift(unit, nil)
+						elseif aura.Kind == "stealth" then
+							self.includes.Entities["EntityPlayer.h"]:Stealth(unit, false)
 						end
 						if Combat:IsPlayer(unit) then
 							Combat:Log(unit, ("%s fades from you."):format(aura.Name), Config.Chat.Colors.COMMAND)

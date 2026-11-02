@@ -34,7 +34,7 @@ src/ServerStorage/ServerModules/
   WorldServer/Content/             Creatures (spawns, AI, spells, waypoints, loot), GameObjects (chests, doors, nodes, mailboxes),
                                    Items (templates, Describe), Vendors, Teleports, Auction (auction house), Taxi (flight paths), Trade,
                                    Pets (tame, summon, follow, attack)
-  WorldServer/Combat/              Combat (units, damage, healing, rolls, melee), Loot (loot sources), Death (release, ghosts, corpses),
+  WorldServer/Combat/              Combat (units, damage, healing, rolls, melee), Loot (loot sources), Death (release, ghosts, corpses, spirit healers),
                                    Duel, Pvp (world PvP, honor)
   WorldServer/Quests/              Quests (templates, questgivers, gossip, objectives, rewards)
   WorldServer/Spells/              Spells (templates, casting, mana, cooldowns, trainers, item use, creature casts, ranks),
@@ -42,6 +42,8 @@ src/ServerStorage/ServerModules/
   WorldServer/Mail/                Mail (letters with money and items, mailboxes)
   AuthServer/Social/               Party, Social (friends, ignore, who, played, inspect, roll), Guild, Reputation, Achievements
 src/ServerStorage/ObjectTemplates/                 models .gobject can place
+src/ServerStorage/MountTemplates/                  mount bodies (Pony), see Forms, stances, mounts
+src/ServerStorage/FormTemplates/                   shapeshift bodies, same format
   GlobalModules/Database/          Database (DataStore wrapper), DatabaseUUID
   GlobalModules/System/            Compiler (resolves module includes), Global (cross-server bus), Effects (particles)
 src/ReplicatedStorage/Assets/Particles/            ParticleEmitters on Roblox's built-in textures
@@ -659,6 +661,29 @@ order: name in quality colour, binding, slot and type, armor, green stats, level
 requirement in red when too low, Use line, max stack, sell price in coin colours.
 Spells show cost and range, cast time and cooldown, rank, class, description and
 what the aura does. Items list primary stats and spell power.
+
+## Forms, stances, mounts you can build
+
+Druids shapeshift: Bear Form (armor and Stamina), Cat Form (Agility and
+speed), Travel Form (speed), and the talent forms Moonkin and Tree of Life;
+Shaman have Ghost Wolf, Priests Shadowform, Rogues Stealth (slow, creatures
+notice you only within six studs, any attack or damage breaks it). A form
+hides the body and stands a form body in its place, one form at a time, casting
+the form again shifts back, mounting ends it. Warriors have Battle, Defensive
+and Berserker Stance, Paladins Devotion and Retribution Aura, Hunters Aspect
+of the Hawk and Cheetah, Death Knights Blood, Frost and Unholy Presence: each
+group is exclusive and lasts until swapped. All of these are `aura` kinds
+(`form`, `stealth`, `stats` with a `group`) with `stats` scaled per point and
+an optional speed `mult`.
+
+Mounts and forms are bodies attached to the character. The built-in horse,
+gryphon and the form bodies live in EntityPlayer; to make your own, put a
+Model in `ServerStorage/MountTemplates` (or `FormTemplates`) whose parts sit
+around the origin as the rider's HumanoidRootPart. Part attributes: `Parent`
+(the part to hang on, default Body), `Motor` ("leg" or "wing") with `Side`,
+`Phase` and `Pivot` (hinge offset) for the parts clients animate. Name the
+template in the mount spell's `aura.model`; the Pony template and Pony Reins
+show the whole chain. Legs swing with speed, wings glide and flap.
 
 ## Factions, guards, equip rules, spirit healers, GM tools
 
