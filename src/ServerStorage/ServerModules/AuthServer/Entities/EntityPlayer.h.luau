@@ -69,9 +69,10 @@ function module:ApplyStats(player: Player)
 	for i, name in S.Names do
 		stats[name] = math.floor(base[i] + grow[i] * (level - 1))
 	end
-	for _, entry in (char.Equipment or {}) do
+	for slot, entry in (char.Equipment or {}) do
 		local item = DB:Get("item_template", entry)
-		if item then
+		local broken = item and self:MaxDurability(item) and (char.Durability or {})[slot] == 0
+		if item and not broken then
 			stats.Health += item.health or 0
 			stats.Damage += item.damage or 0
 			stats.Armor += item.armor or 0
@@ -236,6 +237,21 @@ end
 -- Config.BagSlots. Stacks merge up to the template's stack size, then the first
 -- free slot is used; a full bag refuses, WoW style.
 
+-- Backpack slots plus every equipped bag's slots.
+function module:BagSize(player: Player): number
+	local char = self.information[player] and self.information[player].Active
+	local size = Config.BagSlots
+	if char then
+		local DB = self.includes.Database["WorldDB.h"]
+		for _, slot in Config.BagSlotNames do
+			local entry = char.Equipment and char.Equipment[slot]
+			local item = entry and DB:Get("item_template", entry)
+			size += item and item.container or 0
+		end
+	end
+	return size
+end
+
 local function bag(char)
 	char.Inventory = char.Inventory or {}
 	for i, stack in char.Inventory do
@@ -255,8 +271,8 @@ local function stackAt(items, slot: number)
 	return nil
 end
 
-local function freeSlot(items): number?
-	for slot = 1, Config.BagSlots do
+local function freeSlot(items, size: number?): number?
+	for slot = 1, size or Config.BagSlots do
 		if not stackAt(items, slot) then
 			return slot
 		end
@@ -285,8 +301,9 @@ function module:AddItem(player: Player, entry: number, count: number, quiet: boo
 		end
 	end
 	local needed = math.ceil(left / size)
+	local bagSize = self:BagSize(player)
 	local free = 0
-	for slot = 1, Config.BagSlots do
+	for slot = 1, bagSize do
 		if not stackAt(items, slot) then
 			free += 1
 		end
@@ -298,7 +315,7 @@ function module:AddItem(player: Player, entry: number, count: number, quiet: boo
 	end
 	while left > 0 do
 		local add = math.min(size, left)
-		table.insert(items, { slot = freeSlot(items), entry = entry, count = add })
+		table.insert(items, { slot = freeSlot(items, bagSize), entry = entry, count = add })
 		left -= add
 	end
 	if not quiet then
@@ -372,7 +389,7 @@ function module:MoveStack(player: Player, from: string, fromSlot: number, to: st
 		return
 	end
 	local lists = { bag = bag(char), bank = bank(char) }
-	local limits = { bag = Config.BagSlots, bank = Config.BankSlots }
+	local limits = { bag = self:BagSize(player), bank = Config.BankSlots }
 	local source, dest = lists[from], lists[to]
 	if not source or not dest then
 		return
@@ -444,7 +461,8 @@ end
 -- Move or swap bag slots; partial stacks of the same item merge, WoW style.
 function module:SwapSlots(player: Player, from: number, to: number)
 	local char = self.information[player] and self.information[player].Active
-	if not char or from == to or from < 1 or to < 1 or from > Config.BagSlots or to > Config.BagSlots then
+	local size = self:BagSize(player)
+	if not char or from == to or from < 1 or to < 1 or from > size or to > size then
 		return
 	end
 	local items = bag(char)
@@ -488,16 +506,112 @@ function module:Equip(player: Player, slot: number): (boolean, string?)
 		return false, ("You need to be level %d."):format(item.level)
 	end
 	char.Equipment = char.Equipment or {}
-	local previous = char.Equipment[item.slot]
+	char.Durability = char.Durability or {}
+	local slotName = item.slot
+	if slotName == "bag" then
+		slotName = nil
+		for _, name in Config.BagSlotNames do
+			if not char.Equipment[name] then
+				slotName = name
+				break
+			end
+		end
+		if not slotName then
+			return false, "All your bag slots are full."
+		end
+	end
+	local previous = char.Equipment[slotName]
+	if previous and item.container then
+		return false, "Take the old bag off first."
+	end
 	stack.count -= 1
 	if stack.count == 0 then
 		table.remove(items, table.find(items, stack))
 	end
-	char.Equipment[item.slot] = stack.entry
+	char.Equipment[slotName] = stack.entry
+	local previousDurability = char.Durability[slotName]
+	char.Durability[slotName] = stack.durability or self:MaxDurability(item)
 	if previous then
-		table.insert(items, { slot = freeSlot(items) or slot, entry = previous, count = 1 })
+		table.insert(items, { slot = freeSlot(items, self:BagSize(player)) or slot, entry = previous, count = 1, durability = previousDurability })
 	end
 	self:SendInventory(player, false)
+	self:ApplyStats(player)
+	return true
+end
+
+-- Durability: armor and weapons wear with damage taken and death; at zero the
+-- item gives nothing until repaired at a vendor with `repair`.
+function module:MaxDurability(item): number?
+	if not item or not item.slot or item.slot == "bag" or item.class == "misc" then
+		return nil
+	end
+	return if item.class == "weapon" then Config.Durability.Weapon else Config.Durability.Armor
+end
+
+function module:Wear(player: Player, fraction: number, chance: number?)
+	local char = self.information[player] and self.information[player].Active
+	if not char or not char.Equipment then
+		return
+	end
+	local DB = self.includes.Database["WorldDB.h"]
+	char.Durability = char.Durability or {}
+	local broke = false
+	for slot, entry in char.Equipment do
+		local item = DB:Get("item_template", entry)
+		local max = self:MaxDurability(item)
+		if max and (chance == nil or math.random() < chance) then
+			local current = char.Durability[slot] or max
+			local after = math.max(0, current - math.max(1, math.floor(max * fraction)))
+			char.Durability[slot] = after
+			if after == 0 and current > 0 then
+				broke = true
+				self:System(player, ("Your %s is broken."):format(item.name))
+			end
+		end
+	end
+	self:ApplyStats(player)
+	if broke then
+		self.includes.System["Effects.h"]:Play("Smoke", player, 6)
+	end
+end
+
+function module:RepairCost(player: Player): number
+	local char = self.information[player] and self.information[player].Active
+	local DB = self.includes.Database["WorldDB.h"]
+	local cost = 0
+	for slot, entry in (char and char.Equipment or {}) do
+		local item = DB:Get("item_template", entry)
+		local max = self:MaxDurability(item)
+		if max then
+			local missing = max - ((char.Durability or {})[slot] or max)
+			cost += missing * Config.Durability.CostPerPoint * math.max(1, item.level or 1) * math.max(1, (item.quality or 1))
+		end
+	end
+	return cost
+end
+
+function module:Repair(player: Player): boolean
+	local char = self.information[player] and self.information[player].Active
+	if not char then
+		return false
+	end
+	local cost = self:RepairCost(player)
+	if cost == 0 then
+		self:System(player, "Your equipment needs no repairs.")
+		return true
+	elseif (char.Money or 0) < cost then
+		self:System(player, "You don't have enough money to repair.")
+		return false
+	end
+	self:AddMoney(player, -cost)
+	local DB = self.includes.Database["WorldDB.h"]
+	for slot, entry in char.Equipment do
+		local max = self:MaxDurability(DB:Get("item_template", entry))
+		if max then
+			char.Durability[slot] = max
+		end
+	end
+	self:System(player, "Your equipment has been repaired.")
 	self:ApplyStats(player)
 	return true
 end
@@ -509,13 +623,28 @@ function module:Unequip(player: Player, slotName: string, toSlot: number?): bool
 		return false
 	end
 	local items = bag(char)
-	local free = if toSlot and toSlot >= 1 and toSlot <= Config.BagSlots and not stackAt(items, toSlot) then toSlot else freeSlot(items)
+	local size = self:BagSize(player)
+	local item = self.includes.Database["WorldDB.h"]:Get("item_template", entry)
+	if item and item.container then
+		local after = size - item.container
+		for _, stack in items do
+			if stack.slot > after then
+				self:System(player, "That bag is not empty.")
+				return false
+			end
+		end
+		size = after
+	end
+	local free = if toSlot and toSlot >= 1 and toSlot <= size and not stackAt(items, toSlot) then toSlot else freeSlot(items, size)
 	if not free then
 		self:System(player, "Inventory is full.")
 		return false
 	end
 	char.Equipment[slotName] = nil
-	table.insert(items, { slot = free, entry = entry, count = 1 })
+	table.insert(items, { slot = free, entry = entry, count = 1, durability = char.Durability and char.Durability[slotName] })
+	if char.Durability then
+		char.Durability[slotName] = nil
+	end
 	self:SendInventory(player, false)
 	self:ApplyStats(player)
 	return true
@@ -529,7 +658,9 @@ function module:SendEquipment(player: Player)
 	local Items = self.includes.Content["Items.h"]
 	local slots = {}
 	for slot, entry in (char.Equipment or {}) do
-		slots[slot] = Items:Describe(entry)
+		local item = Items:Template(entry)
+		local max = self:MaxDurability(item)
+		slots[slot] = Items:Describe(entry, { Durability = max and ((char.Durability or {})[slot] or max), MaxDurability = max })
 	end
 	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_EQUIPMENT, { Slots = slots, Stats = entity.Stats })
 end
@@ -555,9 +686,10 @@ function module:SendInventory(player: Player, announce: boolean?)
 	local Items = self.includes.Content["Items.h"]
 	local items = {}
 	for _, stack in (char and bag(char) or {}) do
-		table.insert(items, Items:Describe(stack.entry, { Bag = stack.slot, Count = stack.count }))
+		local max = self:MaxDurability(Items:Template(stack.entry))
+		table.insert(items, Items:Describe(stack.entry, { Bag = stack.slot, Count = stack.count, Durability = max and (stack.durability or max), MaxDurability = max }))
 	end
-	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INVENTORY, { Items = items, Money = char and char.Money or 0, Bags = Config.BagSlots, Announce = announce == true })
+	self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_INVENTORY, { Items = items, Money = char and char.Money or 0, Bags = if char then self:BagSize(player) else Config.BagSlots, Announce = announce == true })
 end
 
 function module:Get(player: Player)
@@ -633,6 +765,7 @@ function module:Spawn(player: Player, at: CFrame?, ghost: boolean?)
 		Packet:Send(player, Opcodes.SMSG_DESPAWN, {})
 		local e = self.information[player]
 		if e and e.Active == saved and e.Character == character and not ghost then
+			self:Wear(player, Config.Durability.DeathLoss)
 			self.includes.Combat["Death.h"]:OnDeath(player, character:GetPivot())
 		end
 	end)

@@ -158,10 +158,12 @@ local tiles = scope:Computed(function(use)
 	return list
 end)
 
-local rows = math.ceil(Config.BagSlots / COLUMNS)
 Components.Panel(scope, {
 	Name = "BagFrame",
-	Size = UDim2.fromOffset(12 * 2 + COLUMNS * TILE + (COLUMNS - 1) * GAP, 36 + 12 * 2 + rows * TILE + (rows - 1) * GAP + 26),
+	Size = scope:Computed(function(use)
+		local rows = math.ceil(use(bagSlots) / COLUMNS)
+		return UDim2.fromOffset(12 * 2 + COLUMNS * TILE + (COLUMNS - 1) * GAP, 36 + 12 * 2 + rows * TILE + (rows - 1) * GAP + 26)
+	end),
 	Position = UDim2.new(1, -170, 0.5, 60),
 	Enabled = open,
 	Parent = player:WaitForChild("PlayerGui"),

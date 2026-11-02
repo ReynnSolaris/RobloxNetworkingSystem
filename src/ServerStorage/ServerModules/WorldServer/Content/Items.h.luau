@@ -31,6 +31,8 @@ local SEED = {
 	{ name = "Spiced Wolf Meat", quality = 1, stack = 20, class = "consumable", buyprice = 30, use = "Food", consumable = true },
 	{ name = "Stringy Wolf Meat", quality = 1, stack = 20, class = "reagent", buyprice = 5 },
 	{ name = "Brown Horse Bridle", quality = 2, stack = 1, class = "misc", buyprice = 100000, level = 20, use = "Summon Brown Horse", flavor = "A trusted companion of the road." },
+	{ name = "Linen Bag", quality = 1, stack = 1, class = "container", slot = "bag", container = 6, buyprice = 500, level = 1 },
+	{ name = "Woolen Bag", quality = 2, stack = 1, class = "container", slot = "bag", container = 8, buyprice = 2500, level = 10 },
 	{ name = "Gryphon Reins", quality = 3, stack = 1, class = "misc", buyprice = 5000000, level = 30, use = "Summon Gryphon", flavor = "The skies of Azeroth await." },
 }
 
@@ -63,7 +65,7 @@ function module:Describe(item, extra)
 	local out = { Entry = template.entry, Name = template.name or "?", Quality = template.quality or 1, Stack = template.stack, Slot = template.slot,
 		Class = template.class, Level = template.level, Health = template.health, Damage = template.damage, Armor = template.armor,
 		Sell = template.sellprice or math.floor((template.buyprice or 0) / 4), Use = spell and spell.description, Flavor = template.flavor,
-		Bind = template.bind, Recipe = template.recipe, Mount = template.mount }
+		Bind = template.bind, Recipe = template.recipe, Mount = template.mount, Container = template.container }
 	for _, stat in STATS do
 		out[stat:sub(1, 1):upper() .. stat:sub(2)] = template[stat]
 	end

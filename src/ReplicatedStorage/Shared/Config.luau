@@ -35,8 +35,11 @@ return table.freeze({
 	QuestLogSize = 25,
 	BuybackSlots = 12,
 
-	-- Equipment slots, in character sheet order.
-	Slots = { "head", "chest", "legs", "feet", "mainhand", "ring", "trinket" },
+	-- Equipment slots, in character sheet order; the last four hold bags.
+	Slots = { "head", "chest", "legs", "feet", "mainhand", "ring", "trinket", "bag1", "bag2", "bag3", "bag4" },
+	BagSlotNames = { "bag1", "bag2", "bag3", "bag4" },
+	-- Durability points for armor and weapons, loss on death as a fraction, repair price per point.
+	Durability = { Armor = 40, Weapon = 60, DeathLoss = 0.1, HitLoss = 0.025, HitChance = 0.15, CostPerPoint = 4 },
 	VendorRange = 12,
 
 	-- Item quality colours, WoW order: poor, common, uncommon, rare, epic, legendary.
@@ -58,6 +61,9 @@ return table.freeze({
 		end,
 		CorpseSeconds = 60, -- a lootable corpse waits this long; an emptied one clears sooner
 		LeaveCombatSeconds = 6,
+		ThreatSwitch = 1.1, -- a unit needs this much more threat than the current target to pull a creature
+		-- creature ranks: health, damage and experience multipliers
+		Ranks = { normal = { Health = 1, Damage = 1, Xp = 1 }, elite = { Health = 2.5, Damage = 1.5, Xp = 2 }, rare = { Health = 1.6, Damage = 1.3, Xp = 2 }, boss = { Health = 8, Damage = 2, Xp = 5 } },
 		AssistRange = 12, -- creatures of the same kind this close join a fight
 		WanderSeconds = 6,
 		DefaultRespawn = 30,

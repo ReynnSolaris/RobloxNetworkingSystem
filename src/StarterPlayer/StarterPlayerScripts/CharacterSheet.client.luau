@@ -117,12 +117,12 @@ local function slotTile(scope, index: number, slotName: string)
 				TextColor3 = Ui.DIM,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextWrapped = true,
-				Text = slotName:sub(1, 1):upper() .. slotName:sub(2),
+				Text = if slotName:sub(1, 3) == "bag" then "Bag " .. slotName:sub(4) else slotName:sub(1, 1):upper() .. slotName:sub(2),
 			},
 		},
 	}
 	Drag.target(button, function(payload)
-		if payload.Bag and payload.Item and payload.Item.Slot == slotName then
+		if payload.Bag and payload.Item and (payload.Item.Slot == slotName or (payload.Item.Slot == "bag" and slotName:sub(1, 3) == "bag")) then
 			netSend:Fire(Opcodes.CMSG_EQUIP, { Bag = payload.Bag })
 		end
 	end)

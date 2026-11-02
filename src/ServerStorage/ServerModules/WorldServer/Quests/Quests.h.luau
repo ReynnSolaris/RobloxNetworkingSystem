@@ -202,6 +202,10 @@ function module:Gossip(player: Player, guid)
 	if template.trainer_skill then
 		table.insert(options, { Id = "profession", Text = "I would like to learn a profession." })
 	end
+	if template.repair then
+		local cost = self.includes.Entities["EntityPlayer.h"]:RepairCost(player)
+		table.insert(options, { Id = "repair", Text = if cost > 0 then ("Repair all my items. (%dg %ds %dc)"):format(cost // 10000, (cost % 10000) // 100, cost % 100) else "Repair all my items." })
+	end
 	if self.includes.Spells["Spells.h"]:IsTrainer(entry) and (player:GetAttribute("CharacterLevel") or 1) >= Config.Talents.FirstLevel then
 		table.insert(options, { Id = "untalent", Text = ("I wish to unlearn my talents. (%s)"):format(self.includes.Spells["Talents.h"]:ResetCost(player) // 10000 .. "g") })
 	end
@@ -235,6 +239,8 @@ function module:Select(player: Player, guid, option)
 		self.includes.Entities["EntityPlayer.h"]:SendBank(player, true)
 	elseif option == "guildbank" and template.banker then
 		self.includes.Social["Guild.h"]:SendBank(player, true)
+	elseif option == "repair" and template.repair then
+		self.includes.Entities["EntityPlayer.h"]:Repair(player)
 	elseif option == "profession" and template.trainer_skill then
 		self.includes.Spells["Skills.h"]:TrainerList(player, guid)
 	elseif option == "untalent" then

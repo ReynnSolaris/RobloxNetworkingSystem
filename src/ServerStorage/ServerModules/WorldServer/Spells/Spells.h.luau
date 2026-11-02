@@ -54,6 +54,10 @@ end
 local SEED = {
 	dmg("Warrior", "Heroic Strike", "physical", 8, 2, 10, 0, 3, 8, "HS", "A strong attack that deals extra damage.", true),
 	speed("Warrior", "Battle Shout", 1.25, 20, 15, 30, "BS", "Quickens your step for 20 sec."),
+	spell("Warrior", "Taunt", "physical", "taunt", "enemy", 0, 0, 5, 0, 8, 20, "TA", "Taunts the target to attack you, putting you at the top of its threat list."),
+	spell("Paladin", "Hand of Reckoning", "holy", "taunt", "enemy", 0, 0, 10, 0, 8, 30, "HR", "Taunts the target to attack you, putting you at the top of its threat list."),
+	spell("Druid", "Growl", "physical", "taunt", "enemy", 0, 0, 5, 0, 8, 20, "GL", "Taunts the target to attack you, putting you at the top of its threat list."),
+	spell("Death Knight", "Dark Command", "shadow", "taunt", "enemy", 0, 0, 5, 0, 8, 30, "DK", "Commands the target to attack you, putting you at the top of its threat list."),
 	dot("Warrior", "Rend", "physical", 3, 1, 10, 0, 8, 3, 15, "RE", "Wounds the target, causing them to bleed."),
 	slow("Warrior", "Hamstring", "physical", 0.5, 15, 10, 0, 8, "HM", "Maims the enemy, reducing movement speed by 50% for 15 sec."),
 	dmg("Paladin", "Crusader Strike", "holy", 8, 2, 10, 0, 4, 8, "CS", "An instant strike that deals holy damage.", true),
@@ -464,6 +468,13 @@ function module:Apply(caster, spell, target, item)
 	elseif spell.effect == "aura" then
 		Effects:Play(Combat.EFFECT[spell.school] or "Holy", if Combat:IsPlayer(target) then target else target.Row.guid, 10)
 		Auras:Apply(caster, target, spell, amount)
+		amount = 0
+	elseif spell.effect == "taunt" and isPlayer then
+		if not Combat:IsPlayer(target) and not target.Owner then
+			self.includes.Content["Creatures.h"]:Taunt(target, caster)
+			Effects:Play("Hit", target.Row.guid, 8)
+			Combat:Log(caster, ("%s is taunted by your %s."):format(Combat:Name(target), spell.name), Config.Chat.Colors.HIT)
+		end
 		amount = 0
 	elseif spell.effect == "tame" and isPlayer then
 		if not target.Dead and target.Template.beast then

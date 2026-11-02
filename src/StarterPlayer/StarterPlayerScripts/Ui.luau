@@ -36,8 +36,8 @@ function Ui.itemName(item): string
 	return ('<font color="%s">[%s]</font>%s'):format(Ui.quality(item.Quality), item.Name or "?", count)
 end
 
-local SLOT_NAMES = { head = "Head", chest = "Chest", legs = "Legs", feet = "Feet", mainhand = "Main Hand", ring = "Finger", trinket = "Trinket" }
-local CLASS_NAMES = { armor = "Armor", weapon = "Weapon", consumable = "Consumable", misc = "Miscellaneous" }
+local SLOT_NAMES = { head = "Head", chest = "Chest", legs = "Legs", feet = "Feet", mainhand = "Main Hand", ring = "Finger", trinket = "Trinket", bag = "Bag", bag1 = "Bag", bag2 = "Bag", bag3 = "Bag", bag4 = "Bag" }
+local CLASS_NAMES = { armor = "Armor", weapon = "Weapon", consumable = "Consumable", misc = "Miscellaneous", container = "Bag", reagent = "Trade Goods" }
 
 -- WoW item tooltip: name in quality colour, binding, slot and type, armor, green
 -- stats, level requirement (red when too low), Use line, flavour, sell price.
@@ -66,7 +66,11 @@ function Ui.itemTooltip(item, price: string?): string
 		local mine = player:GetAttribute("CharacterLevel") or 1
 		table.insert(lines, ('<font color="%s">Requires Level %d</font>'):format(if mine >= item.Level then "#FFFFFF" else "#FF2020", item.Level))
 	end
+	if item.Container then white(("%d Slot Bag"):format(item.Container)) end
 	if item.Use then table.insert(lines, ('<font color="#1EFF00">Use: %s</font>'):format(item.Use)) end
+	if item.MaxDurability then
+		table.insert(lines, ('<font color="%s">Durability %d / %d%s</font>'):format(if (item.Durability or 0) == 0 then "#FF2020" else "#FFFFFF", item.Durability or 0, item.MaxDurability, if (item.Durability or 0) == 0 then "  (Broken)" else ""))
+	end
 	if item.Flavor then table.insert(lines, ('<font color="#FFD100"><i>"%s"</i></font>'):format(item.Flavor)) end
 	if (item.Stack or 1) > 1 then table.insert(lines, ('<font color="#AAAAAA">Max Stack: %d</font>'):format(item.Stack)) end
 	if price then
@@ -214,10 +218,12 @@ task.spawn(function()
 			if model.Parent == creatures and model:GetAttribute("Guid") then
 				local hostile = model:GetAttribute("Faction") == "hostile"
 				local humanoid = model:FindFirstChildOfClass("Humanoid")
-				show = ('<font size="16" color="%s"><b>%s</b></font>%s\n<font color="#FFFFFF">Level %s %s</font>%s'):format(
-					if hostile then "#FF5A5A" else "#5ADC5A", model.Name,
+				local rank = model:GetAttribute("Rank")
+				local rankText = if rank == "boss" then " Boss" elseif rank == "elite" then " Elite" elseif rank == "rare" then " Rare" else ""
+				show = ('<font size="16" color="%s"><b>%s</b></font>%s\n<font color="#FFFFFF">Level %s%s %s</font>%s'):format(
+					if rank == "boss" or rank == "elite" then "#FFD100" elseif rank == "rare" then "#C0C0FF" elseif hostile then "#FF5A5A" else "#5ADC5A", model.Name,
 					if model:GetAttribute("Subname") then ('\n<font color="#AAAAAA">&lt;%s&gt;</font>'):format(model:GetAttribute("Subname")) else "",
-					tostring(model:GetAttribute("Level") or "?"), if hostile then "Hostile" else "Friendly",
+					tostring(model:GetAttribute("Level") or "?"), rankText, if hostile then "Hostile" elseif model:GetAttribute("Faction") == "pet" then "Pet" else "Friendly",
 					if humanoid and humanoid.Health <= 0 then '\n<font color="#AAAAAA">Dead</font>' else "")
 			elseif other and other ~= player then
 				local class = other:GetAttribute("CharacterClass")

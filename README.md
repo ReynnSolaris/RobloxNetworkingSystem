@@ -287,7 +287,7 @@ placing something on one server sees it appear on all of them. Tables and keys:
 
 | Table | Key | Columns |
 |---|---|---|
-| creature_template | entry | name, subname, modelid, scale, gossip, faction, minlevel, maxlevel, health, dmgmin, dmgmax, aggro, speed, mingold, maxgold, spells, wander, faction_id, rep_kill, rep_ally, innkeeper, banker, trainer_skill, flightmaster, auctioneer |
+| creature_template | entry | name, subname, modelid, scale, gossip, faction, minlevel, maxlevel, health, dmgmin, dmgmax, aggro, speed, mingold, maxgold, spells, wander, rank, script, beast, repair, faction_id, rep_kill, rep_ally, innkeeper, banker, trainer_skill, flightmaster, auctioneer |
 | creature | guid | id (entry), x, y, z, o, spawntimesecs, waypoints, event, by |
 | creature_loot_template / gameobject_loot_template | id | entry, item, chance, mincount, maxcount |
 | gameobject_template | entry | name, modelid, size, type (mailbox, chest, door, node, auctioneer), skill, reqskill, mingold, maxgold |
@@ -311,7 +311,7 @@ placing something on one server sees it appear on all of them. Tables and keys:
 Outside the world tables, the World store also keeps `names` (character name to
 account, for mail and friends), `mail:<name>` (a character's letters),
 `guild:<id>` (a guild with its members and ranks) and `guildnames`.
-| item_template | entry | name, quality 0-5, stack, class, slot, health, damage, armor, strength, agility, stamina, intellect, spirit, spellpower, buyprice, sellprice, level, use, consumable, flavor, bind |
+| item_template | entry | name, quality 0-5, stack, class, slot, health, damage, armor, strength, agility, stamina, intellect, spirit, spellpower, buyprice, sellprice, level, use, consumable, flavor, bind, container |
 | npc_vendor | id | entry (creature), item |
 
 Templates are the assets, spawns reference them by entry, like TC. A creature's
@@ -581,6 +581,26 @@ talent spread; `/roll` rolls to the party or those nearby.
 In a zone with `Pvp = true`, players of the other faction are attackable, which
 flags you (red PvP on the player frame) for five minutes. A kill of someone within
 five levels is an honorable kill worth honor, both kept on the character sheet.
+
+## Threat, ranks, bosses, durability, bags
+
+Creatures keep a threat table like TC: damage adds its amount for the attacker,
+healing adds half to every creature fighting the healed unit, and taunts
+(Warrior, Paladin, Druid, Death Knight) jump to the top. The target is whoever
+leads by `Config.Combat.ThreatSwitch`; with nobody left the creature evades to
+full health. Everyone on the table shares the kill. `creature_template.rank`
+is normal, elite, rare or boss and scales health, damage and experience; the
+tooltip and target frame show it in gold or silver. A boss `script` lists
+events (`at` combat, health with a value, timer with every, death; `action` say,
+yell, cast, summon with a creature and count, enrage) that fire once per fight.
+Goldtooth seeds one: he yells, calls kobolds at 75%, throws Fire Blasts on a
+timer and enrages at 30%; his adds vanish when he dies or resets.
+
+Armor and weapons have durability (`Config.Durability`): hits taken chip it,
+death takes a tenth, a broken item gives no stats, and any vendor with `repair`
+offers "Repair all my items" in gossip for a price by level and quality. Bags
+are items with `container` slots that go in the four bag slots on the
+character sheet and grow the backpack; a bag must be empty to come off.
 
 ## Pets, group loot, events, guild vault, resurrection
 

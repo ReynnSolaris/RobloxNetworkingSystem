@@ -80,6 +80,12 @@ scope:New "ScreenGui" {
 			if other then
 				return classColor[other:GetAttribute("CharacterClass") or ""] or Color3.new(1, 1, 1)
 			end
+			local rank = use(target) and use(target):GetAttribute("Rank")
+			if rank == "boss" or rank == "elite" then
+				return Color3.fromRGB(255, 209, 0)
+			elseif rank == "rare" then
+				return Color3.fromRGB(192, 192, 255)
+			end
 			return if use(hostile) then Color3.fromRGB(255, 90, 90) else Color3.fromRGB(90, 220, 90)
 		end),
 		Info = scope:Computed(function(use)
@@ -89,7 +95,12 @@ scope:New "ScreenGui" {
 				local duel = use(duelOpponent) ~= nil and use(duelOpponent) == (other:GetAttribute("CharacterName") or other.Name)
 				return ("Level %d %s %s%s"):format(other:GetAttribute("CharacterLevel") or 1, other:GetAttribute("CharacterRace") or "", other:GetAttribute("CharacterClass") or "", if duel then "  (Duel)" elseif use(hostile) then "  (PvP)" else "")
 			end
-			return if model then ("Level %s %s"):format(tostring(model:GetAttribute("Level") or "?"), if use(hostile) then "Hostile" else "Friendly") else ""
+			if not model then
+				return ""
+			end
+			local rank = model:GetAttribute("Rank")
+			local rankText = if rank == "boss" then " Boss" elseif rank == "elite" then " Elite" elseif rank == "rare" then " Rare" else ""
+			return ("Level %s%s %s"):format(tostring(model:GetAttribute("Level") or "?"), rankText, if use(hostile) then "Hostile" elseif model:GetAttribute("Faction") == "pet" then "Pet" else "Friendly")
 		end),
 		Right = scope:Computed(function(use)
 			return if use(attacking) then "ATTACKING" else ""

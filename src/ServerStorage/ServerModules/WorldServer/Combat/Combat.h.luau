@@ -140,6 +140,9 @@ function module:Damage(attacker, target, amount: number, school: string?, source
 		humanoid:TakeDamage(amount)
 		Effects:Play(EFFECT[school or "physical"] or "Hit", target, 6)
 		self:Enter(target)
+		if humanoid.Health > 0 and math.random() < Config.Durability.HitChance then
+			Entities:Wear(target, Config.Durability.HitLoss, 0.5)
+		end
 		local who = if attacker then self:Name(attacker) else "Something"
 		self:Log(target, ("%s's %s hits you for %d."):format(who, (source:gsub("^Your ", "")), amount), Config.Chat.Colors.HURT)
 		if attacker and not self:IsPlayer(attacker) then
@@ -164,6 +167,7 @@ function module:Damage(attacker, target, amount: number, school: string?, source
 	end
 	if owner then
 		self.includes.Content["Creatures.h"]:Aggro(target.Row.guid, attacker)
+		self.includes.Content["Creatures.h"]:AddThreat(target, attacker, amount)
 		self:Enter(owner)
 		self:Log(owner, ("%s hits %s for %d."):format(source, self:Name(target), amount), Config.Chat.Colors.HIT)
 	end
@@ -182,6 +186,9 @@ function module:Heal(healer, target, amount: number, source: string?): number
 	humanoid.Health = math.min(humanoid.MaxHealth, humanoid.Health + amount)
 	if amount <= 0 then
 		return 0
+	end
+	if healer and self:IsPlayer(target) then
+		self.includes.Content["Creatures.h"]:HealThreat(healer, target, amount)
 	end
 	self.includes.System["Effects.h"]:Play("Heal", effectTarget(self, target), 12)
 	if healer and self:IsPlayer(healer) then

@@ -8,7 +8,7 @@ local module = {}
 -- npc_vendor: { id, entry (creature), item }. Talking to a creature with rows
 -- opens the vendor window; buying and selling are validated here.
 
-local SEED = { creature = "General Goods", items = { "Tough Jerky", "Linen Cloth", "Worn Shortsword", "Recruit's Tunic", "Recruit's Pants", "Recruit's Boots" } }
+local SEED = { creature = "General Goods", items = { "Tough Jerky", "Linen Cloth", "Worn Shortsword", "Recruit's Tunic", "Recruit's Pants", "Recruit's Boots", "Linen Bag", "Brown Horse Bridle" } }
 
 function module:DB()
 	return self.includes.Database["WorldDB.h"]
@@ -60,9 +60,15 @@ function module:Start()
 			vendor = row
 		end
 	end
-	if vendor and #DB:Select("npc_vendor") == 0 then
+	if vendor then
+		local stocked = {}
+		for _, row in DB:Select("npc_vendor") do
+			if tostring(row.entry) == tostring(vendor.entry) then
+				stocked[tostring(row.item)] = true
+			end
+		end
 		for _, item in DB:Select("item_template") do
-			if table.find(SEED.items, item.name) then
+			if table.find(SEED.items, item.name) and not stocked[tostring(item.entry)] then
 				DB:Insert("npc_vendor", { entry = vendor.entry, item = item.entry })
 			end
 		end

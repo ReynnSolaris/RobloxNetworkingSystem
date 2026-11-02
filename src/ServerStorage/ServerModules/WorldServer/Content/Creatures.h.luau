@@ -12,18 +12,31 @@ local module = {}
 -- innkeeper, banker, flightmaster, auctioneer, trainer_skill }. creature is a
 -- spawn: { guid, id, x, y, z, o, spawntimesecs, waypoints = { {x,y,z} } }.
 -- Friendly creatures stand with a Talk prompt, or patrol their waypoints.
--- Hostile ones get a level, health and a brain: aggro, chase, melee, spells,
--- call for help, leash, wander. Loot comes from creature_loot_template.
+-- Hostile ones get a level, health and a brain: a threat table (damage and
+-- healing build threat, taunts top it), chase, melee, spells, call for help,
+-- leash and evade, wander. rank = normal|elite|rare|boss scales health, damage
+-- and experience; a boss `script` lists events: { at = combat|health|timer|
+-- death, value, every, action = say|yell|cast|summon|enrage, text, spell,
+-- creature, count }. Loot comes from creature_loot_template.
 
 local SEED = {
 	{ name = "Innkeeper", subname = "Innkeeper", modelid = "default", scale = 1, gossip = "Welcome, traveler. Rest your feet a while.", faction = "friendly", innkeeper = true },
 	{ name = "Town Guard", subname = "Guard", modelid = "default", scale = 1.05, gossip = "Move along, citizen.", faction = "friendly" },
 	{ name = "Banker", subname = "Banker", modelid = "default", scale = 1, gossip = "Your deposits are safe with us.", faction = "friendly", banker = true },
 	{ name = "Class Trainer", subname = "Trainer", modelid = "default", scale = 1, gossip = "What would you like to learn?", faction = "friendly" },
-	{ name = "General Goods", subname = "Vendor", modelid = "default", scale = 1, gossip = "Fine wares, fair prices.", faction = "friendly" },
+	{ name = "General Goods", subname = "Vendor", modelid = "default", scale = 1, gossip = "Fine wares, fair prices.", faction = "friendly", repair = true },
 	{ name = "Kobold Vermin", modelid = "default", scale = 0.85, faction = "hostile", minlevel = 1, maxlevel = 2, health = 40, dmgmin = 2, dmgmax = 4, aggro = 15, speed = 12, mingold = 1, maxgold = 5, wander = 8, spells = { "Throw Torch" } },
 	{ name = "Young Wolf", modelid = "default", scale = 0.9, faction = "hostile", minlevel = 2, maxlevel = 3, health = 55, dmgmin = 3, dmgmax = 5, aggro = 18, speed = 14, mingold = 0, maxgold = 3, wander = 12, spells = { "Bite" }, beast = true },
 	{ name = "Kobold Geomancer", modelid = "default", scale = 0.85, faction = "hostile", minlevel = 3, maxlevel = 4, health = 60, dmgmin = 2, dmgmax = 4, aggro = 20, speed = 12, mingold = 3, maxgold = 9, spells = { "Fire Blast" } },
+	{ name = "Goldtooth", subname = "Kobold Chieftain", modelid = "default", scale = 1.1, faction = "hostile", rank = "boss", minlevel = 5, maxlevel = 5, health = 120, dmgmin = 4, dmgmax = 7, aggro = 20, speed = 13, mingold = 50, maxgold = 120, spells = { "Throw Torch" },
+		script = {
+			{ at = "combat", action = "yell", text = "You no take candle!" },
+			{ at = "health", value = 0.75, action = "yell", text = "Vermin! To me!" },
+			{ at = "health", value = 0.75, action = "summon", creature = "Kobold Vermin", count = 2 },
+			{ at = "timer", every = 20, action = "cast", spell = "Fire Blast" },
+			{ at = "health", value = 0.3, action = "enrage", text = "Goldtooth becomes enraged!" },
+			{ at = "death", action = "yell", text = "My... candles..." },
+		} },
 	{ name = "Imp", subname = "Minion", modelid = "default", scale = 0.6, faction = "pet", health = 45, dmgmin = 3, dmgmax = 6, speed = 16, spells = { "Firebolt" } },
 	{ name = "Festival Vendor", subname = "Harvest Festival", modelid = "default", scale = 1, gossip = "Fresh from the fields! Only while the festival lasts.", faction = "friendly" },
 }
@@ -37,6 +50,9 @@ local LOOT_SEED = {
 	{ creature = "Kobold Geomancer", item = "Linen Cloth", chance = 70, mincount = 1, maxcount = 3 },
 	{ creature = "Kobold Geomancer", item = "Kobold Mining Helm", chance = 8, mincount = 1, maxcount = 1 },
 	{ creature = "Kobold Geomancer", item = "Copper Ore", chance = 30, mincount = 1, maxcount = 2 },
+	{ creature = "Goldtooth", item = "Kobold Mining Helm", chance = 60, mincount = 1, maxcount = 1 },
+	{ creature = "Goldtooth", item = "Rough Copper Sword", chance = 40, mincount = 1, maxcount = 1 },
+	{ creature = "Goldtooth", item = "Linen Cloth", chance = 100, mincount = 3, maxcount = 6 },
 }
 
 local function folder(): Folder
@@ -179,8 +195,10 @@ function module:Spawn(row)
 	if template.scale and template.scale ~= 1 then
 		model:ScaleTo(template.scale)
 	end
+	local rank = Config.Combat.Ranks[template.rank or "normal"] or Config.Combat.Ranks.normal
+	model:SetAttribute("Rank", template.rank or "normal")
 	if hostile then
-		humanoid.MaxHealth = math.floor((template.health or 40) * (1 + 0.15 * (level - (template.minlevel or 1))))
+		humanoid.MaxHealth = math.floor((template.health or 40) * (1 + 0.15 * (level - (template.minlevel or 1))) * rank.Health)
 		humanoid.Health = humanoid.MaxHealth
 		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
 	else
@@ -205,8 +223,9 @@ function module:Spawn(row)
 		root:SetNetworkOwner(nil)
 	end
 
-	local state = { Row = row, Template = template, Model = model, Humanoid = humanoid, Root = root, Home = home, Level = level,
-		Hostile = hostile, Moves = moves, Target = nil, NextSwing = 0, LastAttacker = nil, Dead = false, Waypoint = 1, NextWander = 0, Cooldowns = {} }
+	local state = { Row = row, Template = template, Model = model, Humanoid = humanoid, Root = root, Home = home, Level = level, Rank = rank,
+		Hostile = hostile, Moves = moves, Target = nil, NextSwing = 0, LastAttacker = nil, Dead = false, Waypoint = 1, NextWander = 0, Cooldowns = {},
+		Threat = {}, Fired = {}, Timers = {}, Adds = {}, DamageMult = 1 }
 	self.information[tostring(row.guid)] = state
 	humanoid.Died:Once(function()
 		self:OnDeath(state)
@@ -282,22 +301,193 @@ end
 
 -- Called when a player hurts the creature. Nearby creatures of the same kind
 -- join in.
+-- Threat. Damage adds its amount, healing half of it to every creature fighting
+-- the healed unit, a taunt jumps to the top. The target is whoever leads by
+-- Config.Combat.ThreatSwitch over the current one.
+function module:AddThreat(state, unit, amount: number)
+	if not state.Hostile or state.Dead or not unit then
+		return
+	end
+	state.Threat[unit] = (state.Threat[unit] or 0) + math.max(0, amount)
+	local Combat = self.includes.Combat["Combat.h"]
+	local owner = Combat:OwnerOf(unit)
+	if owner then
+		state.LastAttacker = owner
+	end
+	if not state.Target then
+		state.Target = unit
+		self:OnCombatStart(state)
+	end
+end
+
+function module:Taunt(state, unit)
+	local top = 0
+	for _, threat in state.Threat do
+		top = math.max(top, threat)
+	end
+	state.Threat[unit] = top * 1.1 + 10
+	state.Target = unit
+end
+
+-- Healing threat: every creature with the healed unit on its table.
+function module:HealThreat(healer, healed, amount: number)
+	for _, state in self.information do
+		if state.Hostile and not state.Dead and state.Threat[healed] then
+			self:AddThreat(state, healer, amount * 0.5)
+		end
+	end
+end
+
+function module:TopThreat(state)
+	local Combat = self.includes.Combat["Combat.h"]
+	local best, bestThreat = nil, -1
+	for unit, threat in state.Threat do
+		if Combat:Alive(unit) and (Combat:IsPlayer(unit) and unit.Parent == Players or not Combat:IsPlayer(unit)) then
+			if threat > bestThreat then
+				best, bestThreat = unit, threat
+			end
+		else
+			state.Threat[unit] = nil
+		end
+	end
+	return best, bestThreat
+end
+
+-- Called when a unit hurts the creature. Nearby creatures of the same kind join in.
 function module:Aggro(guid, attacker, quiet: boolean?)
 	local state = self:State(guid)
 	if not state or not state.Hostile or state.Dead then
 		return
 	end
-	local owner = if typeof(attacker) == "table" then attacker.Owner else attacker
-	state.LastAttacker = owner or state.LastAttacker
-	state.Target = state.Target or attacker
+	self:AddThreat(state, attacker, 0)
 	if not quiet then
 		for _, other in self.information do
 			if other ~= state and other.Hostile and not other.Dead and not other.Target and other.Row.id == state.Row.id
 				and (other.Root.Position - state.Root.Position).Magnitude <= Config.Combat.AssistRange then
-				other.Target = attacker
+				self:AddThreat(other, attacker, 0)
 			end
 		end
 	end
+end
+
+-- Boss scripts: fire each event once per fight (timers repeat).
+local function speak(self, state, text: string, yell: boolean)
+	local origin = state.Root.Position
+	local packet = { Channel = if yell then "YELL" else "SAY", Sender = state.Template.name, Text = text }
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		if character and (character:GetPivot().Position - origin).Magnitude <= (if yell then Config.Chat.YellRange else Config.Chat.SayRange) then
+			self.includes.Security["Packet.h"]:Send(player, Opcodes.SMSG_MESSAGECHAT, packet)
+		end
+	end
+end
+
+function module:RunEvent(state, event, index)
+	if event.action == "say" or event.action == "yell" then
+		speak(self, state, event.text or "", event.action == "yell")
+	elseif event.action == "cast" and state.Target then
+		self.includes.Spells["Spells.h"]:CreatureCast(state, event.spell, state.Target)
+	elseif event.action == "summon" then
+		local template = self:ByName(event.creature or "")
+		for i = 1, event.count or 1 do
+			if template then
+				local angle = i / (event.count or 1) * math.pi * 2
+				local add = self:SpawnAdd(template, state.Root.CFrame * CFrame.new(math.cos(angle) * 4, 0, math.sin(angle) * 4), state)
+				if add and state.Target then
+					self:AddThreat(add, state.Target, 1)
+				end
+			end
+		end
+		if event.text then
+			speak(self, state, event.text, true)
+		end
+	elseif event.action == "enrage" then
+		state.DamageMult = event.value or 1.5
+		self.includes.System["Effects.h"]:Attach("Fire", state.Root)
+		if event.text then
+			speak(self, state, event.text, true)
+		end
+	end
+end
+
+function module:Script(state, at: string)
+	local script = state.Template.script
+	if not script then
+		return
+	end
+	local health = state.Humanoid.Health / math.max(1, state.Humanoid.MaxHealth)
+	for index, event in script do
+		if event.at == at and (at ~= "health" or health <= (event.value or 0)) and not state.Fired[index] then
+			if at ~= "timer" then
+				state.Fired[index] = true
+			end
+			self:RunEvent(state, event, index)
+		elseif event.at == "timer" and at == "tick" and state.Target then
+			local nextAt = state.Timers[index] or (os.clock() + (event.every or 20))
+			if os.clock() >= nextAt then
+				state.Timers[index] = os.clock() + (event.every or 20)
+				self:RunEvent(state, event, index)
+			else
+				state.Timers[index] = nextAt
+			end
+		end
+	end
+end
+
+function module:OnCombatStart(state)
+	state.Fired, state.Timers = {}, {}
+	self:Script(state, "combat")
+end
+
+-- Out of combat: full health, scripts reset, adds vanish.
+function module:Evade(state)
+	state.Target = nil
+	state.Threat = {}
+	state.DamageMult = 1
+	self.includes.System["Effects.h"]:Detach("Fire", state.Root)
+	for _, add in state.Adds do
+		if not add.Dead then
+			self:Despawn(add.Row.guid)
+		end
+	end
+	state.Adds = {}
+	state.Humanoid.Health = state.Humanoid.MaxHealth
+end
+
+-- A temporary hostile creature bound to a boss; gone when the boss dies or resets.
+local nextAdd = 0
+function module:SpawnAdd(template, at: CFrame, boss)
+	nextAdd += 1
+	local guid = "add:" .. nextAdd
+	local model = build(template.modelid or "default")
+	model.Name = template.name
+	model:SetAttribute("Guid", guid)
+	model:SetAttribute("Entry", tostring(template.entry))
+	model:SetAttribute("Level", boss.Level)
+	model:SetAttribute("Faction", "hostile")
+	model:SetAttribute("Rank", "normal")
+	local humanoid = model:FindFirstChildOfClass("Humanoid") :: Humanoid
+	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
+	humanoid.DisplayName = template.name
+	humanoid.BreakJointsOnDeath = false
+	humanoid.WalkSpeed = template.speed or 12
+	humanoid.MaxHealth = math.floor((template.health or 40) * (1 + 0.15 * (boss.Level - (template.minlevel or 1))))
+	humanoid.Health = humanoid.MaxHealth
+	if template.scale and template.scale ~= 1 then
+		model:ScaleTo(template.scale)
+	end
+	model:PivotTo(at)
+	model.Parent = folder()
+	root:SetNetworkOwner(nil)
+	local state = { Row = { guid = guid, id = template.entry, temporary = true }, Template = template, Model = model, Humanoid = humanoid, Root = root, Home = boss.Home, Level = boss.Level,
+		Rank = Config.Combat.Ranks.normal, Hostile = true, Moves = true, Target = nil, NextSwing = 0, Dead = false, Waypoint = 1, NextWander = 0, Cooldowns = {},
+		Threat = {}, Fired = {}, Timers = {}, Adds = {}, DamageMult = 1 }
+	self.information[guid] = state
+	table.insert(boss.Adds, state)
+	humanoid.Died:Once(function()
+		self:OnDeath(state)
+	end)
+	return state
 end
 
 function module:OnDeath(state)
@@ -308,28 +498,46 @@ function module:OnDeath(state)
 	state.Model:SetAttribute("Casting", nil)
 	state.Model:SetAttribute("Dead", true)
 	self.includes.Spells["Auras.h"]:Clear(state)
+	self.includes.System["Effects.h"]:Detach("Fire", state.Root)
+	self:Script(state, "death")
+	for _, add in state.Adds do
+		if not add.Dead then
+			self:Despawn(add.Row.guid)
+		end
+	end
 	state.Hitbox = module.LayDown(state.Model)
 	local Entities = self.includes.Entities["EntityPlayer.h"]
 	local Combat = self.includes.Combat["Combat.h"]
 	local Loot = self.includes.Combat["Loot.h"]
 	local killer = state.LastAttacker
 	self.includes.System["Effects.h"]:Play("Smoke", state.Row.guid, 8)
-	if killer and killer.Parent == Players then
-		Combat:Log(killer, ("%s dies."):format(state.Template.name), Config.Chat.Colors.HIT)
-		local xp = Config.Combat.KillXp(killer:GetAttribute("CharacterLevel") or 1, state.Level)
-		if xp > 0 then
-			Entities:GrantXp(killer, xp, state.Template.name .. " slain", true)
+	-- everyone on the threat table shares the kill: experience, quest credit, standing
+	local credited = {}
+	for unit in state.Threat do
+		local owner = Combat:OwnerOf(unit)
+		if owner and owner.Parent == Players then
+			credited[owner] = true
 		end
-		self.includes.Quests["Quests.h"]:OnKill(killer, state.Row.id, state.Root.Position)
-		self.includes.Social["Reputation.h"]:OnKill(killer, state.Template)
-		self.includes.Social["Achievements.h"]:OnKill(killer)
+	end
+	if killer and killer.Parent == Players then
+		credited[killer] = true
+	end
+	for player in credited do
+		Combat:Log(player, ("%s dies."):format(state.Template.name), Config.Chat.Colors.HIT)
+		local xp = math.floor(Config.Combat.KillXp(player:GetAttribute("CharacterLevel") or 1, state.Level) * (state.Rank and state.Rank.Xp or 1))
+		if xp > 0 and not state.Row.temporary then
+			Entities:GrantXp(player, xp, state.Template.name .. " slain", true)
+		end
+		self.includes.Quests["Quests.h"]:OnKill(player, state.Row.id, state.Root.Position)
+		self.includes.Social["Reputation.h"]:OnKill(player, state.Template)
+		self.includes.Social["Achievements.h"]:OnKill(player)
 	end
 	local loot = Loot:Roll("creature_loot_template", state.Row.id, state.Template.mingold, state.Template.maxgold)
 	if not Loot:IsEmpty(loot) then
 		local Party = self.includes.Social["Party.h"]
 		Loot:Register({ Guid = state.Row.guid, Name = state.Template.name, Root = state.Hitbox, Loot = loot,
 			MayLoot = function(player)
-				return not killer or killer == player or table.find(Party:MembersOf(killer), player) ~= nil
+				return credited[player] == true or not killer or killer == player or table.find(Party:MembersOf(killer), player) ~= nil
 			end,
 			OnEmpty = function()
 				self:ClearCorpse(state.Row.guid)
@@ -351,7 +559,10 @@ function module:OnDeath(state)
 			self:Despawn(guid)
 		end
 	end)
-	task.delay(state.Row.spawntimesecs or Config.Combat.DefaultRespawn, function()
+	if state.Row.temporary then
+		return
+	end
+	task.delay(state.Row.spawntimesecs or (if state.Template.rank == "boss" or state.Template.rank == "rare" then Config.Combat.DefaultRespawn * 10 else Config.Combat.DefaultRespawn), function()
 		local row = self:DB():Get("creature", guid)
 		if row and not self.information[tostring(guid)] then
 			self:Spawn(row)
@@ -411,12 +622,26 @@ function module:Think(state)
 		return idle(self, state)
 	end
 
-	local target = state.Target
+	-- the threat table picks the target; a leader by ThreatSwitch takes over
+	local fighting = state.Target ~= nil
+	local top, topThreat = self:TopThreat(state)
+	local current = state.Target
+	if current and (state.Threat[current] == nil) then
+		current = nil
+	end
+	if top and (not current or topThreat > (state.Threat[current] or 0) * Config.Combat.ThreatSwitch) then
+		current = top
+	end
+	state.Target = current
+	local target = current
 	local targetRoot = target and Combat:Root(target)
-	if target and (not targetRoot or not Combat:Alive(target) or (Combat:IsPlayer(target) and target.Parent ~= Players)
-		or (flat(targetRoot.Position) - flat(state.Home.Position)).Magnitude > 60) then
+	if target and (not targetRoot or (flat(targetRoot.Position) - flat(state.Home.Position)).Magnitude > 60) then
+		state.Threat[target] = nil
 		state.Target = nil
 		target = nil
+	end
+	if not target and next(state.Threat) == nil and (fighting or state.DamageMult ~= 1 or #state.Adds > 0) then
+		self:Evade(state)
 	end
 
 	if not target then
@@ -430,13 +655,14 @@ function module:Think(state)
 				end
 			end
 		end
-		state.Target = nearest
 		if not nearest then
 			return idle(self, state)
 		end
 		target, targetRoot = nearest, Combat:Root(nearest)
 		self:Aggro(state.Row.guid, nearest)
 	end
+	self:Script(state, "health")
+	self:Script(state, "tick")
 
 	Combat:Enter(target)
 	if Combat:IsPlayer(target) then
@@ -465,8 +691,8 @@ function module:Think(state)
 			if roll == "miss" or roll == "dodge" then
 				Combat:Log(target, ("%s %s."):format(template.name, if roll == "miss" then "misses you" else "attacks. You dodge"), Config.Chat.Colors.HURT)
 			else
-				local damage = math.random(template.dmgmin or 1, math.max(template.dmgmax or 1, template.dmgmin or 1))
-				Combat:Damage(state, target, if roll == "crit" then damage * 2 else damage, "physical", if roll == "crit" then "attack crits" else "attack")
+				local damage = math.random(template.dmgmin or 1, math.max(template.dmgmax or 1, template.dmgmin or 1)) * (state.Rank and state.Rank.Damage or 1) * (state.DamageMult or 1)
+				Combat:Damage(state, target, math.round(if roll == "crit" then damage * 2 else damage), "physical", if roll == "crit" then "attack crits" else "attack")
 			end
 		end
 	end
@@ -530,7 +756,7 @@ function module:Start()
 			byName[template.name] = DB:Insert("creature_template", table.clone(template))
 		else
 			local fields = {}
-			for _, key in { "innkeeper", "banker", "spells", "wander", "beast" } do
+			for _, key in { "innkeeper", "banker", "spells", "wander", "beast", "rank", "script", "repair" } do
 				if template[key] ~= nil and existing[key] == nil then
 					fields[key] = template[key]
 				end
